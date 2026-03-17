@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+.env/
+
+# Logs
+*.log
+
+# Editor files
+*.swp
+*.swo
+*.orig
