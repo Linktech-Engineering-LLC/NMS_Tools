@@ -13,3 +13,6 @@ venv/
 *.swp
 *.swo
 *.orig
+
+# Workspace Files
+*.code-workspace

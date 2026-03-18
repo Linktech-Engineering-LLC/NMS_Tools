@@ -4,13 +4,15 @@ File: check_cert.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-17
-Modified: 2026-03-17
+Modified: 2026-03-18
 Required: Python 3.6+
 Description:
     Certificate checker with SAN, issuer, signature algorithm, wildcard detection,
     perfdata, quiet/verbose modes, and JSON output.
 """
 
+import urllib.request
+import urllib.error
 import ssl
 import socket
 import argparse
@@ -20,7 +22,7 @@ import json
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.x509.oid import ExtensionOID, NameOID
+from cryptography.x509.oid import ExtensionOID, NameOID, AuthorityInformationAccessOID
 from cryptography.x509.ocsp import load_der_ocsp_response  # optional, see OCSP stub
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448
 
@@ -32,9 +34,8 @@ WARNING = 1
 CRITICAL = 2
 UNKNOWN = 3
 
-
 # -----------------------------
-#  Certificate Fetch (SNI)
+#  Certificate Fetch/Parse
 # -----------------------------
 
 def fetch_certificate_and_socket(hostname: str, port: int = 443):
@@ -65,12 +66,94 @@ def fetch_certificate_and_socket(hostname: str, port: int = 443):
         return cert, chain, ocsp_resp, tls_version, cipher
     except Exception as e:
         raise RuntimeError(f"TLS handshake or certificate retrieval failed: {e}")
+def fetch_aia_certificate(url, timeout=5):
+    """
+    Fetch an intermediate certificate from an AIA URL.
+    Returns raw certificate bytes (DER or PEM).
+    Returns None on failure.
+    """
+
+    # Deterministic user-agent
+    headers = {
+        "User-Agent": "NMS_Tools/1.0 (AIA Fetcher)"
+    }
+
+    req = urllib.request.Request(url, headers=headers)
+
+    try:
+        # AIA URLs are HTTP, not HTTPS — but we still set a context for consistency
+        ctx = ssl.create_default_context()
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+            return resp.read()
+
+    except urllib.error.HTTPError as e:
+        # 404, 403, etc.
+        return None
+
+    except urllib.error.URLError as e:
+        # DNS failure, timeout, refused connection
+        return None
+
+    except Exception:
+        # Any other unexpected failure
+        return None
+def parse_cert_bytes(raw):
+    try:
+        # PEM
+        if raw.startswith(b"-----BEGIN CERTIFICATE-----"):
+            return x509.load_pem_x509_certificate(raw, default_backend())
+        # DER
+        else:
+            return x509.load_der_x509_certificate(raw, default_backend())
+    except Exception:
+        return None    
+def parse_intermediate_cert(url, raw_bytes):
+    """
+    Parse an intermediate certificate fetched via AIA.
+    Returns a dict with parsed fields or an error entry.
+    """
+
+    entry = {"url": url}
+
+    if raw_bytes is None:
+        entry["error"] = "fetch_failed"
+        return entry
+
+    cert_obj = parse_cert_bytes(raw_bytes)
+    if cert_obj is None:
+        entry["error"] = "parse_failed"
+        return entry
+
+    # Extract fields
+    subject_cn = get_subject_cn(cert_obj)
+    issuer_cn = get_issuer_cn(cert_obj)
+    sigalg = cert_obj.signature_hash_algorithm.name
+    key_type = cert_obj.public_key().__class__.__name__
+
+    # Extract OCSP URLs
+    ocsp_urls = get_ocsp_urls(cert_obj)
+
+    entry.update({
+        "subject_cn": subject_cn,
+        "issuer_cn": issuer_cn,
+        "signature_algorithm": sigalg,
+        "key_type": key_type,
+        "ocsp_urls": ocsp_urls,
+    })
+
+    return entry
 
 # -----------------------------
 #  Extractors
 # -----------------------------
 def get_cert_expiry(cert):
     return cert.not_valid_after
+
+def get_cn(cert_obj):
+    try:
+        return cert_obj.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
+    except Exception:
+        return None
 
 def get_key_info(cert):
     """Return (key_type, rsa_bits, curve_name)"""
@@ -111,11 +194,34 @@ def get_issuer_cn(cert):
         return None
     return None
 
+def get_subject_cn(cert):
+    try:
+        for attr in cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME):
+            return attr.value
+    except Exception:
+        return None
+    return None
+
 def get_signature_algorithm(cert):
     try:
         return cert.signature_hash_algorithm.name.lower()
     except Exception:
         return None
+
+def get_ocsp_urls(cert_obj):
+    urls = []
+    try:
+        aia = cert_obj.extensions.get_extension_for_oid(
+            AuthorityInformationAccessOID.AUTHORITY_INFORMATION_ACCESS
+        ).value
+
+        for desc in aia:
+            if desc.access_method == AuthorityInformationAccessOID.OCSP:
+                urls.append(desc.access_location.value)
+    except Exception:
+        pass
+
+    return urls
 
 def is_wildcard_cert(cert):
     san_list = get_san_list(cert)
@@ -131,9 +237,9 @@ def is_wildcard_cert(cert):
 
     return False
 
-# -----------------------------
-#  Classification Logic
-# -----------------------------
+# --------------------------------------
+#  Classification/Enforcement/Validation
+# --------------------------------------
 def classify(days: int, warn: int, crit: int) -> str:
     if days < 0:
         return "expired"
@@ -165,17 +271,14 @@ def enforce(args, data):
 
     # 1. Self-signed detection
     if is_self_signed(data["cert"]):
-        print("UNKNOWN - certificate is self-signed (no valid chain)")
         data["chain_warning"] = "self-signed certificate"
 
     # 2. Missing intermediates (server sent only leaf)
     if not chain and aia_urls:
-        print("UNKNOWN - server did not send intermediate certificates (AIA present)")
         data["chain_warning"] = "missing intermediates"
 
     # 3. Issuer mismatch (rare but important)
     if data["issuer_cn"] is None:
-        print("UNKNOWN - certificate issuer could not be determined")
         data["chain_warning"] = "Unknown Issuer"
 
     # OCSP enforcement
@@ -267,6 +370,42 @@ def enforce(args, data):
     if args.forbid_wildcard and wildcard:
         print("UNKNOWN - certificate is wildcard")
         sys.exit(UNKNOWN)
+
+def validate_chain(leaf_cert, aia_chain_entries):
+    """
+    Validate the certificate chain using the leaf certificate and parsed AIA intermediates.
+    Returns (chain_reconstructed, chain_valid, errors)
+    """
+
+    errors = []
+
+    # No intermediates fetched
+    if not aia_chain_entries:
+        return False, False, ["no_intermediates"]
+
+    # Only supporting single-intermediate chains for now
+    entry = aia_chain_entries[0]
+
+    # If fetch or parse failed
+    if "error" in entry:
+        return False, False, [entry["error"]]
+
+    leaf_issuer = get_issuer_cn(leaf_cert)
+    interm_subject = entry["subject_cn"]
+    interm_issuer = entry["issuer_cn"]
+
+    # 1. Leaf issuer must match intermediate subject
+    if leaf_issuer != interm_subject:
+        errors.append("leaf_issuer_mismatch")
+
+    # 2. Intermediate issuer must exist (root is implicit)
+    if interm_issuer is None:
+        errors.append("intermediate_missing_issuer")
+
+    chain_reconstructed = len(errors) == 0
+    chain_valid = len(errors) == 0
+
+    return chain_reconstructed, chain_valid, errors
 
 # -----------------------------
 #  Status Dispatcher + Perfdata
@@ -434,6 +573,19 @@ def main():
         "ecc_curve": curve_name,
         "aia_urls": aia_urls,
     }
+    # Fetch intermediates via AIA
+    data["aia_chain"] = []
+    for url in aia_urls:
+        raw = fetch_aia_certificate(url)
+        entry = parse_intermediate_cert(url, raw)
+        data["aia_chain"].append(entry)
+    
+    chain_reconstructed, chain_valid, chain_errors = validate_chain(cert, data["aia_chain"])
+
+    data["chain_reconstructed"] = chain_reconstructed
+    data["chain_valid"] = chain_valid
+    data["chain_errors"] = chain_errors
+    data["oscp_urls"] = get_ocsp_urls(cert)
 
     # JSON mode overrides everything else
     if args.json:
@@ -455,8 +607,12 @@ def main():
             "ecc_curve": curve_name,
             "chain_present": len(chain) > 0,
             "aia_issuer_urls": aia_urls,
+            "aia_chain": data["aia_chain"],
             "self_signed": is_self_signed(cert),
             "chain_warning" : data.get("chain_warning"),
+            "chain_reconstructed": chain_reconstructed,
+            "chain_valid": chain_valid,
+            "chain_errors": chain_errors,
         }
 
         print(json.dumps(dta, indent=2))
@@ -476,12 +632,49 @@ def main():
         print(f"RSA Bits: {rsa_bits}")
         print(f"ECC Curve: {curve_name}")
         print(f"Self-Signed: {is_self_signed(cert)}")
-        print(f"AIA Issuer URLs: {', '.join(aia_urls) if aia_urls else 'None'}")
         print(f"Chain Present: {len(chain) > 0}")
-        print(f"Self-Signed: {is_self_signed(cert)}")
-        print(f"AIA Issuer URLs: {', '.join(aia_urls) if aia_urls else 'None'}")
-        print(f"Chain Present: {len(chain) > 0}")
-        if "chain_warning" in data:
+
+        # AIA URLs
+        print("AIA Issuer URLs:")
+        if aia_urls:
+            for url in aia_urls:
+                print(f"  - {url}")
+        else:
+            print("  None")
+
+        # AIA Chain Details
+        print("AIA Chain:")
+        if data.get("aia_chain"):
+            for entry in data["aia_chain"]:
+                print(f"  - {entry['url']}")
+                if "error" in entry:
+                    print(f"      ERROR: {entry['error']}")
+                else:
+                    print(f"      Subject CN: {entry['subject_cn']}")
+                    print(f"      Issuer CN: {entry['issuer_cn']}")
+                    print(f"      Signature Algorithm: {entry['signature_algorithm']}")
+                    print(f"      Key Type: {entry['key_type']}")
+        else:
+            print("  None")
+            print("Chain Validation:")
+            print(f"  Reconstructed: {data['chain_reconstructed']}")
+            print(f"  Valid: {data['chain_valid']}")
+            if data["chain_errors"]:
+                print("  Errors:")
+                for e in data["chain_errors"]:
+                    print(f"    - {e}")
+            else:
+                print("  No errors detected")
+            print("OCSP Responder URLs:")
+            if entry.get("ocsp_urls"):
+                for url in entry["ocsp_urls"]:
+                    print(f"  - {url}")
+            else:
+                print("  None")
+
+
+        # Chain warning (if any)
+        if data.get("chain_warning"):
             print(f"Chain Warning: {data['chain_warning']}")
 
     enforce(args, data)
