@@ -4,7 +4,7 @@ File: check_cert.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-17
-Modified: 2026-03-18
+Modified: 2026-03-19
 Required: Python 3.6+
 Description:
     Certificate checker with SAN, issuer, signature algorithm, wildcard detection,
@@ -16,16 +16,17 @@ import urllib.error
 import ssl
 import socket
 import argparse
-import datetime
 import sys
 import json
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448
 from cryptography.x509.oid import ExtensionOID, NameOID, AuthorityInformationAccessOID
 from cryptography.x509.ocsp import load_der_ocsp_response  # optional, see OCSP stub
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448
-
+from datetime import datetime
+from typing import Tuple, Optional, List
 # -----------------------------
 #  Nagios Exit Codes
 # -----------------------------
@@ -54,11 +55,15 @@ def fetch_certificate_and_socket(hostname: str, port: int = 443):
         ssock = ctx.wrap_socket(sock, server_hostname=hostname)
 
         der = ssock.getpeercert(binary_form=True)
+        if der is None:
+            raise RuntimeError("No certificate received from peer")
+
         pem = ssl.DER_cert_to_PEM_cert(der)
         cert = x509.load_pem_x509_certificate(pem.encode(), default_backend())
 
-        tls_version = ssock.version()
-        cipher = ssock.cipher()[0] if ssock.cipher() else None
+        tls_version, cipher = get_tls_info(ssock)
+        cipher_info = ssock.cipher()
+        cipher = cipher_info[0] if cipher_info is not None else None
 
         ocsp_resp = None
         chain = []  # stdlib doesn't expose full chain cleanly
@@ -127,8 +132,9 @@ def parse_intermediate_cert(url, raw_bytes):
     # Extract fields
     subject_cn = get_subject_cn(cert_obj)
     issuer_cn = get_issuer_cn(cert_obj)
-    sigalg = cert_obj.signature_hash_algorithm.name
-    key_type = cert_obj.public_key().__class__.__name__
+    algo = cert_obj.signature_hash_algorithm
+    sigalg = algo.name if algo is not None else cert_obj.signature_algorithm_oid._name
+    key_type, key_bits, curve = get_key_info(cert_obj)
 
     # Extract OCSP URLs
     ocsp_urls = get_ocsp_urls(cert_obj)
@@ -155,30 +161,79 @@ def get_cn(cert_obj):
     except Exception:
         return None
 
-def get_key_info(cert):
-    """Return (key_type, rsa_bits, curve_name)"""
-    key = cert.public_key()
+def get_key_info(cert: x509.Certificate) -> Tuple[str, Optional[int], Optional[str]]:
+    """
+    Returns (key_type, key_bits, curve) in a deterministic format.
+    - RSA: ('rsa', bits, None)
+    - EC: ('ecdsa', None, curve_name)
+    - Ed25519/Ed448: ('ed25519'/'ed448', None, None)
+    - Fallback: ('unknown', None, None)
+    """
+    pub = cert.public_key()
 
     # RSA
-    if isinstance(key, rsa.RSAPublicKey):
-        return ("rsa", key.key_size, None)
+    if isinstance(pub, rsa.RSAPublicKey):
+        return ("rsa", pub.key_size, None)
 
-    # ECC
-    if isinstance(key, ec.EllipticCurvePublicKey):
-        return ("ec", None, key.curve.name.lower())
+    # Elliptic Curve (ECDSA)
+    if isinstance(pub, ec.EllipticCurvePublicKey):
+        curve_name = pub.curve.name.lower()
+        return ("ecdsa", None, curve_name)
 
-    # EdDSA
-    if isinstance(key, ed25519.Ed25519PublicKey):
-        return ("eddsa", None, "ed25519")
-    if isinstance(key, ed448.Ed448PublicKey):
-        return ("eddsa", None, "ed448")
+    # Ed25519
+    if isinstance(pub, ed25519.Ed25519PublicKey):
+        return ("ed25519", None, None)
 
+    # Ed448
+    if isinstance(pub, ed448.Ed448PublicKey):
+        return ("ed448", None, None)
+
+    # Fallback
     return ("unknown", None, None)
 
-def get_ocsp_status(ocsp_resp):
-    # Using stdlib ssl: no stapled OCSP available
-    return (False, "unsupported")
+def get_ocsp_status(cert: x509.Certificate, timeout: float = 1.0) -> str:
+    """
+    Returns OCSP reachability status:
+    - 'reachable' if TCP connect to OCSP responder succeeds
+    - 'unreachable' if connect fails
+    - 'none' if no OCSP URL is present
+    """
+    # Extract OCSP URL from AIA
+    try:
+        aia = cert.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_INFORMATION_ACCESS).value
+    except x509.ExtensionNotFound:
+        return "none"
 
+    ocsp_urls = [
+        desc.access_location.value
+        for desc in aia
+        if desc.access_method == AuthorityInformationAccessOID.OCSP
+    ]
+
+    if not ocsp_urls:
+        return "none"
+
+    ocsp_url = ocsp_urls[0]
+
+    # Parse host/port from URL
+    try:
+        # Example: http://ocsp.int-x3.letsencrypt.org
+        host = ocsp_url.split("://", 1)[1].split("/", 1)[0]
+        if ":" in host:
+            hostname, port = host.split(":", 1)
+            port = int(port)
+        else:
+            hostname, port = host, 80
+    except Exception:
+        return "unreachable"
+
+    # Attempt TCP connection
+    try:
+        with socket.create_connection((hostname, port), timeout=timeout):
+            return "reachable"
+    except Exception:
+        return "unreachable"
+    
 def get_san_list(cert):
     try:
         san = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
@@ -202,11 +257,25 @@ def get_subject_cn(cert):
         return None
     return None
 
-def get_signature_algorithm(cert):
-    try:
-        return cert.signature_hash_algorithm.name.lower()
-    except Exception:
-        return None
+def get_signature_algorithm(cert: x509.Certificate) -> str:
+    """
+    Returns a deterministic signature algorithm name for any certificate.
+    - RSA/ECDSA: returns the hash name (e.g., 'sha256')
+    - Ed25519/Ed448: returns the algorithm name (e.g., 'ed25519')
+    - Fallback: OID name
+    """
+    # Case 1: Algorithms with a hash (RSA, ECDSA)
+    algo = cert.signature_hash_algorithm
+    if algo is not None:
+        return algo.name.lower()
+
+    # Case 2: Algorithms without a hash (Ed25519, Ed448)
+    oid_name = cert.signature_algorithm_oid._name
+    if oid_name:
+        return oid_name.lower()
+
+    # Case 3: Absolute fallback (should never happen)
+    return cert.signature_algorithm_oid.dotted_string
 
 def get_ocsp_urls(cert_obj):
     urls = []
@@ -222,6 +291,23 @@ def get_ocsp_urls(cert_obj):
         pass
 
     return urls
+
+def get_tls_info(ssock) -> Tuple[str, Optional[str]]:
+    """
+    Returns (tls_version, cipher) in a normalized, deterministic format.
+    - tls_version: 'tls1.3', 'tls1.2', etc.
+    - cipher: canonical OpenSSL cipher name or None
+    """
+    # Normalize TLS version
+    version = ssock.version()
+    tls_version = version.lower() if version else "unknown"
+
+    # Normalize cipher
+    cipher_info = ssock.cipher()
+    cipher = cipher_info[0] if cipher_info else None
+
+    return tls_version, cipher
+
 
 def is_wildcard_cert(cert):
     san_list = get_san_list(cert)
@@ -254,7 +340,6 @@ def enforce(args, data):
     chain = data.get("chain", [])
     tls_version = data["tls_version"]
     cipher = data["cipher"]
-    ocsp_supported = data["ocsp_supported"]
     ocsp_status = data["ocsp_status"]
     san_list = data["san"]
     issuer_cn = data["issuer_cn"]
@@ -282,13 +367,19 @@ def enforce(args, data):
         data["chain_warning"] = "Unknown Issuer"
 
     # OCSP enforcement
-    if args.require_ocsp and not ocsp_supported:
-        print("UNKNOWN - server did not staple an OCSP response")
-        sys.exit(UNKNOWN)
+    ocsp_status = data["ocsp_status"]
 
-    if args.forbid_ocsp and ocsp_supported:
-        print("UNKNOWN - server stapled an OCSP response but --forbid-ocsp was used")
-        sys.exit(UNKNOWN)
+    # --require-ocsp means: OCSP must be reachable
+    if args.require_ocsp:
+        if ocsp_status != "reachable":
+            print("UNKNOWN - OCSP responder not reachable")
+            sys.exit(UNKNOWN)
+
+    # --forbid-ocsp means: OCSP must NOT be reachable
+    if args.forbid_ocsp:
+        if ocsp_status == "reachable":
+            print("UNKNOWN - OCSP responder reachable but --forbid-ocsp was used")
+            sys.exit(UNKNOWN)
 
     if args.ocsp_status and ocsp_status != args.ocsp_status:
         print(f"UNKNOWN - OCSP status '{ocsp_status}' does not match required '{args.ocsp_status}'")
@@ -371,41 +462,39 @@ def enforce(args, data):
         print("UNKNOWN - certificate is wildcard")
         sys.exit(UNKNOWN)
 
-def validate_chain(leaf_cert, aia_chain_entries):
+def validate_chain(cert: x509.Certificate, chain: List[x509.Certificate]) -> Tuple[bool, List[str]]:
     """
-    Validate the certificate chain using the leaf certificate and parsed AIA intermediates.
-    Returns (chain_reconstructed, chain_valid, errors)
+    Validates certificate chain structure.
+    Returns (chain_ok, warnings).
     """
+    warnings = []
 
-    errors = []
+    # Case 1: Self-signed certificate
+    if cert.issuer == cert.subject:
+        warnings.append("self_signed")
+        return (False, warnings)
 
-    # No intermediates fetched
-    if not aia_chain_entries:
-        return False, False, ["no_intermediates"]
+    # Case 2: No intermediates provided
+    if not chain:
+        warnings.append("missing_intermediate")
+        return (False, warnings)
 
-    # Only supporting single-intermediate chains for now
-    entry = aia_chain_entries[0]
+    # Case 3: Check ordering and issuer/subject linkage
+    full_chain = [cert] + chain
+    for i in range(len(full_chain) - 1):
+        child = full_chain[i]
+        parent = full_chain[i + 1]
 
-    # If fetch or parse failed
-    if "error" in entry:
-        return False, False, [entry["error"]]
+        if child.issuer != parent.subject:
+            warnings.append("issuer_mismatch")
 
-    leaf_issuer = get_issuer_cn(leaf_cert)
-    interm_subject = entry["subject_cn"]
-    interm_issuer = entry["issuer_cn"]
+    # Case 4: If chain is out of order
+    # (simple heuristic: if issuer of leaf matches neither subject of first intermediate nor leaf itself)
+    if cert.issuer != chain[0].subject:
+        warnings.append("chain_out_of_order")
 
-    # 1. Leaf issuer must match intermediate subject
-    if leaf_issuer != interm_subject:
-        errors.append("leaf_issuer_mismatch")
-
-    # 2. Intermediate issuer must exist (root is implicit)
-    if interm_issuer is None:
-        errors.append("intermediate_missing_issuer")
-
-    chain_reconstructed = len(errors) == 0
-    chain_valid = len(errors) == 0
-
-    return chain_reconstructed, chain_valid, errors
+    chain_ok = len(warnings) == 0
+    return (chain_ok, warnings)
 
 # -----------------------------
 #  Status Dispatcher + Perfdata
@@ -535,6 +624,43 @@ def parse_args():
     return parser.parse_args()
 
 # -----------------------------
+# Populate Warnings/Errors
+# -----------------------------
+def populate_warnings(data: dict) -> list:
+    warnings = []
+    expiration_days = data.get("expiration_days", 0)
+    sigalg = data.get("sigalg")
+    tls_version = data.get("tls_version")
+    if expiration_days < 30:
+        warnings.append(f"certificate_expires_soon: {expiration_days} days")
+    key_type = data.get("key_type")
+    key_bits = data.get("key_bits")
+
+    if key_type == "rsa" and isinstance(key_bits, int) and key_bits < 2048:
+        warnings.append(f"weak_rsa_key: {key_bits} bits")
+
+    if sigalg in ("sha1", "md5"):
+        warnings.append(f"deprecated_signature_algorithm: {sigalg}")
+    if tls_version in ("tls1", "tls1.1"):
+        warnings.append(f"weak_tls_version: {tls_version}")
+    if data.get("cipher") is None:
+        warnings.append("no_cipher_negotiated")
+    if data.get("ocsp_status") == "unreachable":
+        warnings.append("ocsp_unreachable")
+    return warnings
+def populate_errors(data: dict) -> list:
+    errors = []
+    expiration_days = data.get("expiration_days", 0)
+    if expiration_days < 0:
+        errors.append("certificate_expired")
+    if not data.get("chain_ok"):
+        errors.append("chain_invalid")
+    errors.append("tls_handshake_failed")
+    if data.get("cert_obj") is None:
+        errors.append("no_certificate_present")
+    return errors
+
+# -----------------------------
 #  Main Orchestrator
 # -----------------------------
 def main():
@@ -546,8 +672,8 @@ def main():
         print(f"UNKNOWN - failed to retrieve certificate: {e}")
         sys.exit(UNKNOWN)
 
-    ocsp_supported, ocsp_status = get_ocsp_status(ocsp_resp)
-    key_type, rsa_bits, curve_name = get_key_info(cert)
+    ocsp_status = get_ocsp_status(cert)
+    key_type, key_bits, curve = get_key_info(cert)
 
     expiry = get_cert_expiry(cert)
     san_list = get_san_list(cert)
@@ -562,57 +688,65 @@ def main():
         "chain": chain,
         "tls_version": tls_version,
         "cipher": cipher,
-        "ocsp_supported": ocsp_supported,
         "ocsp_status": ocsp_status,
         "san": san_list,
         "issuer_cn": issuer_cn,
         "signature_algorithm": sigalg,
         "wildcard": wildcard,
         "key_type": key_type,
-        "rsa_bits": rsa_bits,
-        "ecc_curve": curve_name,
+        "rsa_bits": key_bits,
+        "ecc_curve": curve,
         "aia_urls": aia_urls,
     }
     # Fetch intermediates via AIA
+    aia_chain_raw = []
     data["aia_chain"] = []
+
     for url in aia_urls:
         raw = fetch_aia_certificate(url)
+
+        # Parse raw cert object for validation
+        if isinstance(raw, bytes):
+            try:
+                cert_obj = x509.load_der_x509_certificate(raw, default_backend())
+                aia_chain_raw.append(cert_obj)
+            except Exception:
+                pass
+
+        # Parse JSON-safe entry for output
         entry = parse_intermediate_cert(url, raw)
         data["aia_chain"].append(entry)
-    
-    chain_reconstructed, chain_valid, chain_errors = validate_chain(cert, data["aia_chain"])
 
-    data["chain_reconstructed"] = chain_reconstructed
-    data["chain_valid"] = chain_valid
-    data["chain_errors"] = chain_errors
+    chain_ok, chain_warnings = validate_chain(cert, aia_chain_raw)
+
+    data["chain_ok"] = chain_ok
+    data["chain_warnings"] = chain_warnings
     data["oscp_urls"] = get_ocsp_urls(cert)
+
+    not_after = cert.not_valid_after
+    expiration_date = not_after.strftime("%Y-%m-%d")
+    expiration_days = (not_after - datetime.utcnow()).days
+    data["expiration_days"] = expiration_days
+    warnings = populate_warnings(data)
 
     # JSON mode overrides everything else
     if args.json:
         dta = {
-            "host": args.host,
-            "port": args.port,
-            "expiry": expiry.isoformat(),
-            "days_remaining": (expiry - datetime.datetime.utcnow()).days,
-            "san": san_list,
+            "subject_cn": get_subject_cn(cert),
             "issuer_cn": issuer_cn,
-            "signature_algorithm": sigalg,
-            "wildcard": wildcard,
-            "ocsp_supported": ocsp_supported,
-            "ocsp_status": ocsp_status,
+            "sigalg": sigalg,
+            "key_type": key_type,
+            "key_bits": key_bits,
+            "curve": curve,
             "tls_version": tls_version,
             "cipher": cipher,
-            "key_type": key_type,
-            "rsa_bits": rsa_bits,
-            "ecc_curve": curve_name,
-            "chain_present": len(chain) > 0,
-            "aia_issuer_urls": aia_urls,
-            "aia_chain": data["aia_chain"],
-            "self_signed": is_self_signed(cert),
-            "chain_warning" : data.get("chain_warning"),
-            "chain_reconstructed": chain_reconstructed,
-            "chain_valid": chain_valid,
-            "chain_errors": chain_errors,
+            "ocsp_status": ocsp_status,
+            "chain_ok": chain_ok,
+            "chain_warnings": chain_warnings,
+            "expiration_days": expiration_days,
+            "expiration_date": expiration_date,
+            "warnings": populate_warnings(data),     # your existing general warnings
+            "errors": populate_errors(data),          # your existing general errors
         }
 
         print(json.dumps(dta, indent=2))
@@ -629,8 +763,8 @@ def main():
         print(f"SAN: {', '.join(san_list)}")
         print(f"Expires: {expiry} UTC")
         print(f"Key Type: {key_type}")
-        print(f"RSA Bits: {rsa_bits}")
-        print(f"ECC Curve: {curve_name}")
+        print(f"RSA Bits: {key_bits}")
+        print(f"ECC Curve: {curve}")
         print(f"Self-Signed: {is_self_signed(cert)}")
         print(f"Chain Present: {len(chain) > 0}")
 
@@ -685,7 +819,7 @@ def main():
         print(f"SAN: {', '.join(san_list)}")
 
     # Expiration logic
-    remaining = expiry - datetime.datetime.utcnow()
+    remaining = expiry - datetime.utcnow()
     days = remaining.days
 
     status = classify(days, args.warning, args.critical)
