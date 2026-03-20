@@ -37,9 +37,11 @@ The JSON output is a single object with the following top‑level keys:
   "errors": [],
   "enforcement": { ... }
 }
+
 Each section is documented below.
 
 ## 2. Host & Connection Metadata
+
 "host": "example.com",
 "port": 443,
 "timestamp_utc": "2026-05-18T18:19:55Z"
@@ -52,6 +54,7 @@ Each section is documented below.
 | timestamp_utc | Time of evaluation in UTC |
 
 ## 3. Expiration Metadata
+
 "expiration": {
   "not_before": "2025-02-12T00:00:00Z",
   "not_after": "2026-05-18T18:19:55Z",
@@ -66,6 +69,7 @@ Each section is documented below.
 
 ## 4. Certificate Metadata
 json
+
 "certificate": {
   "subject_cn": "example.com",
   "issuer_cn": "Example CA",
@@ -84,6 +88,7 @@ json
 
 ## 5. Key Metadata
 json
+
 "key": {
   "type": "ecdsa",
   "size": 256,
@@ -98,6 +103,7 @@ json
 
 ## 6. Subject Alternative Names (SAN)
 json
+
 "san": [
   "example.com",
   "*.example.com"
@@ -106,6 +112,7 @@ Always an array, even if empty.
 
 ## 7. TLS Session Metadata
 json
+
 "tls": {
   "version": "tls1.3",
   "cipher": "TLS_AES_256_GCM_SHA384"
@@ -118,6 +125,7 @@ json
 
 ## 8. AIA Metadata
 json
+
 "aia": {
   "issuer_urls": [
     "http://ca.example.com/intermediate.crt"
@@ -130,6 +138,7 @@ json
 
 ## 9. Chain Metadata
 json
+
 "chain": {
   "validated": true,
   "warnings": [],
@@ -149,6 +158,7 @@ json
 
 ## 10. OCSP Metadata
 json
+
 "ocsp": {
   "urls": [
     "http://ocsp.example.com"
@@ -174,7 +184,9 @@ json
 Both arrays are always present.
 
 ## 12. Enforcement Metadata
+
 json
+
 "enforcement": {
   "applied": ["min-tls", "require-aead"],
   "passed": ["require-aead"],
@@ -221,6 +233,7 @@ Any change to:
 - migration notes
 
 ## 15. Example Full JSON Output
+
 {
   "host": "example.com",
   "port": 443,
