@@ -17,6 +17,7 @@ Future schema changes require a version bump and migration notes.
 ## 1. Top‑Level Structure
 The JSON output is a single object with the following top‑level keys:
 
+```json
 {
   "host": "",
   "port": 443,
@@ -37,15 +38,17 @@ The JSON output is a single object with the following top‑level keys:
   "errors": [],
   "enforcement": { ... }
 }
+```
 
 Each section is documented below.
 
 ## 2. Host & Connection Metadata
 
+```
 "host": "example.com",
 "port": 443,
 "timestamp_utc": "2026-05-18T18:19:55Z"
-
+```
 
 | Field | Description |
 |-------|-------------|
@@ -55,11 +58,13 @@ Each section is documented below.
 
 ## 3. Expiration Metadata
 
+```
 "expiration": {
   "not_before": "2025-02-12T00:00:00Z",
   "not_after": "2026-05-18T18:19:55Z",
   "days_remaining": 60
 }
+```
 
 | Field | Description |
 |-------|-------------|
@@ -68,8 +73,9 @@ Each section is documented below.
 | days_remaining | Integer days until expiration |
 
 ## 4. Certificate Metadata
-json
 
+
+```json
 "certificate": {
   "subject_cn": "example.com",
   "issuer_cn": "Example CA",
@@ -77,6 +83,7 @@ json
   "signature_algorithm": "sha256",
   "version": 3
 }
+```
 
 | Field | Description |
 |-------|-------------|
@@ -87,13 +94,14 @@ json
 | version |Certificate version (usually 3) |
 
 ## 5. Key Metadata
-json
 
+```json
 "key": {
   "type": "ecdsa",
   "size": 256,
   "curve": "prime256v1"
 }
+```
 
 | Field | Description |
 |-------|-------------|
@@ -102,21 +110,24 @@ json
 | curve	| ECDSA curve name (null for RSA) |
 
 ## 6. Subject Alternative Names (SAN)
-json
 
+```json
 "san": [
   "example.com",
   "*.example.com"
 ]
+```
+
 Always an array, even if empty.
 
 ## 7. TLS Session Metadata
-json
 
+```json
 "tls": {
   "version": "tls1.3",
   "cipher": "TLS_AES_256_GCM_SHA384"
 }
+```
 
 | Field | Description |
 |-------|-------------|
@@ -124,21 +135,22 @@ json
 | cipher | Negotiated cipher suite |
 
 ## 8. AIA Metadata
-json
 
+```json
 "aia": {
   "issuer_urls": [
     "http://ca.example.com/intermediate.crt"
   ]
 }
+```
 
 | Field | Description |
 |-------|-------------|
 | issuer_urls | AIA “CA Issuers” URLs extracted from certificate |
 
 ## 9. Chain Metadata
-json
 
+```json
 "chain": {
   "validated": true,
   "warnings": [],
@@ -149,6 +161,7 @@ json
     }
   ]
 }
+```
 
 | Field | Description |
 |-------|-------------|
@@ -157,14 +170,15 @@ json
 | intermediates	| List of intermediate certificates (minimal metadata) |
 
 ## 10. OCSP Metadata
-json
 
+```json
 "ocsp": {
   "urls": [
     "http://ocsp.example.com"
   ],
   "status": "unknown"
 }
+```
 
 | Field | Description |
 |-------|-------------|
@@ -174,9 +188,11 @@ json
 Full OCSP response parsing is planned for a future version.
 
 ## 11. Warnings & Errors
-json
+
+```json
 "warnings": [],
 "errors": []
+```
 
 - warnings: Non‑fatal issues (chain gaps, weak algorithms, missing AIA)
 - errors: Fatal issues (handshake failure, parsing errors)
@@ -185,14 +201,14 @@ Both arrays are always present.
 
 ## 12. Enforcement Metadata
 
-json
-
+```json
 "enforcement": {
   "applied": ["min-tls", "require-aead"],
   "passed": ["require-aead"],
   "failed": ["min-tls"],
   "errors": []
 }
+```
 This structure is defined in detail in **Enforcement.md**.
 
 ## 13. Deterministic Ordering
@@ -234,6 +250,7 @@ Any change to:
 
 ## 15. Example Full JSON Output
 
+```json
 {
   "host": "example.com",
   "port": 443,
@@ -293,3 +310,4 @@ Any change to:
     "errors": []
   }
 }
+```
