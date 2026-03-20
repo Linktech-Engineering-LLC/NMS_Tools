@@ -1,7 +1,7 @@
-# Usage Examples — `check_cert.py`
+# Usage Guide — `check_cert.py`
 
-This document provides practical examples for real‑world usage of
-`check_cert.py` in both system and monitoring environments.
+This guide explains how to invoke `check_cert.py`, what each flag does, and how
+to combine modes, thresholds, and enforcement rules.
 
 ---
 
@@ -10,174 +10,201 @@ This document provides practical examples for real‑world usage of
 ```bash
 check_cert -H example.com
 ```
+This emits a single Nagios-style line:
 
----
+`OK - certificate valid, expires in 85 days on 2026-06-13`
+
+This is the default mode for:
+
+- Monitoring systems
+- Cron jobs
+- Shell scripts
 
 ## 2. Verbose Output
 
-```bash
 check_cert -H example.com -v
-```
 
----
+- Connection details
+- TLS version and cipher
+- Certificate metadata
+- SAN list
+- Key information  
+- AIA URLs and intermediate chain
+- OCSP metadata
+- Chain validation summary
+- General warnings and errors
+- Enforcement summary
+
+Verbose mode is "grouped, noise-free, deterministic"
+Chain warnings appear **only** in verbose/JSON, never Nagios
 
 ## 3. JSON Output
 
-```bash
 check_cert -H example.com --json
-```
 
----
+Outputs a stable, deterministic JSON object containing:
 
-## 4. Checking Non‑Standard Ports
+- Certificate metadata
+- Key metadata  
+- SAN list
+- TLS session details
+- Expiration timestamp and days remaining
+- OCSP metadata
+- Chain metadata
+- General warnings and errors
+- Enforcement results
 
-```bash
-check_cert -H mail.example.com -p 587 -S
-```
+Ideal for:
 
----
+- Automation
+- Log ingestion
+- Pipelines
+- Programmatic inspection 
 
-## 5. Enforcing TLS Versions
+## 4. Expiration Thresholds
 
-Require TLS 1.3:
+Set Nagios thresholds:
 
-```bash
-check_cert -H example.com --require-tls TLSv1.3
-```
+-w DAYS   Warning threshold
+-c DAYS   Critical threshold
 
-Minimum TLS 1.2:
+Example: 
+`check_cert -H example.com -w 30 -c 10`
 
-```bash
-check_cert -H example.com --min-tls TLSv1.2
-```
+Behavior:
 
----
+- days_remaining <= critical → CRITICAL
+- days_remaining <= warning → WARNING
+- otherwise → OK
 
-## 6. Enforcing Ciphers
+Thresholds apply only to expiration unless enforcement rules are used.
+Enforcement failures always produce CRITICAL.
 
-Require a specific cipher:
+## 5. Enforcement Rules
 
-```bash
-check_cert -H example.com --require-cipher TLS_AES_256_GCM_SHA384
-```
+Enforcement rules validate certificate, TLS, and OCSP properties.
 
-Forbid CBC:
+Failures appear in:
 
-```bash
-check_cert -H example.com --forbid-cbc
-```
+- JSON: enforcement.failed
+- Verbose: “Enforcement Summary”
+- Nagios: CRITICAL
 
----
+### OCSP Enforcement
+--require-ocsp
+--forbid-ocsp
+--ocsp-status {good,revoked,unknown,invalid}
 
-## 7. Key Requirements
+**Note:**
+OCSP support is currently limited to:
 
-Minimum RSA size:
+- Extracting OCSP URLs
+- Reporting presence/absence
+- Placeholder status
 
-```bash
-check_cert -H example.com --min-rsa 2048
-```
+Full OCSP reachability and response parsing are planned.
 
-Require ECC curve:
+### TLS Requirements
+--min-tls VERSION
+--require-tls VERSION
+--require-cipher CIPHER
+--forbid-cipher CIPHER
+--require-aead
+--forbid-cbc
+--forbid-rc4
 
-```bash
-check_cert -H example.com --require-curve secp256r1
-```
+### Key Requirements
+--min-rsa BITS
+--require-curve CURVE
 
----
+### Certificate Requirements
+--require-wildcard
+--forbid-wildcard
+-I, --issuer ISSUER
+-A, --sigalg ALGORITHM
 
-## 8. OCSP Enforcement
+## 6. Port, Timeout, and SNI
+**Port**
+check_cert -H mail.example.com -p 587
 
-Require OCSP reachability:
+**Timeout**
+--timeout SECONDS
 
-```bash
-check_cert -H example.com --require-ocsp
-```
+**Disable SNI**
+--no-sni
 
-Forbid OCSP:
+## 7. Insecure Mode
+Skip certificate validation during the TLS handshake:
 
-```bash
-check_cert -H example.com --forbid-ocsp
-```
+Code
+--insecure
 
----
+This does not affect certificate parsing or enforcement rules.
 
-## 9. Wildcard Enforcement
+## 8. Nagios Integration
 
-Require wildcard:
-
-```bash
-check_cert -H example.com --require-wildcard
-```
-
-Forbid wildcard:
-
-```bash
-check_cert -H example.com --forbid-wildcard
-```
-
----
-
-## 10. Nagios Integration
-
-### Command Definition
-
-```
+**Command Definition**
 define command {
     command_name    check_cert
     command_line    /usr/lib/nagios/plugins/check_cert -H $HOSTADDRESS$ -w 30 -c 10
 }
-```
 
-### Service Definition
-
-```
+**Service Definition**
 define service {
     use                 generic-service
     host_name           myserver
     service_description TLS Certificate
     check_command       check_cert
 }
-```
 
----
+## 9. Example Outputs
 
-## 11. Example Outputs
+**Default**
+OK - 60 days remaining (2026-05-18 18:19:55 UTC);
 
-### Default
-
-```
-OK - 60 days remaining (2026-05-18 18:19:55 UTC) | days_remaining=60;30;15;0;
-```
-
-### Verbose
-
-(Truncated for brevity)
-
-```
+**Verbose (truncated)**
 Host: example.com
 Port: 443
 TLS Version: tlsv1.3
 Cipher: TLS_AES_256_GCM_SHA384
 Issuer CN: Example CA
 ...
-```
 
-### JSON
-
-```json
+**JSON**
 {
   "subject_cn": "example.com",
   "issuer_cn": "Example CA",
-  "sigalg": "sha256",
+  "signature_algorithm": "sha256",
   "key_type": "ecdsa",
   "tls_version": "tlsv1.3",
   "cipher": "TLS_AES_256_GCM_SHA384",
-  "ocsp_status": "reachable",
-  "chain_ok": true,
   "expiration_days": 60,
   "warnings": [],
   "errors": []
 }
-```
 
----
+## 10. Troubleshooting
+
+### “tls_handshake_failed”
+- Port blocked  
+- TLS version mismatch  
+- SNI mismatch  
+
+### “no_certificate_present”
+- Host does not serve TLS on the given port  
+- Missing `-p` for non‑443 services  
+
+### OCSP unreachable
+- Firewall blocking outbound HTTP  
+- OCSP responder offline  
+
+### Chain validation warnings
+- Missing intermediates  
+- Mismatched issuer/subject  
+- Non‑standard chain structure  
+
+## 11. Network Requirements
+
+- Outbound TCP to target host
+- Outbound HTTP for AIA retrieval 
+- Outbound HTTP for OCSP (future retrieval)  

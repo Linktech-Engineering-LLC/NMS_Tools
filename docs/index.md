@@ -4,8 +4,8 @@ Welcome to the documentation for **NMS_Tools**, a suite of deterministic,
 audit‑transparent network management and monitoring tools used across Linktech
 Engineering infrastructure.
 
-This documentation covers installation, operation, usage examples, and the
-project roadmap.
+This documentation covers installation, usage, operation, enforcement, metadata
+schema details, and the project roadmap.
 
 ---
 
@@ -18,19 +18,40 @@ A deterministic TLS certificate inspection and policy enforcement tool with:
 - TLS version and cipher extraction  
 - SAN, issuer, signature algorithm, and key metadata  
 - AIA chain reconstruction  
-- OCSP reachability detection  
+- OCSP metadata extraction  
 - Expiration thresholds and policy enforcement  
+- Deterministic JSON schema for automation  
 
 ---
 
-## Documentation
+## Documentation Suite
 
+### Core Guides
 - **Installation Guide** — `Installation.md`  
+- **Usage Guide** — `Usage.md`  
 - **Operation Guide** — `Operation.md`  
-- **Usage Examples** — `Usage.md`  
+
+### Reference
+- **Enforcement Model** — `Enforcement.md`  
+- **Metadata Schema** — `Metadata_Schema.md`  
+
+### Project
 - **Roadmap** — `roadmap.md`  
 - **Contributing Guidelines** — `CONTRIBUTING.md`  
 - **Changelog** — `CHANGELOG.md`  
+
+Each document has a single responsibility:
+
+| Document | Purpose |
+|----------|---------|
+| Installation | How to install and run the tool |
+| Usage | CLI flags, examples, Nagios integration |
+| Operation | Runtime behavior, exit codes, troubleshooting |
+| Enforcement | Policy engine, rule semantics, failure behavior |
+| Metadata Schema | Canonical JSON structure for automation |
+| Roadmap | Planned enhancements and future tools |
+| CONTRIBUTING | Guidelines for contributors |
+| CHANGELOG | Version history and schema changes |
 
 ---
 
@@ -51,4 +72,3 @@ NMS_Tools follows Linktech Engineering’s deterministic engineering principles:
 
 Active development.  
 See `roadmap.md` for planned enhancements and upcoming tools.
-

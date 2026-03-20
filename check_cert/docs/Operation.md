@@ -10,21 +10,29 @@ its output, and how to use its enforcement features.
 When run without `-v` or `--json`, the tool emits a **single Nagios‑style line**:
 
 ```
-OK - 60 days remaining (2026-05-18 18:19:55 UTC) | days_remaining=60;30;15;0;
+OK - 60 days remaining (2026-05-18 18:19:55 UTC);
 ```
 
-This is intentional and designed for:
+This mode is designed for:
 
 - Monitoring systems  
 - Cron jobs  
 - Shell scripts  
 - Automated pipelines  
 
+Nagios mode supports:
+
+- **OK**
+- **WARNING**
+- **CRITICAL**
+- **UNKNOWN**
+
+Expiration thresholds and enforcement failures influence the exit code.
 ---
 
 ## 2. Detailed Output Modes
 
-### Verbose Mode (`-v`)
+### Verbose Mode (`-v` / `--verbose`)
 
 ```bash
 check_cert -H example.com -v
@@ -32,15 +40,20 @@ check_cert -H example.com -v
 
 Displays:
 
-- TLS version and cipher  
-- Certificate metadata  
-- SAN list  
-- AIA URLs  
-- Parsed intermediate certificates  
+- Connection details
+- TLS version and cipher
+- Certificate metadata
+- SAN list
 - Key information  
-- Expiration timestamp  
+- AIA URLs and intermediate chain
+- OCSP metadata
+- Chain validation summary
+- General warnings and errors
+- Enforcement summary
 
-### JSON Mode (`--json`)
+Verbose mode is intended for operators and debugging
+
+### JSON Mode (`--json` / `-j` )
 
 ```bash
 check_cert -H example.com --json
@@ -48,10 +61,21 @@ check_cert -H example.com --json
 
 Emits a deterministic JSON object suitable for:
 
-- Automation  
-- Log ingestion  
-- Pipelines  
-- Programmatic inspection  
+- Certificate metadata
+- Key metadata  
+- SAN list
+- TLS session details
+- Expiration timestamp and days remaining
+- OCSP metadata
+- Chain metadata
+- General warnings and errors
+- Enforcement results
+
+This mode is ideal for:
+- Automation
+- Log ingestion
+- Programmatic inspection
+- Monitoring pipelines
 
 Verbose and JSON modes are **opt‑in**.
 
@@ -82,18 +106,44 @@ Example:
 ```bash
 check_cert -H example.com -w 30 -c 10
 ```
+### Behavior:
 
+days_remaining <= critical → CRITICAL
+
+days_remaining <= warning → WARNING
+
+otherwise → OK
+
+Enforcement failures always produce CRITICAL.
 ---
 
 ## 5. Enforcement Features
+Enforcement rules evaluate certificate, TLS, and OCSP properties.
+Results appear in:
 
-### OCSP
+- JSON: enforcement.applied, passed, failed, errors
+
+- Verbose: “Enforcement Summary” section
+
+- Nagios: CRITICAL if any rule fails
+
+### OCSP Enforcement
 
 ```
 --require-ocsp
 --forbid-ocsp
 --ocsp-status {good,revoked,unknown,invalid}
 ```
+#### Note:  
+OCSP support is currently limited to:
+
+Extracting OCSP URLs
+
+Reporting presence/absence
+
+Reporting placeholder status
+
+Full OCSP reachability and response parsing are planned.
 
 ### Key Requirements
 
@@ -149,7 +199,8 @@ check_cert -H example.com -w 30 -c 10
 
 ## 7. Network Requirements
 
-- Outbound TCP to target host  
-- Outbound HTTP for OCSP and AIA retrieval  
+- Outbound TCP to target host
+- Outbound HTTP for AIA retrieval 
+- Outbound HTTP for OCSP (future retrieval)  
 
 ---
