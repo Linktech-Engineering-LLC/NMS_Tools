@@ -45,11 +45,11 @@ Each section is documented below.
 "timestamp_utc": "2026-05-18T18:19:55Z"
 
 
-|**Field**    |	**Description**            |
-|*------------|*---------------------------|
-|host	      |Hostname provided via -H    |
-|port         |Port used for TLS connection|
-|timestamp_utc|Time of evaluation in UTC   |
+| Field | Description |
+|-------|-------------|
+| host | Hostname provided via -H |
+| port | Port used for TLS connection |
+| timestamp_utc | Time of evaluation in UTC |
 
 ## 3. Expiration Metadata
 "expiration": {
@@ -58,11 +58,11 @@ Each section is documented below.
   "days_remaining": 60
 }
 
-|**Field**    |	**Description**            |
-|*------------|*---------------------------|
-|not_before	|Certificate validity start |
-|not_after	|Certificate expiration timestamp |
-|days_remaining	|Integer days until expiration |
+| Field | Description |
+|-------|-------------|
+| not_before | Certificate validity start |
+| not_after	| Certificate expiration timestamp |
+| days_remaining | Integer days until expiration |
 
 ## 4. Certificate Metadata
 json
@@ -74,13 +74,13 @@ json
   "version": 3
 }
 
-|**Field**    |	**Description**            |
-|*------------|*---------------------------|
-|subject_cn	|Subject Common Name            |
-|issuer_cn	|Issuer Common Name             |
-|serial_number	|Hexadecimal serial number  |
-|signature_algorithm	|e.g., sha256, sha384, ecdsa-with-SHA256 |
-|version	|Certificate version (usually 3) |
+| Field | Description |
+|-------|-------------|
+| subject_cn | Subject Common Name |
+| issuer_cn	| Issuer Common Name |
+| serial_number	| Hexadecimal serial number |
+| signature_algorithm | e.g., sha256, sha384, ecdsa-with-SHA256 |
+| version |Certificate version (usually 3) |
 
 ## 5. Key Metadata
 json
@@ -90,11 +90,11 @@ json
   "curve": "prime256v1"
 }
 
-|**Field**    |	**Description**            |
-|*------------|*---------------------------|
-|type	|rsa, ecdsa, or unknown |
-|size	|RSA key size in bits, or ECDSA curve size |
-|curve	|ECDSA curve name (null for RSA) |
+| Field | Description |
+|-------|-------------|
+| type | rsa, ecdsa, or unknown |
+| size | RSA key size in bits, or ECDSA curve size |
+| curve	| ECDSA curve name (null for RSA) |
 
 ## 6. Subject Alternative Names (SAN)
 json
@@ -111,10 +111,10 @@ json
   "cipher": "TLS_AES_256_GCM_SHA384"
 }
 
-|**Field**    |	**Description**            |
-|*------------|*---------------------------|
-|version	|Negotiated TLS version |
-|cipher	|Negotiated cipher suite |
+| Field | Description |
+|-------|-------------|
+| version | Negotiated TLS version |
+| cipher | Negotiated cipher suite |
 
 ## 8. AIA Metadata
 json
@@ -124,9 +124,9 @@ json
   ]
 }
 
-|**Field**    |	**Description**            |
-|*------------|*---------------------------|
-|issuer_urls	|AIA “CA Issuers” URLs extracted from certificate |
+| Field | Description |
+|-------|-------------|
+| issuer_urls | AIA “CA Issuers” URLs extracted from certificate |
 
 ## 9. Chain Metadata
 json
@@ -141,11 +141,11 @@ json
   ]
 }
 
-|**Field**    |	**Description**            |
-|*------------|*---------------------------|
-|validated	|Whether the chain validated successfully |
-|warnings	|Missing intermediates, mismatches, non‑standard chains |
-|intermediates	|List of intermediate certificates (minimal metadata) |
+| Field | Description |
+|-------|-------------|
+| validated	| Whether the chain validated successfully |
+| warnings	| Missing intermediates, mismatches, non‑standard chains |
+| intermediates	| List of intermediate certificates (minimal metadata) |
 
 ## 10. OCSP Metadata
 json
@@ -156,10 +156,10 @@ json
   "status": "unknown"
 }
 
-|**Field**    |	**Description**            |
-|*------------|*---------------------------|
-|urls	|OCSP responder URLs |
-|status	|Placeholder: good, revoked, unknown, invalid |
+| Field | Description |
+|-------|-------------|
+| urls | OCSP responder URLs |
+| status | Placeholder: good, revoked, unknown, invalid |
 
 Full OCSP response parsing is planned for a future version.
 
