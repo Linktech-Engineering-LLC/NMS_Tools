@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
 File: check_cert.py
-Version: 3.0.0
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-17
-Modified: 2026-03-20
+Modified: 2026-03-21
 Required: Python 3.6+
 Description:
     Certificate checker with SAN, issuer, signature algorithm, wildcard detection,

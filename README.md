@@ -1,4 +1,8 @@
 # NMS_Tools
+![Python Version](https://img.shields.io/badge/python-3.6%2B-blue)
+![License](https://img.shields.io/badge/license-Apache%202.0-green)
+![Status](https://img.shields.io/badge/status-active-success)
+![Last Commit](https://img.shields.io/github/last-commit/LinktechEngineering/NMS_Tools)
 
 A collection of deterministic, audit‑transparent network management and monitoring tools used across Linktech Engineering infrastructure.
 
@@ -27,9 +31,26 @@ A deterministic TLS certificate inspection and policy enforcement tool with:
 - Deterministic JSON schema for automation  
 - Clean, noise‑free CLI parser and help output  
 
-### Documentation
+---
 
-The `docs/` directory contains the full documentation suite:
+### `check_html.py`
+
+A deterministic HTTP/HTTPS inspection and content‑validation tool with:
+
+- JSON, verbose, and Nagios output modes  
+- TLS‑aware request pipeline with handshake detection  
+- HTTP status, headers, content‑type, and HTML body capture  
+- Backend fingerprinting and backend enforcement  
+- Content‑type and HTML presence rules  
+- Deterministic JSON schema for automation  
+- Clean, noise‑free CLI parser and help output  
+- Nagios‑aware severity merging (CRITICAL > WARNING > UNKNOWN > OK)
+
+---
+
+## Documentation
+
+The `docs/` directory contains the full documentation suite for all tools:
 
 - **Installation:** `docs/Installation.md`  
 - **Usage Guide:** `docs/Usage.md`  
@@ -42,7 +63,7 @@ Each document has a single responsibility:
 
 | Document | Purpose |
 |----------|---------|
-| Installation | How to install and run the tool |
+| Installation | How to install and run the tools |
 | Usage | CLI flags, examples, Nagios integration |
 | Operation | Runtime behavior, exit codes, troubleshooting |
 | Enforcement | Policy engine, rule semantics, failure behavior |

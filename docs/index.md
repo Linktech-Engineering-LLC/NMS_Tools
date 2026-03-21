@@ -22,6 +22,18 @@ A deterministic TLS certificate inspection and policy enforcement tool with:
 - Expiration thresholds and policy enforcement  
 - Deterministic JSON schema for automation  
 
+### `check_html.py`
+
+A deterministic HTTP/HTTPS inspection and content‑validation tool with:
+
+- JSON, verbose, and Nagios output modes
+- TLS‑aware request pipeline with handshake detection
+- HTTP status, headers, content‑type, and HTML body capture
+- Backend fingerprinting and backend enforcement
+- Content‑type and HTML presence rules
+- Deterministic JSON schema for automation
+- Clean, noise‑free CLI parser and help output
+
 ---
 
 ## Documentation Suite
