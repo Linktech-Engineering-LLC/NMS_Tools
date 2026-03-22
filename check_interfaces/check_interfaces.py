@@ -337,7 +337,7 @@ def gather_local_interfaces():
             "mtu": None,
             "speed": None,
             "duplex": None,
-            "up": None,
+            "oper_up": None,
             "running": None,
             "flags": []
         }
@@ -369,14 +369,13 @@ def gather_local_interfaces():
             iface_info["mtu"] = st.mtu
             iface_info["speed"] = st.speed  # may be 0 or None
             iface_info["duplex"] = st.duplex  # psutil.NIC_DUPLEX_FULL, etc.
-            iface_info["up"] = st.isup
+            iface_info["oper_up"] = st.isup
 
             # psutil doesn't expose flags directly, but we can infer:
             if st.isup:
                 iface_info["flags"].append("UP")
             if st.speed not in (0, None):
                 iface_info["flags"].append("RUNNING")
-
         interfaces[iface] = iface_info
 
     return interfaces
