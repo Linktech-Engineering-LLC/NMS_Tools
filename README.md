@@ -88,6 +88,18 @@ Each tool is built to be reliable in both interactive and automated environments
 
 ---
 
+## Global Requirements
+
+NMS_Tools enforces a small set of suite‑wide operational rules to ensure deterministic, operator‑grade behavior:
+
+- All tools accepting -H require the hostname to be resolvable via the system resolver (DNS, /etc/hosts, or equivalent).
+  - Unresolvable hosts must fail fast with a deterministic error message.
+  - In Nagios mode, tools must exit UNKNOWN with a single clean line.
+- No network operations are attempted without a resolvable target.
+- All tools validate input before execution and fail deterministically on invalid parameters.
+
+---
+
 ## Status
 
 Active development.  
@@ -116,10 +128,7 @@ Run an HTML check:
 
 ---
 
-# ⭐ **Suite Overview (Markdown)**
-
-```markdown
-## Suite Overview
+## ⭐ Suite Overview
 
 NMS_Tools is a collection of deterministic, audit‑transparent monitoring tools used across Linktech Engineering infrastructure.  
 Each tool follows the same engineering principles:

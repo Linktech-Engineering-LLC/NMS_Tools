@@ -4,7 +4,7 @@ File: check_html.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-21
-Modified: 2026-03-21
+Modified: 2026-03-22
 Required: Python 3.6+
 Description:
     HTML content checker with status-code enforcement, required-tag checks,
@@ -12,6 +12,8 @@ Description:
 """
 
 import sys
+import socket
+import ipaddress
 import argparse
 import platform
 import time
@@ -19,7 +21,7 @@ import ssl
 import json
 import http.client
 
-from typing import Tuple, Optional, List
+from typing import Optional
 from urllib.parse import urlparse
 
 # Nagios Exit Codes
@@ -27,8 +29,8 @@ OK = 0
 WARNING = 1
 CRITICAL = 2
 UNKNOWN = 3
-
-SCRIPT_VERSION = "1.0.0"
+# Other Global Constants
+SCRIPT_VERSION = "1.0.1"
 BACKEND_SIGNATURES = {
     "tomcat": {
         "headers": [
@@ -99,19 +101,18 @@ class CustomFormatter(
         if action.default in (None, False):
             return help_text
         return f"{help_text} (default: {action.default})"
-
-class CheckHtmlArgError(Exception):
+class CheckArgError(Exception):
     pass
-
-class CheckHtmlArgumentParser(argparse.ArgumentParser):
+class CheckArgumentParser(argparse.ArgumentParser):
     def error(self, message):
-        raise CheckHtmlArgError(message)
-
+        print(f"ERROR: {message}\n")
+        self.print_help()
+        sys.exit(UNKNOWN)
 # -----------------------------
 # CLI Parser
 # -----------------------------
 def build_parser():
-    parser = CheckHtmlArgumentParser(
+    parser = CheckArgumentParser(
         description=(
             "HTTP/HTML Inspection Tool\n\n"
             "Fetches a webpage, validates status code, content-type, required tags,\n"
@@ -904,17 +905,9 @@ def single_line(result):
     code = result["overall"]["status"]
     message = result["overall"]["message"]
 
-    # Enhance OK output with HTTP status + content-type
+    # Determine prefix
     if code == 0:
         prefix = "OK"
-        http_status = result["capture"]["status"]
-        ctype = result["capture"]["content_type"]
-
-        if http_status is not None:
-            if ctype:
-                message = f"{http_status} OK ({ctype})"
-            else:
-                message = f"{http_status} OK (no content-type)"
     elif code == 1:
         prefix = "WARNING"
     elif code == 2:
@@ -922,13 +915,129 @@ def single_line(result):
     else:
         prefix = "UNKNOWN"
 
-    if message:
+    # ------------------------------------------------------------
+    # Enhance OK output with HTTP status + content-type
+    # ------------------------------------------------------------
+    perfdata = None
+
+    if code == 0:
+        capture = result.get("capture", {})
+        http_status = capture.get("status")
+        ctype = capture.get("content_type")
+        rt = capture.get("response_time") or 0
+        body = capture.get("body") or ""
+        size = len(body.encode("utf-8"))
+
+        # Build perfdata deterministically
+        perfdata = f"time={rt:.4f}s;;;0 size={size}B;;;0"
+
+        # Build human-readable message
+        if http_status is not None:
+            if ctype:
+                message = f"{http_status} OK ({ctype})"
+            else:
+                message = f"{http_status} OK (no content-type)"
+
+    # ------------------------------------------------------------
+    # Build final line
+    # ------------------------------------------------------------
+    if perfdata:
+        return f"{prefix} - {message} | {perfdata}"
+    elif message:
         return f"{prefix} - {message}"
     else:
         return f"{prefix}"
+# -----------------------------
+# Host Validation
+# -----------------------------
+def validate_host_basic(host: str):
+    """
+    Deterministic hostname validation used by all NMS_Tools plugins.
 
+    Rules:
+      • If the user supplies an IP → treat it as authoritative (no reverse DNS).
+      • If the user supplies the system hostname → resolve it once.
+      • Otherwise → attempt forward resolution only.
+      • Never perform reverse lookups.
+      • Never replace an IP with a hostname.
+      • All failures return UNKNOWN-level errors (caller decides exit).
+
+    Returns:
+        {
+            "ok": bool,
+            "ip": str or None,
+            "error": str or None
+        }
+    """
+
+    host = host.strip()
+
+    # ------------------------------------------------------------
+    # 1. IP address case (authoritative)
+    # ------------------------------------------------------------
+    try:
+        ip_obj = ipaddress.ip_address(host)
+        return {
+            "ok": True,
+            "ip": str(ip_obj),   # return IP exactly as supplied
+            "error": None
+        }
+    except ValueError:
+        pass  # Not an IP, continue
+
+    # ------------------------------------------------------------
+    # 2. Local hostname case (special deterministic rule)
+    # ------------------------------------------------------------
+    system_hostname = socket.gethostname()
+
+    if host.lower() == system_hostname.lower():
+        try:
+            resolved = socket.gethostbyname(system_hostname)
+            return {
+                "ok": True,
+                "ip": resolved,
+                "error": None
+            }
+        except Exception:
+            return {
+                "ok": False,
+                "ip": None,
+                "error": (
+                    f"Hostname '{host}' matches local hostname but "
+                    f"cannot be resolved by the system resolver"
+                )
+            }
+
+    # ------------------------------------------------------------
+    # 3. Normal hostname → forward resolution only
+    # ------------------------------------------------------------
+    try:
+        resolved = socket.gethostbyname(host)
+        return {
+            "ok": True,
+            "ip": resolved,
+            "error": None
+        }
+    except Exception:
+        return {
+            "ok": False,
+            "ip": None,
+            "error": f"Hostname resolution failed for '{host}'"
+        }
+# -----------------------------
+# Main Function
+# -----------------------------
 def main():
     args = build_parser()
+    # ------------------------------------------------------------
+    # Hostname validation (suite-wide deterministic rule)
+    # ------------------------------------------------------------
+    rc = validate_host_basic(args.host)
+    if not rc["ok"]:
+        print(f"UNKNOWN - {rc['error']}")
+        sys.exit(UNKNOWN)
+
+
     # Track whether the operator explicitly set -p/--port
     args.port_was_explicit = args.port is not None
 
@@ -970,7 +1079,6 @@ def main():
     # Default: Nagios single-line output
     print(single_line(result))
     sys.exit(result["overall"]["status"])
-
 
 if __name__ == "__main__":
     main()

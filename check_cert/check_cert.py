@@ -4,7 +4,7 @@ File: check_cert.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-17
-Modified: 2026-03-21
+Modified: 2026-03-22
 Required: Python 3.6+
 Description:
     Certificate checker with SAN, issuer, signature algorithm, wildcard detection,
@@ -15,6 +15,7 @@ import urllib.request
 import urllib.error
 import ssl
 import socket
+import ipaddress
 import argparse
 import sys
 import json
@@ -36,10 +37,10 @@ WARNING = 1
 CRITICAL = 2
 UNKNOWN = 3
 # Other Constants
-SCRIPT_VERSION = "3.0.0"
+SCRIPT_VERSION = "3.0.1"
 TLS_VERSIONS = ["TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3"]
 # -----------------------------
-# ArgParse Custom Formatter
+# ArgParse Custom Formatter & CLI Parser
 # -----------------------------
 class CustomFormatter(
     argparse.ArgumentDefaultsHelpFormatter,
@@ -61,19 +62,16 @@ class CustomFormatter(
 
         # Otherwise, append the meaningful default
         return f"{help_text} (default: {action.default})"
-    
-class CheckCertArgError(Exception):
+class CheckArgError(Exception):
     """Raised when CLI arguments are invalid."""
     pass
-class CheckCertArgumentParser(argparse.ArgumentParser):
+class CheckArgumentParser(argparse.ArgumentParser):
     def error(self, message):
-        raise CheckCertArgError(message)
-
-# -----------------------------
-#  CLI Parser
-# -----------------------------
+        print(f"ERROR: {message}\n")
+        self.print_help()
+        sys.exit(UNKNOWN)
 def build_parser():
-    parser = CheckCertArgumentParser(
+    parser = CheckArgumentParser(
         description=(
             "TLS Certificate Inspection Tool\n\n"
             "Performs a full TLS handshake, retrieves the server certificate and chain,\n"
@@ -190,7 +188,6 @@ def build_parser():
 # -----------------------------
 #  Certificate Fetch/Parse
 # -----------------------------
-
 def fetch_certificate_and_socket(hostname: str, port: int = 443, timeout: int = 10, insecure: bool = False):
     """Perform TLS handshake using stdlib ssl and return:
        - leaf certificate (cryptography.x509)
@@ -230,7 +227,6 @@ def fetch_certificate_and_socket(hostname: str, port: int = 443, timeout: int = 
         return cert, chain, tls_version, cipher
     except Exception as e:
         raise RuntimeError(f"TLS handshake or certificate retrieval failed: {e}")
-
 def fetch_aia_certificate(url, timeout=5):
     """
     Fetch an intermediate certificate from an AIA URL.
@@ -308,19 +304,16 @@ def parse_intermediate_cert(url, raw_bytes):
     })
 
     return entry
-
 # -----------------------------
 #  Extractors
 # -----------------------------
 def get_cert_expiry(cert):
     return cert.not_valid_after
-
 def get_cn(cert_obj):
     try:
         return cert_obj.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
     except Exception:
         return None
-
 def get_key_info(cert: x509.Certificate) -> Tuple[str, Optional[int], Optional[str]]:
     """
     Returns (key_type, key_bits, curve) in a deterministic format.
@@ -350,7 +343,6 @@ def get_key_info(cert: x509.Certificate) -> Tuple[str, Optional[int], Optional[s
 
     # Fallback
     return ("unknown", None, None)
-
 def get_ocsp_status(cert: x509.Certificate, timeout: float = 1.0) -> str:
     """
     Returns OCSP reachability status:
@@ -393,14 +385,12 @@ def get_ocsp_status(cert: x509.Certificate, timeout: float = 1.0) -> str:
             return "reachable"
     except Exception:
         return "unreachable"
-    
 def get_san_list(cert):
     try:
         san = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
         return san.value.get_values_for_type(x509.DNSName)
     except x509.ExtensionNotFound:
         return []
-
 def get_issuer_cn(cert):
     try:
         for attr in cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME):
@@ -408,7 +398,6 @@ def get_issuer_cn(cert):
     except Exception:
         return None
     return None
-
 def get_subject_cn(cert):
     try:
         for attr in cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME):
@@ -416,7 +405,6 @@ def get_subject_cn(cert):
     except Exception:
         return None
     return None
-
 def get_signature_algorithm(cert: x509.Certificate) -> str:
     """
     Returns a deterministic signature algorithm name for any certificate.
@@ -436,7 +424,6 @@ def get_signature_algorithm(cert: x509.Certificate) -> str:
 
     # Case 3: Absolute fallback (should never happen)
     return cert.signature_algorithm_oid.dotted_string
-
 def get_ocsp_urls(cert_obj):
     urls = []
     try:
@@ -451,7 +438,6 @@ def get_ocsp_urls(cert_obj):
         pass
 
     return urls
-
 def get_tls_info(ssock) -> Tuple[str, Optional[str]]:
     """
     Returns (tls_version, cipher) in a normalized, deterministic format.
@@ -467,8 +453,6 @@ def get_tls_info(ssock) -> Tuple[str, Optional[str]]:
     cipher = cipher_info[0] if cipher_info else None
 
     return tls_version, cipher
-
-
 def is_wildcard_cert(cert):
     san_list = get_san_list(cert)
     if any(name.startswith("*.") for name in san_list):
@@ -482,19 +466,9 @@ def is_wildcard_cert(cert):
         pass
 
     return False
-
 # --------------------------------------
 #  Classification/Enforcement/Validation
 # --------------------------------------
-def classify(days: int, warn: int, crit: int) -> str:
-    if days < 0:
-        return "expired"
-    if days <= crit:
-        return "critical"
-    if days <= warn:
-        return "warning"
-    return "ok"
-
 def run_enforcement_checks(args, meta):
     """
     Evaluate all enforcement rules and return raw results.
@@ -611,7 +585,6 @@ def run_enforcement_checks(args, meta):
     )
 
     return results
-
 def validate_chain(cert: x509.Certificate, chain: List[x509.Certificate]) -> Tuple[bool, List[str]]:
     """
     Validates certificate chain structure.
@@ -645,7 +618,6 @@ def validate_chain(cert: x509.Certificate, chain: List[x509.Certificate]) -> Tup
 
     chain_ok = len(warnings) == 0
     return (chain_ok, warnings)
-
 def check_ocsp_reachability(url, timeout=5):
     """
     Returns:
@@ -687,7 +659,6 @@ def check_ocsp_reachability(url, timeout=5):
 
     except Exception:
         return "unreachable"
-
 def build_enforcement_dict(args, results) -> dict:
     """
     Build a deterministic enforcement dictionary for verbose, JSON, and Nagios modes.
@@ -765,47 +736,23 @@ def build_enforcement_dict(args, results) -> dict:
         "failed": failed,
         "errors": errors,
     }
-
 # -----------------------------
 #  Status Dispatcher + Perfdata
 # -----------------------------
-def handle_status(status, days, expiry, warn, crit, quiet=False):
-    handlers = {
-        "expired": lambda: (f"CRITICAL - certificate expired {abs(days)} days ago ({expiry} UTC)", CRITICAL),
-        "critical": lambda: (f"CRITICAL - {days} days remaining ({expiry} UTC)", CRITICAL),
-        "warning": lambda: (f"WARNING - {days} days remaining ({expiry} UTC)", WARNING),
-        "ok":       lambda: (f"OK - {days} days remaining ({expiry} UTC)", OK),
-    }
-
-    message, code = handlers[status]()
-
-    perfdata = f"days_remaining={days};{warn};{crit};0;"
-
-    if quiet:
-        print(f"{code}")
-    else:
-        print(f"{message} | {perfdata}")
-
-    sys.exit(code)
-
 def is_aead_cipher(cipher: Optional[str]) -> bool:
     if not cipher:
         return False
     return cipher.startswith("TLS_") and ("GCM" in cipher or "CHACHA20" in cipher)
-
 def is_cbc_cipher(cipher: Optional[str]) -> bool:
     if not cipher:
         return False
     return "CBC" in cipher
-
 def is_rc4_cipher(cipher: Optional[str]) -> bool:
     if not cipher:
         return False
     return "RC4" in cipher
-
 def is_self_signed(cert):
     return cert.issuer == cert.subject
-
 def get_aia_issuer_urls(cert):
     try:
         aia = cert.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_INFORMATION_ACCESS)
@@ -816,17 +763,14 @@ def get_aia_issuer_urls(cert):
         return urls
     except Exception:
         return []
-
 TLS_ORDER = {
     "TLSv1": 1,
     "TLSv1.1": 2,
     "TLSv1.2": 3,
     "TLSv1.3": 4,
 }
-
 def tls_version_rank(version: str):
     return TLS_ORDER.get(version, 0)
-
 # -----------------------------
 # Populate Warnings/Errors
 # -----------------------------
@@ -865,7 +809,7 @@ def populate_errors(data: dict) -> list:
         errors.append("no_certificate_present")
     return errors
 # -----------------------------
-# Display Verbose
+# Display Options
 # -----------------------------
 def display_verbose(data):
     """Pretty, operator-grade verbose output."""
@@ -1016,8 +960,6 @@ def display_verbose(data):
             print(f"  - {e}")
     else:
         print("  None")
-
-        
 def display_chain_summary(data):
     """High-level, operator-grade summary of certificate chain status."""
 
@@ -1117,7 +1059,6 @@ def display_enforcement_summary(enf):
         print("Errors: None")
 
     print()
-
 def nagios_exit(days_remaining, expiration_date, enf, args):
     # 1. Enforcement failures override everything
     if enf["failed"]:
@@ -1137,7 +1078,6 @@ def nagios_exit(days_remaining, expiration_date, enf, args):
     # 4. OK
     print(f"OK - certificate valid, expires in {days_remaining} days on {expiration_date} UTC")
     sys.exit(OK)
-
 def output_json(meta, enf):
     """
     Produce deterministic JSON output for monitoring and automation.
@@ -1187,15 +1127,94 @@ def output_json(meta, enf):
     }
 
     print(json.dumps(out, indent=2))
+# -----------------------------
+# Host Validation
+# -----------------------------
+def validate_host_basic(host: str):
+    """
+    Deterministic hostname validation used by all NMS_Tools plugins.
 
+    Rules:
+      • If the user supplies an IP → treat it as authoritative (no reverse DNS).
+      • If the user supplies the system hostname → resolve it once.
+      • Otherwise → attempt forward resolution only.
+      • Never perform reverse lookups.
+      • Never replace an IP with a hostname.
+      • All failures return UNKNOWN-level errors (caller decides exit).
+
+    Returns:
+        {
+            "ok": bool,
+            "ip": str or None,
+            "error": str or None
+        }
+    """
+
+    host = host.strip()
+
+    # ------------------------------------------------------------
+    # 1. IP address case (authoritative)
+    # ------------------------------------------------------------
+    try:
+        ip_obj = ipaddress.ip_address(host)
+        return {
+            "ok": True,
+            "ip": str(ip_obj),   # return IP exactly as supplied
+            "error": None
+        }
+    except ValueError:
+        pass  # Not an IP, continue
+
+    # ------------------------------------------------------------
+    # 2. Local hostname case (special deterministic rule)
+    # ------------------------------------------------------------
+    system_hostname = socket.gethostname()
+
+    if host.lower() == system_hostname.lower():
+        try:
+            resolved = socket.gethostbyname(system_hostname)
+            return {
+                "ok": True,
+                "ip": resolved,
+                "error": None
+            }
+        except Exception:
+            return {
+                "ok": False,
+                "ip": None,
+                "error": (
+                    f"Hostname '{host}' matches local hostname but "
+                    f"cannot be resolved by the system resolver"
+                )
+            }
+
+    # ------------------------------------------------------------
+    # 3. Normal hostname → forward resolution only
+    # ------------------------------------------------------------
+    try:
+        resolved = socket.gethostbyname(host)
+        return {
+            "ok": True,
+            "ip": resolved,
+            "error": None
+        }
+    except Exception:
+        return {
+            "ok": False,
+            "ip": None,
+            "error": f"Hostname resolution failed for '{host}'"
+        }
 # -----------------------------
 #  Main Orchestrator
 # -----------------------------
 def main():
-    try:
-        args = build_parser()
-    except CheckCertArgError as e:
-        print(f"UNKNOWN - invalid arguments: {e}")
+    args = build_parser()
+    # ------------------------------------------------------------
+    # Hostname validation (suite-wide deterministic rule)
+    # ------------------------------------------------------------
+    rc = validate_host_basic(args.host)
+    if not rc["ok"]:
+        print(f"UNKNOWN - {rc['error']}")
         sys.exit(UNKNOWN)
 
     # If version was requested, argparse already printed it and exited.
@@ -1300,7 +1319,7 @@ def main():
         "wildcard": wildcard,
         "san": san_list,
         "expires": expiry.strftime("%Y-%m-%d %H:%M:%S"),
-        "expiration_date": expiry.strftime("%Y-%m-%d"),
+        "expiration_date": expiration_date,
         "days_remaining": expiration_days,
 
         # Key Metadata
@@ -1348,27 +1367,6 @@ def main():
 
     # 6. Nagios mode
     nagios_exit(meta.get("days_remaining"), meta.get("expiration_date"), enf, args)
-
-
-
-
-
-    
-    # Expiration logic
-    remaining = expiry - datetime.utcnow()
-    days = remaining.days
-
-    status = classify(days, args.warning, args.critical)
-    if args.json or args.verbose:
-        # JSON mode: exit with correct code, but print nothing else
-        sys.exit({
-            "expired": CRITICAL,
-            "critical": CRITICAL,
-            "warning": WARNING,
-            "ok": OK,
-        }[status])
-    
-    handle_status(status, days, expiry, args.warning, args.critical, quiet=args.quiet)
 
 
 if __name__ == "__main__":

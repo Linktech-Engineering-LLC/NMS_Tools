@@ -208,3 +208,23 @@ Issuer CN: Example CA
 - Outbound TCP to target host
 - Outbound HTTP for AIA retrieval 
 - Outbound HTTP for OCSP (future retrieval)  
+
+## 12. Hostname Resolution
+
+All NMS_Tools plugins that accept `-H` require the hostname to be resolvable
+via the system resolver (DNS, /etc/hosts, or equivalent).
+
+If the hostname cannot be resolved:
+
+- The tool fails fast with a deterministic error message.
+- No network operations are attempted.
+- In Nagios mode, the tool exits `UNKNOWN` with a single clean line.
+
+### Deterministic Error Example
+
+If the hostname is unresolvable:
+
+    UNKNOWN - Hostname resolution failed for 'badhost.example'
+
+This behavior is consistent across all tools in the suite and is required for
+operator‑grade determinism and Nagios/Icinga compatibility.
