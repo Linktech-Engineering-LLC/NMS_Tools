@@ -10,7 +10,7 @@ its output, and how to use its enforcement features.
 When run without `-v` or `--json`, the tool emits a **single Nagios‑style line**:
 
 ```
-OK - 60 days remaining (2026-05-18 18:19:55 UTC);
+OK - 60 days remaining (2026-05-18 18:19:55 UTC)
 ```
 
 This mode is designed for:
@@ -50,6 +50,7 @@ Displays:
 - Chain validation summary
 - General warnings and errors
 - Enforcement summary
+- Hostname match result (hostname_matches)
 
 Verbose mode is intended for operators and debugging
 
@@ -70,6 +71,7 @@ Emits a deterministic JSON object suitable for:
 - Chain metadata
 - General warnings and errors
 - Enforcement results
+- Hostname match metadata
 
 This mode is ideal for:
 - Automation
@@ -122,9 +124,7 @@ Enforcement rules evaluate certificate, TLS, and OCSP properties.
 Results appear in:
 
 - JSON: enforcement.applied, passed, failed, errors
-
 - Verbose: “Enforcement Summary” section
-
 - Nagios: CRITICAL if any rule fails
 
 ### OCSP Enforcement
@@ -135,13 +135,7 @@ Results appear in:
 --ocsp-status {good,revoked,unknown,invalid}
 ```
 #### Note:  
-OCSP support is currently limited to:
-
-Extracting OCSP URLs
-
-Reporting presence/absence
-
-Reporting placeholder status
+OCSP support is currently limited to extracting URLs and reporting placeholder state (unknown) and revocation_reason (always null). 
 
 Full OCSP reachability and response parsing are planned.
 

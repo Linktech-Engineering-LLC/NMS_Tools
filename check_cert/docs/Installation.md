@@ -10,6 +10,7 @@ your operational environment.
 
 ### Python
 - Python **3.6 or newer**
+- Python **3.6 and 3.7 require** typing_extensions
 
 ### Python Packages
 - `cryptography`
@@ -18,6 +19,7 @@ Install via `pip` (recommended):
 
 ```bash
 pip install cryptography
+pip install typing_extensions   # only for Python < 3.8
 ```
 
 Or via your distribution’s package manager:

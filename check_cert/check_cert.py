@@ -4,7 +4,7 @@ File: check_cert.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-17
-Modified: 2026-03-22
+Modified: 2026-03-23
 Required: Python 3.6+
 Description:
     Certificate checker with SAN, issuer, signature algorithm, wildcard detection,
@@ -28,7 +28,9 @@ from cryptography.x509.oid import ExtensionOID, NameOID, AuthorityInformationAcc
 from cryptography.x509.ocsp import load_der_ocsp_response  # optional, see OCSP stub
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448
 from datetime import datetime
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Union, cast, Dict
+from typing_extensions import TypedDict
+
 # -----------------------------
 #  Nagios Exit Codes
 # -----------------------------
@@ -37,8 +39,47 @@ WARNING = 1
 CRITICAL = 2
 UNKNOWN = 3
 # Other Constants
-SCRIPT_VERSION = "3.0.1"
+SCRIPT_VERSION = "3.0.2"
 TLS_VERSIONS = ["TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3"]
+TLS_ORDER = {
+    "TLSv1": 1,
+    "TLSv1.1": 2,
+    "TLSv1.2": 3,
+    "TLSv1.3": 4,
+}
+# -----------------------------
+# Enforcement Results Class
+# ----------------------------
+class EnforcementResults(TypedDict):
+    # Policy rules
+    min_tls: Optional[bool]
+    require_tls: Optional[bool]
+    require_cipher: Optional[bool]
+    forbid_cipher: Optional[bool]
+    require_aead: Optional[bool]
+    forbid_cbc: Optional[bool]
+    forbid_rc4: Optional[bool]
+    enforce_san: Optional[bool]
+    issuer: Optional[bool]
+    sigalg: Optional[bool]
+    min_rsa: Optional[bool]
+    require_curve: Optional[bool]
+    require_wildcard: Optional[bool]
+    forbid_wildcard: Optional[bool]
+    require_ocsp: Optional[bool]
+    forbid_ocsp: Optional[bool]
+    ocsp_status: Optional[bool]
+
+    # Monitoring rules
+    self_signed: Optional[bool]
+    chain_valid: Optional[bool]
+    hostname_match: Optional[bool]
+    san_present: Optional[bool]
+    expiration: Optional[Union[bool, str]]  # "warning" allowed
+    ocsp: Optional[bool]
+
+    # Shared
+    errors: List[str]
 # -----------------------------
 # ArgParse Custom Formatter & CLI Parser
 # -----------------------------
@@ -152,6 +193,60 @@ def build_parser():
                       help="Require wildcard certificate")
     cert.add_argument("--forbid-wildcard", action="store_true",
                       help="Forbid wildcard certificate")
+    # ---------------------------
+    # Monitoring Switches
+    # ---------------------------
+    monitoring = parser.add_argument_group("Monitoring Checks")
+
+    monitoring.add_argument(
+        "--no-check-expiration",
+        dest="check_expiration",
+        action="store_false",
+        default=True,
+        help="Disable expiration enforcement (default: enabled)"
+    )
+
+    monitoring.add_argument(
+        "--no-check-chain",
+        dest="check_chain",
+        action="store_false",
+        default=True,
+        help="Disable chain validation enforcement (default: enabled)"
+    )
+
+    monitoring.add_argument(
+        "--no-check-hostname",
+        dest="check_hostname",
+        action="store_false",
+        default=True,
+        help="Disable hostname enforcement (default: enabled)"
+    )
+
+    monitoring.add_argument(
+        "--no-check-san",
+        dest="check_san",
+        action="store_false",
+        default=True,
+        help="Disable SAN presence enforcement (default: enabled)"
+    )
+
+    monitoring.add_argument(
+        "--no-check-self-signed",
+        dest="check_self_signed",
+        action="store_false",
+        default=True,
+        help="Allow self-signed certificates (default: treat as CRITICAL)"
+    )
+
+    monitoring.add_argument(
+        "--check-ocsp",
+        dest="check_ocsp",
+        action="store_true",
+        default=False,
+        help="Enable OCSP reachability enforcement (default: disabled)"
+    )
+
+
     # ----------------------------
     # Nagios Options
     # ----------------------------
@@ -398,13 +493,31 @@ def get_issuer_cn(cert):
     except Exception:
         return None
     return None
-def get_subject_cn(cert):
+def get_subject_cn(cert) -> str:
+    """
+    Extract the certificate's subject CN and always return a string.
+    Never returns bytes, bytearray, memoryview, or None.
+    """
+
     try:
-        for attr in cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME):
-            return attr.value
+        attrs = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        if not attrs:
+            return ""
+        value = attrs[0].value
     except Exception:
-        return None
-    return None
+        return ""
+
+    # Normalize to string
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="ignore")
+    if isinstance(value, bytearray):
+        return value.decode("utf-8", errors="ignore")
+    if isinstance(value, memoryview):
+        return value.tobytes().decode("utf-8", errors="ignore")
+    if value is None:
+        return ""
+
+    return str(value)
 def get_signature_algorithm(cert: x509.Certificate) -> str:
     """
     Returns a deterministic signature algorithm name for any certificate.
@@ -469,13 +582,8 @@ def is_wildcard_cert(cert):
 # --------------------------------------
 #  Classification/Enforcement/Validation
 # --------------------------------------
-def run_enforcement_checks(args, meta):
-    """
-    Evaluate all enforcement rules and return raw results.
-    meta = extracted certificate metadata.
-    """
-
-    results: dict[str, bool | None | list[str]] = {
+def empty_enforcement_results() -> EnforcementResults:
+    return {
         "min_tls": None,
         "require_tls": None,
         "require_cipher": None,
@@ -493,8 +601,23 @@ def run_enforcement_checks(args, meta):
         "require_ocsp": None,
         "forbid_ocsp": None,
         "ocsp_status": None,
-        "errors": [],   # this one is a list
+
+        "self_signed": None,
+        "chain_valid": None,
+        "hostname_match": None,
+        "san_present": None,
+        "expiration": None,
+        "ocsp": None,
+
+        "errors": [],
     }
+def run_enforcement_checks(args, meta) -> EnforcementResults:
+    """
+    Evaluate all enforcement rules and return raw results.
+    meta = extracted certificate metadata.
+    """
+
+    results = empty_enforcement_results()
 
     # --- TLS Requirements ---
     results["min_tls"] = (
@@ -585,6 +708,106 @@ def run_enforcement_checks(args, meta):
     )
 
     return results
+def run_monitoring_checks(args, meta) -> EnforcementResults:
+    results = empty_enforcement_results()
+
+    if args.check_self_signed:
+        results["self_signed"] = not meta["self_signed"]
+
+    if args.check_chain:
+        results["chain_valid"] = meta["chain_valid"]
+
+    if args.check_hostname:
+        results["hostname_match"] = meta["hostname_matches"]
+
+    if args.check_san:
+        results["san_present"] = len(meta["san"]) > 0
+
+    if args.check_expiration:
+        if meta["expiration_days"] < args.critical:
+            results["expiration"] = False
+        elif meta["expiration_days"] < args.warning:
+            results["expiration"] = "warning"
+        else:
+            results["expiration"] = True
+
+    if args.check_ocsp:
+        results["ocsp"] = meta["ocsp_reachable"]
+
+    return results
+def merge_enforcement(
+    policy: EnforcementResults,
+    monitoring: EnforcementResults
+) -> Dict[str, List[str]]:
+    """
+    Merge policy enforcement results and monitoring enforcement results
+    into a unified enforcement block.
+
+    Output schema:
+        {
+            "applied": [str],
+            "passed": [str],
+            "failed": [str],
+            "errors": [str]
+        }
+    """
+
+    enf = {
+        "applied": [],
+        "passed": [],
+        "failed": [],
+        "errors": []
+    }
+
+    # ------------------------------------------------------------
+    # Merge Policy Rules
+    # ------------------------------------------------------------
+    for rule, outcome in policy.items():
+
+        # Special case: errors list
+        if rule == "errors":
+            enf["errors"].extend(cast(List[str], outcome))
+            continue
+
+        # Skip rules that were not applied
+        if outcome is None:
+            continue
+
+        enf["applied"].append(rule)
+
+        # Boolean outcomes
+        if outcome is True:
+            enf["passed"].append(rule)
+        elif outcome is False:
+            enf["failed"].append(rule)
+
+        # Warning outcomes (string)
+        elif isinstance(outcome, str) and outcome == "warning":
+            enf["failed"].append(f"{rule}_warning")
+
+    # ------------------------------------------------------------
+    # Merge Monitoring Rules
+    # ------------------------------------------------------------
+    for rule, outcome in monitoring.items():
+
+        # Special case: errors list
+        if rule == "errors":
+            enf["errors"].extend(cast(List[str], outcome))
+            continue
+
+        if outcome is None:
+            continue
+
+        enf["applied"].append(rule)
+
+        if outcome is True:
+            enf["passed"].append(rule)
+        elif outcome is False:
+            enf["failed"].append(rule)
+        elif isinstance(outcome, str) and outcome == "warning":
+            enf["failed"].append(f"{rule}_warning")
+
+    return enf
 def validate_chain(cert: x509.Certificate, chain: List[x509.Certificate]) -> Tuple[bool, List[str]]:
     """
     Validates certificate chain structure.
@@ -659,7 +882,7 @@ def check_ocsp_reachability(url, timeout=5):
 
     except Exception:
         return "unreachable"
-def build_enforcement_dict(args, results) -> dict:
+def build_enforcement_dict(args, results) -> Dict:
     """
     Build a deterministic enforcement dictionary for verbose, JSON, and Nagios modes.
 
@@ -736,6 +959,21 @@ def build_enforcement_dict(args, results) -> dict:
         "failed": failed,
         "errors": errors,
     }
+def hostname_matches(host: str, cn: str, san: List[str]) -> bool:
+    host = host.lower()
+
+    # SAN takes precedence
+    for entry in san:
+        if entry.lower() == host:
+            return True
+
+        # wildcard match
+        if entry.startswith("*.") and host.endswith(entry[1:].lower()):
+            return True
+
+    # fallback to CN
+    return cn.lower() == host
+
 # -----------------------------
 #  Status Dispatcher + Perfdata
 # -----------------------------
@@ -763,12 +1001,6 @@ def get_aia_issuer_urls(cert):
         return urls
     except Exception:
         return []
-TLS_ORDER = {
-    "TLSv1": 1,
-    "TLSv1.1": 2,
-    "TLSv1.2": 3,
-    "TLSv1.3": 4,
-}
 def tls_version_rank(version: str):
     return TLS_ORDER.get(version, 0)
 # -----------------------------
@@ -1059,24 +1291,23 @@ def display_enforcement_summary(enf):
         print("Errors: None")
 
     print()
-def nagios_exit(days_remaining, expiration_date, enf, args):
-    # 1. Enforcement failures override everything
-    if enf["failed"]:
-        print(f"CRITICAL - {', '.join(enf['failed'])}")
+def nagios_exit(enf, meta):
+    days = meta["expiration_days"]
+    date = meta["expiration_date"]
+
+    # Hard failures (CRITICAL)
+    hard_failures = [f for f in enf["failed"] if not f.endswith("_warning")]
+    warnings = [f for f in enf["failed"] if f.endswith("_warning")]
+
+    if hard_failures:
+        print(f"CRITICAL - {', '.join(hard_failures)} | expires in {days} days on {date}")
         sys.exit(CRITICAL)
 
-    # 2. Critical expiration threshold
-    if args.critical is not None and days_remaining <= args.critical:
-        print(f"CRITICAL - certificate expires in {days_remaining} days on {expiration_date}")
-        sys.exit(CRITICAL)
-
-    # 3. Warning expiration threshold
-    if args.warning is not None and days_remaining <= args.warning:
-        print(f"WARNING - certificate expires in {days_remaining} days on {expiration_date}")
+    if warnings:
+        print(f"WARNING - {', '.join(warnings)} | expires in {days} days on {date}")
         sys.exit(WARNING)
 
-    # 4. OK
-    print(f"OK - certificate valid, expires in {days_remaining} days on {expiration_date} UTC")
+    print(f"OK - certificate valid, expires in {days} days on {date}")
     sys.exit(OK)
 def output_json(meta, enf):
     """
@@ -1101,7 +1332,7 @@ def output_json(meta, enf):
         "cipher": meta.get("cipher"),
 
         "expiration_date": meta.get("expires").split(" ")[0],
-        "expiration_days": meta.get("days_remaining"),
+        "expiration_days": meta.get("expiration_days"),
 
         "ocsp": {
             "urls": meta.get("ocsp_urls", []),
@@ -1127,6 +1358,16 @@ def output_json(meta, enf):
     }
 
     print(json.dumps(out, indent=2))
+def compute_nagios_code(enf):
+    hard_failures = [f for f in enf["failed"] if not f.endswith("_warning")]
+    warnings = [f for f in enf["failed"] if f.endswith("_warning")]
+
+    if hard_failures:
+        return CRITICAL
+    if warnings:
+        return WARNING
+    return OK
+
 # -----------------------------
 # Host Validation
 # -----------------------------
@@ -1320,8 +1561,9 @@ def main():
         "san": san_list,
         "expires": expiry.strftime("%Y-%m-%d %H:%M:%S"),
         "expiration_date": expiration_date,
-        "days_remaining": expiration_days,
-
+        "expiration_days": expiration_days,  
+        "hostname_matches": hostname_matches(args.host, get_subject_cn(cert), san_list),
+        
         # Key Metadata
         "key_type": key_type,
         "rsa_bits": key_bits,
@@ -1347,26 +1589,33 @@ def main():
         "warnings": populate_warnings(data),
         "errors": populate_errors(data),
     }
-    # 2. Run enforcement checks
-    results = run_enforcement_checks(args, meta)
+    # ------------------------------------------------------------
+    # 2. Run policy + monitoring enforcement
+    # ------------------------------------------------------------
 
-    # 3. Build enforcement dictionary
-    enf = build_enforcement_dict(args, results)
+    # Policy engine (TLS, cipher, key size, sigalg, etc.)
+    policy = run_enforcement_checks(args, meta)
+
+    # Monitoring engine (expiration, chain, hostname, SAN, self-signed, OCSP)
+    monitoring = run_monitoring_checks(args, meta)
+
+    # Merge into unified enforcement block
+    enf = merge_enforcement(policy, monitoring)
 
     # 4. Verbose mode
     if args.verbose:
         display_verbose(meta)
         display_chain_summary(meta)
         display_enforcement_summary(enf)
-        return
+        sys.exit(compute_nagios_code(enf))
  
     # 5. JSON mode
-    if args.json:
+    elif args.json:
         output_json(meta, enf)
-        return
+        sys.exit(compute_nagios_code(enf))
 
     # 6. Nagios mode
-    nagios_exit(meta.get("days_remaining"), meta.get("expiration_date"), enf, args)
+    nagios_exit(enf, meta)
 
 
 if __name__ == "__main__":

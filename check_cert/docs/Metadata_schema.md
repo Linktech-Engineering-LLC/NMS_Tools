@@ -1,33 +1,28 @@
 # Metadata Schema — check_cert.py
-This document defines the **canonical JSON schema** emitted by check_cert.py
-when using --json.
-The schema is **deterministic, stable,** and **ordered**, ensuring reliable
-parsing for automation, monitoring pipelines, and log ingestion systems.
 
-All fields follow these principles:
+This document defines the canonical JSON schema emitted by check_cert.py when using --json.
 
-- **Deterministic ordering**
-- **No optional fields that appear inconsistently**
-- **Explicit nulls only when semantically meaningful**
-- **No nested surprises**
-- **Stable names across versions**
+The schema is:
 
-Future schema changes require a version bump and migration notes.
+* Deterministic (stable ordering)
+* Strict (no surprise fields)
+* Automation‑safe (consistent structure)
+* Versioned implicitly by the tool version
+
+Any schema change requires a version bump and migration notes.
 
 ## 1. Top‑Level Structure
-The JSON output is a single object with the following top‑level keys:
+
+The JSON output is a single object with the following top‑level keys, in guaranteed order:
 
 ```json
 {
   "host": "",
   "port": 443,
   "timestamp_utc": "",
-  "expiration": {
-    "not_before": "",
-    "not_after": "",
-    "days_remaining": 0
-  },
+  "expiration": { ... },
   "certificate": { ... },
+  "hostname_matches": false,
   "key": { ... },
   "san": [],
   "tls": { ... },
@@ -44,21 +39,21 @@ Each section is documented below.
 
 ## 2. Host & Connection Metadata
 
-```
+```Code
 "host": "example.com",
 "port": 443,
 "timestamp_utc": "2026-05-18T18:19:55Z"
 ```
 
-| Field | Description |
-|-------|-------------|
+| Field |	Description |
+| :--- | :--- |
 | host | Hostname provided via -H |
 | port | Port used for TLS connection |
 | timestamp_utc | Time of evaluation in UTC |
 
 ## 3. Expiration Metadata
 
-```
+```json
 "expiration": {
   "not_before": "2025-02-12T00:00:00Z",
   "not_after": "2026-05-18T18:19:55Z",
@@ -66,34 +61,43 @@ Each section is documented below.
 }
 ```
 
-| Field | Description |
-|-------|-------------|
+| Field	| Description |
+| :--- | :--- |
 | not_before | Certificate validity start |
-| not_after	| Certificate expiration timestamp |
+| not_after |	Certificate expiration timestamp |
 | days_remaining | Integer days until expiration |
 
 ## 4. Certificate Metadata
-
 
 ```json
 "certificate": {
   "subject_cn": "example.com",
   "issuer_cn": "Example CA",
-  "serial_number": "01A3F9...",
+  "serial_number": "01A3F9",
   "signature_algorithm": "sha256",
-  "version": 3
+  "wildcard": false
 }
 ```
 
-| Field | Description |
-|-------|-------------|
+| Field	| Description |
+| :--- | :--- |
 | subject_cn | Subject Common Name |
-| issuer_cn	| Issuer Common Name |
-| serial_number	| Hexadecimal serial number |
-| signature_algorithm | e.g., sha256, sha384, ecdsa-with-SHA256 |
-| version |Certificate version (usually 3) |
+| issuer_cn |	Issuer Common Name |
+| serial_number |	Hexadecimal serial number |
+| signature_algorithm |	e.g., sha256, sha384, ecdsa-with-SHA256 |
+| wildcard |	Whether the certificate is a wildcard cert |
 
-## 5. Key Metadata
+## 5. Hostname Match Metadata
+
+```json
+"hostname_matches": true
+```
+
+| Field	| Description |
+| :--- | :--- |
+| hostname_matches |	Whether the certificate matches the requested hostname |
+
+## 6. Key Metadata
 
 ```json
 "key": {
@@ -103,13 +107,13 @@ Each section is documented below.
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| type | rsa, ecdsa, or unknown |
+| Field	| Description |
+| :--- | :--- |
+| type |	rsa, ecdsa, or unknown |
 | size | RSA key size in bits, or ECDSA curve size |
-| curve	| ECDSA curve name (null for RSA) |
+| curve |	ECDSA curve name (null for RSA) |
 
-## 6. Subject Alternative Names (SAN)
+## 7. Subject Alternative Names (SAN)
 
 ```json
 "san": [
@@ -120,7 +124,7 @@ Each section is documented below.
 
 Always an array, even if empty.
 
-## 7. TLS Session Metadata
+## 8. TLS Session Metadata
 
 ```json
 "tls": {
@@ -129,77 +133,89 @@ Always an array, even if empty.
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| version | Negotiated TLS version |
-| cipher | Negotiated cipher suite |
+| Field	| Description |
+| :--- | :--- |
+| version	| Negotiated TLS version |
+| cipher |	Negotiated cipher suite |
 
-## 8. AIA Metadata
+## 9. AIA Metadata
 
 ```json
 "aia": {
-  "issuer_urls": [
+  "ocsp": [
+    "http://ocsp.example.com"
+  ],
+  "ca_issuers": [
     "http://ca.example.com/intermediate.crt"
   ]
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| issuer_urls | AIA “CA Issuers” URLs extracted from certificate |
+| Field	| Description |
+| :--- | :--- |
+| ocsp  |	OCSP responder URLs |
+| ca_issuers |	AIA “CA Issuers” URLs |
 
-## 9. Chain Metadata
+Both arrays are always present.
+
+## 10. Chain Metadata
 
 ```json
 "chain": {
-  "validated": true,
+  "ok": true,
+  "depth": 2,
   "warnings": [],
   "intermediates": [
     {
       "subject_cn": "Example Intermediate CA",
       "issuer_cn": "Example Root CA"
     }
-  ]
+  ],
+  "root_subject_cn": "Example Root CA",
+  "root_issuer_cn": "Example Root CA"
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| validated	| Whether the chain validated successfully |
-| warnings	| Missing intermediates, mismatches, non‑standard chains |
-| intermediates	| List of intermediate certificates (minimal metadata) |
+| Field	| Description |
+| :--- | :--- |
+| ok |	Whether the chain validated successfully |
+| depth |	Number of certificates in the chain |
+| warnings |	Missing intermediates, mismatches, non‑standard chains |
+| intermediates |	Minimal metadata for intermediate certs |
+| root_subject_cn |	Subject CN of the root certificate |
+| root_issuer_cn |	Issuer CN of the root certificate |
 
-## 10. OCSP Metadata
+## 11. OCSP Metadata
 
 ```json
 "ocsp": {
   "urls": [
     "http://ocsp.example.com"
   ],
-  "status": "unknown"
+  "state": "unknown",
+  "revocation_reason": null
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| urls | OCSP responder URLs |
-| status | Placeholder: good, revoked, unknown, invalid |
+| Field	| Description |
+| :--- | :--- |
+| urls |	OCSP responder URLs |
+| state |	good, revoked, unknown, error |
+| revocation_reason |	Null or string (future expansion) |
 
-Full OCSP response parsing is planned for a future version.
-
-## 11. Warnings & Errors
+## 12. Warnings & Errors
 
 ```json
 "warnings": [],
 "errors": []
 ```
 
-- warnings: Non‑fatal issues (chain gaps, weak algorithms, missing AIA)
-- errors: Fatal issues (handshake failure, parsing errors)
+* warnings: Non‑fatal issues (chain gaps, weak algorithms, missing AIA)
+* errors: Fatal issues (handshake failure, parsing errors)
 
 Both arrays are always present.
 
-## 12. Enforcement Metadata
+## 13. Enforcement Metadata
 
 ```json
 "enforcement": {
@@ -209,46 +225,48 @@ Both arrays are always present.
   "errors": []
 }
 ```
-This structure is defined in detail in **Enforcement.md**.
 
-## 13. Deterministic Ordering
+This structure is defined in detail in Enforcement.md.
+
+## 14. Deterministic Ordering
+
 The canonical ordering of top‑level keys is:
 
-1. host
-2. port
-3. timestamp_utc
-4. expiration
-5. certificate
-6. key
-7. san
-8. tls
-9. aia
-10. chain
-11. ocsp
-12. warnings
-13. errors
-14. enforcement
+* host
+* port
+* timestamp_utc
+* expiration
+* certificate
+* hostname_matches
+* key
+* san
+* tls
+* aia
+* chain
+* ocsp
+* warnings
+* errors
+* enforcement
 
 This ordering is guaranteed for all JSON output.
 
-## 14. Versioning
-The schema is versioned implicitly by the tool version.
+## 15. Versioning
 
 Any change to:
 
-- field names
-- field types
-- field presence rules
-- ordering
-- enforcement structure
+* field names
+* field types
+* field presence rules
+* ordering
+* enforcement structure
 
 …requires:
 
-- a version bump
-- an entry in CHANGELOG
-- migration notes
+* a version bump
+* a CHANGELOG entry
+* migration notes
 
-## 15. Example Full JSON Output
+## 16. Example Full JSON Output
 
 ```json
 {
@@ -265,8 +283,9 @@ Any change to:
     "issuer_cn": "Example CA",
     "serial_number": "01A3F9",
     "signature_algorithm": "sha256",
-    "version": 3
+    "wildcard": false
   },
+  "hostname_matches": true,
   "key": {
     "type": "ecdsa",
     "size": 256,
@@ -281,25 +300,32 @@ Any change to:
     "cipher": "TLS_AES_256_GCM_SHA384"
   },
   "aia": {
-    "issuer_urls": [
+    "ocsp": [
+      "http://ocsp.example.com"
+    ],
+    "ca_issuers": [
       "http://ca.example.com/intermediate.crt"
     ]
   },
   "chain": {
-    "validated": true,
+    "ok": true,
+    "depth": 2,
     "warnings": [],
     "intermediates": [
       {
         "subject_cn": "Example Intermediate CA",
         "issuer_cn": "Example Root CA"
       }
-    ]
+    ],
+    "root_subject_cn": "Example Root CA",
+    "root_issuer_cn": "Example Root CA"
   },
   "ocsp": {
     "urls": [
       "http://ocsp.example.com"
     ],
-    "status": "unknown"
+    "state": "unknown",
+    "revocation_reason": null
   },
   "warnings": [],
   "errors": [],
