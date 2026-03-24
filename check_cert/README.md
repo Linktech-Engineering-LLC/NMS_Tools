@@ -2,7 +2,7 @@
 ![Python Version](https://img.shields.io/badge/python-3.6%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-stable-brightgreen)
-![Nagios Plugin Compatibility](https://img.shields.io/badge/Nagios-plugin-success)
+![Nagios Plugin](https://img.shields.io/badge/Nagios-plugin-success)
 ![NMS_Tools](https://img.shields.io/badge/NMS_Tools-check__cert-blueviolet)
 
 check_cert is an operator‑grade TLS certificate inspection tool designed for Nagios, automation pipelines, and standalone diagnostics. It performs deterministic metadata extraction, monitoring checks, and optional policy enforcement, with clean output modes for Nagios, verbose inspection, and JSON integration.

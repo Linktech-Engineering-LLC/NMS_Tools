@@ -4,7 +4,7 @@ File: check_interfaces.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-22
-Modified: 2026-03-22
+Modified: 2026-03-24
 Required: Python 3.6+
 Description:
         Interface Checker: If the host is local, local libraries are used, otherwise SNMP v2 is used
@@ -15,11 +15,17 @@ Description:
 import argparse
 import platform
 import sys
+import os
 import socket
 import ipaddress
 import psutil
 import json
+import re
+import shutil
+import zipfile
 
+from datetime import datetime
+from pathlib import Path
 from pysnmp.hlapi import (
     SnmpEngine, CommunityData, UdpTransportTarget,
     ContextData, ObjectType, ObjectIdentity, nextCmd
@@ -80,77 +86,103 @@ def build_parser():
     parser.usage = "check_interfaces.py -H <host> [options]"
 
     # ------------------------------------------------------------
-    # Connection Options
+    # Core Options
     # ------------------------------------------------------------
-    conn = parser.add_argument_group("Connection Options")
-    conn.add_argument(
-        "-H", "--host", required=True,
+    core = parser.add_argument_group("Core Options")
+
+    core.add_argument(
+        "-H", "--host",
+        required=True,
         help="Target hostname or IP address"
     )
 
-    # SNMP options (only required for remote hosts)
-    conn.add_argument(
+    core.add_argument(
+        "-t", "--timeout",
+        type=int,
+        default=5,
+        help="Connection timeout in seconds (default: 5)"
+    )
+
+    core.add_argument(
+        "--log-dir",
+        dest="log_dir",
+        metavar="DIR",
+        default=None,
+        help="Directory to store logs (optional). If omitted, logging is disabled."
+    )
+    
+    core.add_argument(
+        "--log-max-mb",
+        dest="log_max_mb",
+        metavar="MB",
+        type=int,
+        default=50,
+        help="Maximum log size in MB before rotation."
+    )
+
+    # ------------------------------------------------------------
+    # SNMP Options
+    # ------------------------------------------------------------
+    snmp = parser.add_argument_group("SNMP Options")
+
+    snmp.add_argument(
         "-C", "--community",
         help="SNMPv2c community string (required for remote hosts)"
     )
-    conn.add_argument(
+    snmp.add_argument(
         "-p", "--snmp-port", type=int, default=161,
         help="SNMP port"
     )
-    conn.add_argument(
-        "-t", "--snmp-timeout", type=int, default=3,
-        help="SNMP timeout in seconds"
+    snmp.add_argument(
+        "-T", "--snmp-timeout",
+        type=int,
+        help="SNMP timeout in seconds (defaults to global --timeout if not set; ignored in local mode)"
     )
     # -------------------------------------------------------------
-    # Filtering Group
+    # Interface Filtering Options
     # -------------------------------------------------------------
     filtering = parser.add_argument_group("Interface Filtering Options")
 
     filtering.add_argument(
         "--include-aliases",
         action="store_true",
-        help="Include alias interfaces (e.g., eth0:1, br0:backup) in output and status evaluation"
+        help="Include alias interfaces (e.g., eth0:1, br0:backup) in discovery and evaluation"
     )
+
     filtering.add_argument(
         "--ignore-virtual",
         action="store_true",
-        help="Ignore virtual interfaces (e.g., vnet*, virbr*, docker0) in output and status evaluation"
+        help="Ignore virtual interfaces (e.g., vnet*, virbr*, docker0) during discovery and evaluation"
     )
+
     filtering.add_argument(
         "--exclude-local",
         action="store_true",
-        help="Exclude local-only interfaces such as 'lo' from output and status evaluation"
+        help="Exclude local-only interfaces such as 'lo' from discovery and evaluation"
     )
+
     filtering.add_argument(
         "--ignore",
         action="append",
         metavar="PATTERN",
-        help="Ignore interfaces matching this pattern (supports substring match). Can be used multiple times."
+        help="Ignore interfaces matching this pattern (supports substring or regex). Can be used multiple times."
     )
-    filtering.add_argument(
-        "--require",
-        action="append",
-        metavar="IFACE",
-        help="Require this interface to exist and be UP. Can be used multiple times."
-    )
-    filtering.add_argument(
-        "--require-speed",
-        metavar="SPEED",
-        help="Require interfaces to have at least this speed (e.g., 1G, 100M, 10G)."
-    )
-    filtering.add_argument(
-        "--ignore-iftype",
-        action="append",
-        metavar="TYPE",
-        help="Ignore interfaces with this SNMP ifType (numeric). Can be used multiple times."
-    )
-    filtering.add_argument(
-        "--require-iftype",
-        action="append",
-        metavar="TYPE",
-        help="Require at least one interface of this SNMP ifType to be UP. Can be used multiple times."
+    # -------------------------------------------------------------
+    # Targeting Options
+    # -------------------------------------------------------------
+    targeting = parser.add_argument_group("Targeting Options")
+
+    targeting.add_argument(
+        "--status",
+        choices=["oper-status", "admin-status", "linkspeed", "duplex", "mtu", "alias"],
+        help="Interface attribute to evaluate. Defaults to 'oper-status'."
     )
 
+    targeting.add_argument(
+        "--ifaces",
+        metavar="LIST",
+        help="Comma-delimited list or regex pattern of interfaces to evaluate."
+    )
     # ------------------------------------------------------------
     # Output Modes
     # ------------------------------------------------------------
@@ -314,7 +346,7 @@ def validate_host_local(host: str):
 # -----------------------------
 # Local Interface Information
 # -----------------------------
-def gather_local_interfaces():
+def gather_local_interfaces(timeout=None):
     """
     Collects local interface information using psutil.
     Returns a deterministic structure suitable for JSON, verbose, and Nagios output.
@@ -562,102 +594,65 @@ def is_local(name, iface):
             return True
 
     return False
-def apply_filters(interfaces, args):
+def apply_filters(interfaces, args) -> dict:
     filtered = {}
 
     for name, iface in interfaces.items():
 
         # Alias filtering
-        if is_alias(name) and not args.include_aliases:
+        if args.status == "alias":
+            pass
+        elif is_alias(name) and not args.include_aliases:
             continue
 
         # Virtual filtering
         if args.ignore_virtual and is_virtual(name):
             continue
 
-        # Local filtering
+        # Local-only filtering (lo, loopback, etc.)
         if args.exclude_local and is_local(name, iface):
             continue
 
-        # Pattern ignore
+        # Pattern ignore (substring or regex)
         if matches_ignore(name, args.ignore):
             continue
-
-        # SNMP ifType filtering
-        if args.ignore_iftype:
-            if iface.get("ifType") in [int(t) for t in args.ignore_iftype]:
-                continue
 
         filtered[name] = iface
 
     return filtered
-def matches_ignore(name, patterns):
+def matches_ignore(name, patterns) -> bool:
     if not patterns:
         return False
+
     lname = name.lower()
+
     for p in patterns:
+        p = p.strip()
+        if not p:
+            continue
+
+        # 1. Substring match (default behavior)
         if p.lower() in lname:
             return True
+
+        # 2. Regex match (if pattern looks like a regex)
+        try:
+            if re.search(p, name, re.IGNORECASE):
+                return True
+        except re.error:
+            # Invalid regex → ignore and fall back to substring only
+            pass
+
     return False
 # --------------------------------
 # Enforcement
 # --------------------------------
-def enforce_require_interfaces(filtered, args):
-    if not args.require:
-        return None  # no error
-
-    missing = []
-    down = []
-
-    for req in args.require:
-        if req not in filtered:
-            missing.append(req)
-            continue
-
-        iface = filtered[req]
-
-        # Only enforce oper_up if the interface is intended to be up
-        if iface["admin_up"] and not iface["oper_up"]:
-            down.append(req)
-
-    if missing:
-        return f"CRITICAL - required interfaces missing: {', '.join(missing)}", CRITICAL
-
-    if down:
-        return f"CRITICAL - required interfaces down: {', '.join(down)}", CRITICAL
-
-    return None
 def parse_speed(s):
     s = s.strip().upper()
     for suffix, factor in SPEED_UNITS.items():
         if s.endswith(suffix):
             return int(s[:-1]) * factor
     return int(s)
-def enforce_speed(filtered, args):
-    if not args.require_speed:
-        return None  # no enforcement requested
-
-    min_speed = parse_speed(args.require_speed)
-    slow = []
-
-    for name, iface in filtered.items():
-        speed = iface.get("speed")
-
-        # Unknown speeds are allowed unless you want stricter rules later
-        if speed is None:
-            continue
-
-        if speed < min_speed:
-            slow.append(f"{name}({fmt_speed(speed)})")
-
-    if slow:
-        return (
-            f"WARNING - interfaces below required speed {args.require_speed}: "
-            f"{', '.join(slow)}",
-            WARNING
-        )
-
-    return None
 def extract_required(filtered, args):
     if not args.require:
         return filtered  # no change
@@ -667,26 +662,119 @@ def extract_required(filtered, args):
         if req in filtered:
             required_only[req] = filtered[req]
     return required_only
-def enforce_iftype(filtered, args):
-    if not args.require_iftype:
-        return None
+def apply_iface_selection(interfaces, ifaces_arg) -> dict:
+    """
+    Selects interfaces based on --ifaces.
+    Supports:
+      • comma-delimited lists
+      • regex patterns
+      • literal matches
+    If --ifaces is None → return all interfaces.
+    """
 
-    required_types = [int(t) for t in args.require_iftype]
+    # No selection → return everything
+    if not ifaces_arg:
+        return interfaces
 
-    for t in required_types:
-        found_up = any(
-            iface.get("ifType") == t and iface.get("admin_up") and iface.get("oper_up")
-            for iface in filtered.values()
-        )
+    selected = {}
+    patterns = [p.strip() for p in ifaces_arg.split(",") if p.strip()]
 
-        if not found_up:
-            return (
-                f"CRITICAL - no interfaces of required ifType {t} are UP",
-                CRITICAL
-            )
+    for name, iface in interfaces.items():
+        lname = name.lower()
 
-    return None
+        for p in patterns:
+            # Literal match
+            if lname == p.lower():
+                selected[name] = iface
+                break
 
+            # Substring match
+            if p.lower() in lname:
+                selected[name] = iface
+                break
+
+            # Regex match
+            try:
+                if re.search(p, name, re.IGNORECASE):
+                    selected[name] = iface
+                    break
+            except re.error:
+                # Invalid regex → ignore and fall back to substring only
+                pass
+
+    return selected
+def evaluate_status(interfaces, status_target) -> dict:
+    """
+    Evaluates the selected interfaces based on the --status target.
+    Returns a dict:
+        {
+            "state": "OK" | "WARNING" | "CRITICAL",
+            "failures": [iface names],
+            "results": { iface: { "ok": bool, "value": X } }
+        }
+    """
+
+    if not status_target:
+        status_target = "oper-status"
+
+    results = {}
+    failures = []
+
+    for name, iface in interfaces.items():
+
+        if status_target == "oper-status":
+            ok = iface.get("oper_up", False)
+            value = "up" if ok else "down"
+
+        elif status_target == "admin-status":
+            ok = iface.get("admin_up", False)
+            value = "up" if ok else "down"
+
+        elif status_target == "linkspeed":
+            speed = iface.get("speed")
+            ok = speed not in (None, 0)
+            value = speed
+
+        elif status_target == "duplex":
+            if iface.get("name").startswith("br"):
+                ok = True
+                value = "n/a"
+            else:
+                ok = iface.get("duplex") == "full"
+                value = iface.get("duplex")
+
+        elif status_target == "mtu":
+            mtu = iface.get("mtu")
+            ok = mtu is not None and mtu > 0
+            value = mtu
+
+        elif status_target == "alias":
+            ok = not is_alias(name)
+            value = "alias" if not ok else "normal"
+
+        else:
+            ok = True
+            value = None
+
+        results[name] = {
+            "ok": ok,
+            "value": value
+        }
+
+        if not ok:
+            failures.append(name)
+
+    # Determine overall state
+    if failures:
+        state = "CRITICAL"
+    else:
+        state = "OK"
+
+    return {
+        "state": state,
+        "failures": failures,
+        "results": results
+    }
 # -----------------------------
 # Display the Information
 # -----------------------------
@@ -706,14 +794,15 @@ def output_json(meta, interfaces, exit_code):
 
     print(json.dumps(payload, indent=2, sort_keys=True))
     return exit_code
-def output_verbose(meta, interfaces):
+def output_verbose(meta, interfaces, result):
     print(f"Interface Summary ({meta['mode']})")
     print(f"Host: {meta['host']} ({meta['ip']})")
-    print(f"Interfaces: {meta['interface_count']}\n")
+    print(f"Interfaces: {meta['interface_count']}")
+    print(f"Status Target: {meta['status_target']}\n")
 
     header = (
         f"{'Name':<10} {'MAC':<20} {'MTU':<6} {'Speed':<7} "
-        f"{'Duplex':<8} {'Admin':<6} {'Oper':<6} Flags"
+        f"{'Duplex':<8} {'Admin':<6} {'Oper':<6} {'Eval':<8} Flags"
     )
     print(header)
     print("-" * len(header))
@@ -727,97 +816,240 @@ def output_verbose(meta, interfaces):
         oper = "up" if iface["oper_up"] else "down"
         flags = fmt_flags(iface["flags"])
 
+        # Evaluation result for this interface
+        eval_ok = result["results"][name]["ok"]
+        eval_val = result["results"][name]["value"]
+        eval_str = "OK" if eval_ok else str(eval_val)
+
         print(
             f"{name:<10} {mac:<20} {mtu:<6} {speed:<7} "
-            f"{duplex:<8} {admin:<6} {oper:<6} {flags}"
+            f"{duplex:<8} {admin:<6} {oper:<6} {eval_str:<8} {flags}"
         )
-def output_single_line(interfaces):
-    # Filter out alias interfaces first
-    filtered = {
-        name: iface
-        for name, iface in interfaces.items()
-        if ":" not in name
-    }
+def output_single_line(meta, interfaces, result):
+    """
+    Produces a single-line Nagios-compatible output string and exit code.
+    Returns: (message, exit_code)
+    """
 
-    if not filtered:
-        return ("UNKNOWN - no interfaces detected", UNKNOWN)
+    state = result["state"]
+    failures = result["failures"]
+    status_target = meta["status_target"]
 
     parts = []
-    down_found = False
+    for name, iface in interfaces.items():
+        ok = result["results"][name]["ok"]
+        val = result["results"][name]["value"]
 
-    for name, iface in filtered.items():
-        if iface["oper_up"]:
-            parts.append(f"{name} UP")
+        if status_target == "oper-status":
+                parts.append(f"{name} {'UP' if ok else 'DOWN'}")
+        elif status_target == "linkspeed":
+            parts.append(f"{name} {fmt_speed(val)}")
         else:
-            parts.append(f"{name} DOWN")
-            down_found = True
-
-    if down_found:
-        status = "CRITICAL"
-        exit_code = CRITICAL
-    else:
-        status = "OK"
-        exit_code = OK
+            # Generic formatting for other status types
+            parts.append(f"{name} {val}")
 
     summary = ", ".join(parts)
-    msg = f"{status} - {len(filtered)} interfaces: {summary}"
-    return (msg, exit_code)
+
+    if state == "OK":
+        msg = f"OK - {len(interfaces)} interfaces: {summary}"
+        return msg, OK
+
+    # CRITICAL case
+    failed_list = ", ".join(failures)
+    msg = f"CRITICAL - {failed_list} failed {status_target}: {summary}"
+    return msg, CRITICAL
+# --------------------------------------
+# Logging Functions
+# --------------------------------------
+def ts():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def write_log(meta, message):
+    if meta["mode"] == "nagios":
+        return
+
+    log_dir = meta.get("log_dir")
+    if not log_dir:
+        return
+
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+        logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
+        with open(logfile, "a") as f:
+            f.write(f"{ts()}; {message}\n")
+    except Exception as e:
+        # optional: print to stderr
+        pass
+def rotate_log_if_needed(meta):
+    log_dir = meta.get("log_dir")
+    if not log_dir:
+        return
+
+    logfile = os.path.join(log_dir, "check_interfaces.log")
+    if not os.path.exists(logfile):
+        return
+
+    max_mb = meta.get("log_max_mb", 5)
+    max_bytes = max_mb * 1024 * 1024
+
+    if os.path.getsize(logfile) < max_bytes:
+        return
+
+    archive_path = build_archive_path(log_dir)
+    shutil.move(logfile, archive_path)
+    compress_file(archive_path)
+def build_archive_path(log_dir):
+    base = "check_interfaces"
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return os.path.join(log_dir, f"{base}_{ts}.log")
+def compress_file(path):
+    zip_path = path + ".zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.write(path, os.path.basename(path))
+    os.remove(path)
+def start_banner(meta):
+    return (
+        f"[START] {meta['script_name']}.py"
+        f" host={meta['host']}"
+        f" status={meta.get('status_target')}"
+        f" ignore={meta['ignore']}"
+        f" exclude_local={meta['exclude_local']}"
+        f" include_aliases={meta['include_aliases']}"
+    )
+def log_interface(iface_name, iface_meta, iface_result):
+    fields = [f"{k}={v}" for k, v in iface_meta.items()]
+    fields.append(f"ok={iface_result.get('ok')}")
+    fields.append(f"value={iface_result.get('value')}")
+    return f"[IFACE] {iface_name} " + " ".join(fields)
+def log_summary(state, failures):
+    return f"[RESULT] state={state} failures={failures}"
+def end_banner():
+    return "[END]"
 
 # --------------------------------------
 # Main Entry Point
 # --------------------------------------
 def main():
     args = build_parser()
-        
+
+    # ------------------------------------------------------------
+    # Host validation (local vs remote)
+    # ------------------------------------------------------------
     rc = validate_host_local(args.host)
     if not rc["ok"]:
         print(f"UNKNOWN - {rc['error']}")
         sys.exit(UNKNOWN)
-    data = {}
+
+    # ------------------------------------------------------------
+    # Determine Nagios mode
+    # ------------------------------------------------------------
+    nagios_mode = not args.json and not args.verbose
+
+    # ------------------------------------------------------------
+    # Build initial metadata BEFORE logging
+    # ------------------------------------------------------------
+    meta = {
+        "script_name": Path(sys.argv[0]).stem,
+        "host": args.host,
+        "ip": rc["ip"],
+        "mode": "nagios" if nagios_mode else ("local" if rc["local"] else "snmp"),
+        "ignore": args.ignore,
+        "exclude_local": args.exclude_local,
+        "include_aliases": args.include_aliases,
+        "log_dir": str(Path(args.log_dir).expanduser()) if args.log_dir else None,
+        "log_max_mb": args.log_max_mb,
+    }
+
+    logging_enabled = meta["mode"] != "nagios" and meta["log_dir"]
+    # ------------------------------------------------------------
+    # Determine effective timeout
+    # ------------------------------------------------------------
     if rc["local"]:
-        # LOCAL MODE
-        data = normalize_interfaces(gather_local_interfaces(),"local")
+        effective_timeout = args.timeout
     else:
-        # REMOTE MODE
+        effective_timeout = args.snmp_timeout if args.snmp_timeout else args.timeout
+
+    # ------------------------------------------------------------
+    # Interface collection
+    # ------------------------------------------------------------
+    if rc["local"]:
+        raw = gather_local_interfaces(timeout=effective_timeout)
+        data = normalize_interfaces(raw, "local")
+    else:
         if not args.community:
             print("CRITICAL - remote host requires SNMP community string")
             sys.exit(CRITICAL)
-        data = normalize_interfaces(gather_snmp_interfaces(rc["ip"], args.community),"snmp")
+
+        raw = gather_snmp_interfaces(
+            rc["ip"],
+            args.community,
+            port=args.snmp_port,
+            timeout=effective_timeout
+        )
+        data = normalize_interfaces(raw, "snmp")
+
+    # ------------------------------------------------------------
+    # Filtering
+    # ------------------------------------------------------------
     filtered = apply_filters(data, args)
-    # Enforcement: required interfaces
-    err = enforce_require_interfaces(filtered, args)
-    if err:
-        msg, code = err
-        print(msg)
-        sys.exit(code)
 
-    # Enforcement: speed
-    err = enforce_speed(filtered, args)
-    if err:
-        msg, code = err
-        print(msg)
-        sys.exit(code)
+    # ------------------------------------------------------------
+    # Interface selection (--ifaces)
+    # ------------------------------------------------------------
+    selected = apply_iface_selection(filtered, args.ifaces)
 
-    # Required ifType
-    err = enforce_iftype(filtered, args)
-    if err:
-        msg, code = err
-        print(msg)
-        sys.exit(code)
-    meta = {
-        "host": args.host,
-        "ip": rc["ip"],
-        "mode": "local" if rc["local"] else "snmp",
-        "error": None,
-        "interface_count": len(filtered)
-    }
+    # ------------------------------------------------------------
+    # Status target
+    # ------------------------------------------------------------
+    status_target = args.status or "oper-status"
+
+    # ------------------------------------------------------------
+    # Update metadata BEFORE logging
+    # ------------------------------------------------------------
+    meta["interface_count"] = len(selected)
+    meta["status_target"] = status_target
+
+    # ------------------------------------------------------------
+    # Logging lifecycle (only if not Nagios)
+    # ------------------------------------------------------------
+    if logging_enabled:
+        rotate_log_if_needed(meta)
+        write_log(meta, start_banner(meta))
+
+    # ------------------------------------------------------------
+    # Status evaluation (--status)
+    # ------------------------------------------------------------
+    result = evaluate_status(selected, status_target)
+    #sys.exit(result)
+    # ------------------------------------------------------------
+    # Per-interface logging
+    # ------------------------------------------------------------
+    if logging_enabled:
+        for iface_name in selected:
+            iface_meta = data[iface_name]          # full metadata dict
+            iface_result = result["results"][iface_name] # ok/value dict
+            write_log(meta, log_interface(iface_name, iface_meta, iface_result))
+
+        write_log(meta, log_summary(result["state"], result["failures"]))
+        write_log(meta, end_banner())
+
+    # ------------------------------------------------------------
+    # JSON output
+    # ------------------------------------------------------------
     if args.json:
-        sys.exit(output_json(meta, filtered, OK))
-    elif args.verbose:
-        output_verbose(meta, filtered)
-        sys.exit(OK)
-    display_set = extract_required(filtered, args) if args.require else filtered
-    msg, code = output_single_line(display_set)
+        output_json(meta, selected, result)
+        sys.exit(0 if result["state"] == "OK" else 2)
+
+    # ------------------------------------------------------------
+    # Verbose output
+    # ------------------------------------------------------------
+    if args.verbose:
+        output_verbose(meta, selected, result)
+        sys.exit(0 if result["state"] == "OK" else 2)
+
+    # ------------------------------------------------------------
+    # Single-line Nagios output
+    # ------------------------------------------------------------
+    msg, code = output_single_line(meta, selected, result)
     print(msg)
     sys.exit(code)
 

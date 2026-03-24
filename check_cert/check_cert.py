@@ -4,7 +4,7 @@ File: check_cert.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-17
-Modified: 2026-03-23
+Modified: 2026-03-24
 Required: Python 3.6+
 Description:
     Certificate checker with SAN, issuer, signature algorithm, wildcard detection,
@@ -251,9 +251,9 @@ def build_parser():
     # Nagios Options
     # ----------------------------
     nagios = parser.add_argument_group("Nagios Thresholds")
-    nagios.add_argument("--warning", type=int, default=30,
+    nagios.add_argument("-w", "--warning", type=int, default=30,
                         help="Warning threshold in days")
-    nagios.add_argument("--critical", type=int, default=15,
+    nagios.add_argument("-c", "--critical", type=int, default=15,
                         help="Critical threshold in days")
 
     # -----------------------------
@@ -1294,20 +1294,29 @@ def display_enforcement_summary(enf):
 def nagios_exit(enf, meta):
     days = meta["expiration_days"]
     date = meta["expiration_date"]
+    perf = f"days_remaining={days};{meta['warning_days']};{meta['critical_days']}"
 
     # Hard failures (CRITICAL)
     hard_failures = [f for f in enf["failed"] if not f.endswith("_warning")]
     warnings = [f for f in enf["failed"] if f.endswith("_warning")]
 
-    if hard_failures:
-        print(f"CRITICAL - {', '.join(hard_failures)} | expires in {days} days on {date}")
+    # 1. Certificate expired (days < 0)
+    if days < 0:
+        print(f"CRITICAL - certificate expired on {date} | {perf}")
         sys.exit(CRITICAL)
 
+    # 2. Hard enforcement failures
+    if hard_failures:
+        print(f"CRITICAL - certificate valid but {', '.join(hard_failures)}, expires on {date} | {perf}")
+        sys.exit(CRITICAL)
+
+    # 3. Warning enforcement failures
     if warnings:
-        print(f"WARNING - {', '.join(warnings)} | expires in {days} days on {date}")
+        print(f"WARNING - certificate valid but {', '.join(warnings)}, expires on {date} | {perf}")
         sys.exit(WARNING)
 
-    print(f"OK - certificate valid, expires in {days} days on {date}")
+    # 4. Fully OK
+    print(f"OK - certificate valid, expires on {date} | {perf}")
     sys.exit(OK)
 def output_json(meta, enf):
     """
@@ -1331,6 +1340,8 @@ def output_json(meta, enf):
         "tls_version": meta.get("tls_version"),
         "cipher": meta.get("cipher"),
 
+        "critical_days": meta.get("critical_days"),
+        "warning_days": meta.get("warning_days"),
         "expiration_date": meta.get("expires").split(" ")[0],
         "expiration_days": meta.get("expiration_days"),
 
@@ -1559,6 +1570,8 @@ def main():
         "signature_algorithm": sigalg,
         "wildcard": wildcard,
         "san": san_list,
+        "warning_days": args.warning,
+        "critical_days": args.critical,
         "expires": expiry.strftime("%Y-%m-%d %H:%M:%S"),
         "expiration_date": expiration_date,
         "expiration_days": expiration_days,  

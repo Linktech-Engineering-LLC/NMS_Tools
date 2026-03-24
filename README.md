@@ -49,6 +49,15 @@ A deterministic HTTP/HTTPS inspection and content‑validation tool with:
 
 ---
 
+## Project Status Overview
+
+| Project | Language | Status | Description |
+|--------|----------|--------|-------------|
+| **check_cert.py** | Python | 🟢 Stable | TLS certificate inspection, metadata extraction, and policy enforcement |
+| **check_html.py** | Python | 🟢 Stable | HTTP/HTTPS inspection, content validation, and backend fingerprinting |
+| **check_interfaces.py** | Python | 🟡 Under Construction | Network interface state, speed, and attribute monitoring |
+
+
 ## Documentation
 
 The `docs/` directory contains the full documentation suite for all tools:
@@ -168,3 +177,11 @@ Before submitting a pull request:
 5. Maintain compatibility with Python 3.6+  
 
 For major changes, open an issue first to discuss the design and approach.
+
+## Related Projects (Outside This Repository)
+
+These tools are part of the broader Linktech Engineering ecosystem but are not included in the NMS_Tools repository:
+
+- **BotScanner** — Network flow and host inspection framework (Python)
+- **licensegen** — Deterministic license generator (Rust)
+- **rust_logger** — Structured logging library for Rust applications
