@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest an enhancement or new capability for NMS_Tools
+labels: [enhancement]
+
+body:
+  - type: textarea
+    attributes:
+      label: Summary
+      description: A clear description of the feature or enhancement.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Motivation
+      description: Why this feature is useful or necessary.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Proposed Solution
+      description: Describe how the feature could work.
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Additional Context
+      description: Any other information, examples, or references.

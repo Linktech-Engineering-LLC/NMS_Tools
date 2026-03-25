@@ -1,0 +1,43 @@
+name: Bug report
+description: Report a reproducible issue in NMS_Tools
+labels: [bug]
+
+body:
+  - type: textarea
+    attributes:
+      label: Description
+      description: A clear and concise description of the issue.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Steps to Reproduce
+      description: Provide exact steps to reproduce the issue.
+      placeholder: |
+        1. Run command...
+        2. Provide flags...
+        3. Observe output...
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Actual Behavior
+      description: What actually happened, including any logs or error messages.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Environment
+      description: OS, Python version, tool version, and any relevant environment details.
+    validations:
+      required: true
