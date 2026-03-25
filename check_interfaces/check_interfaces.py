@@ -4,7 +4,7 @@ File: check_interfaces.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-22
-Modified: 2026-03-24
+Modified: 2026-03-25
 Required: Python 3.6+
 Description:
         Interface Checker: If the host is local, local libraries are used, otherwise SNMP v2 is used
@@ -100,7 +100,7 @@ def build_parser():
         "-t", "--timeout",
         type=int,
         default=5,
-        help="Connection timeout in seconds (default: 5)"
+        help="Connection timeout in seconds"
     )
 
     core.add_argument(
@@ -414,10 +414,13 @@ def gather_local_interfaces(timeout=None):
 # -----------------------------
 # SNMP Interface Information
 # -----------------------------
-def snmp_walk(ip, community, oid, port=161, timeout=3):
+def snmp_walk(ip, community, oid, port=161, timeout=3, index_components=1):
     """
     Deterministic SNMP walk helper.
     Returns a dict {index: value}.
+    index_components: number of trailing OID components to use as the key.
+        1 (default) = single integer index (IF-MIB)
+        4 = dotted-quad IP index (ipAddrTable)
     """
     results = {}
 
@@ -426,7 +429,7 @@ def snmp_walk(ip, community, oid, port=161, timeout=3):
          errorIndex,
          varBinds) in nextCmd(
             SnmpEngine(),
-            CommunityData(community, mpModel=1),  # SNMPv2c
+            CommunityData(community, mpModel=1),
             UdpTransportTarget((ip, port), timeout=timeout, retries=1),
             ContextData(),
             ObjectType(ObjectIdentity(oid)),
@@ -440,8 +443,11 @@ def snmp_walk(ip, community, oid, port=161, timeout=3):
             )
 
         for oid_obj, value in varBinds:
-            # Extract the interface index from the OID
-            idx = int(oid_obj.prettyPrint().split('.')[-1])
+            parts = oid_obj.prettyPrint().split('.')
+            if index_components == 1:
+                idx = int(parts[-1])
+            else:
+                idx = '.'.join(parts[-index_components:])
             results[idx] = value.prettyPrint()
 
     return results
@@ -450,6 +456,34 @@ def gather_snmp_interfaces(ip, community, port=161, timeout=3):
     Collect interface information from a remote host using SNMPv2c.
     Returns a structure identical to gather_local_interfaces().
     """
+    # -----------------------------
+    # IP-MIB walks (IPv4)
+    # -----------------------------
+    ipAdEntIfIndex = snmp_walk(ip, community, "1.3.6.1.2.1.4.20.1.2", port, timeout, index_components=4)
+    ipAdEntNetMask = snmp_walk(ip, community, "1.3.6.1.2.1.4.20.1.3", port, timeout, index_components=4)
+
+    # Build reverse map: ifIndex → list of {address, netmask, broadcast}
+    ip_by_ifindex = {}
+    for addr, ifidx in ipAdEntIfIndex.items():
+        ifidx = int(ifidx)
+        netmask = ipAdEntNetMask.get(addr, "255.255.255.255")
+
+        # Calculate broadcast from address + netmask
+        import struct, socket
+        ip_int = struct.unpack("!I", socket.inet_aton(addr))[0]
+        mask_int = struct.unpack("!I", socket.inet_aton(netmask))[0]
+        bcast_int = (ip_int & mask_int) | (~mask_int & 0xFFFFFFFF)
+        broadcast = socket.inet_ntoa(struct.pack("!I", bcast_int))
+
+        # Loopback has no broadcast
+        if netmask == "255.0.0.0":
+            broadcast = None
+
+        ip_by_ifindex.setdefault(ifidx, []).append({
+            "address": addr,
+            "netmask": netmask,
+            "broadcast": broadcast
+        })
 
     # -----------------------------
     # IF-MIB walks
@@ -481,7 +515,7 @@ def gather_snmp_interfaces(ip, community, port=161, timeout=3):
         iface = {
             "name": name,
             "mac": ifPhysAddress.get(idx),
-            "ipv4": [],
+            "ipv4": ip_by_ifindex.get(int(idx), []),
             "ipv6": [],
             "mtu": int(ifMtu.get(idx, 0)),
             "speed": int(ifSpeed.get(idx, 0)),
@@ -513,6 +547,8 @@ def normalize_interfaces(raw, source):
         if mac and mac.startswith("0x"):
             mac = mac[2:]
             mac = ":".join(mac[i:i+2] for i in range(0, len(mac), 2))
+        if not mac:
+            mac = "00:00:00:00:00:00"
 
         # Normalize duplex
         duplex = iface.get("duplex")
@@ -536,6 +572,8 @@ def normalize_interfaces(raw, source):
         speed = iface.get("speed")
         if speed in (0, None, 4294967295):
             speed = None
+        elif source == "snmp":
+            speed = speed // 1_000_000  # Convert bps to Mbps
 
         # Normalize admin/oper
         admin_up = iface.get("admin_up", True)
@@ -662,22 +700,26 @@ def extract_required(filtered, args):
         if req in filtered:
             required_only[req] = filtered[req]
     return required_only
-def apply_iface_selection(interfaces, ifaces_arg) -> dict:
+def apply_iface_selection(interfaces, ifaces_arg) -> tuple:
     """
     Selects interfaces based on --ifaces.
     Supports:
       • comma-delimited lists
       • regex patterns
       • literal matches
-    If --ifaces is None → return all interfaces.
+    If --ifaces is None → return all interfaces, no unmatched.
+
+    Returns:
+        (selected_dict, unmatched_list)
     """
 
     # No selection → return everything
     if not ifaces_arg:
-        return interfaces
+        return interfaces, []
 
     selected = {}
     patterns = [p.strip() for p in ifaces_arg.split(",") if p.strip()]
+    matched_patterns = set()
 
     for name, iface in interfaces.items():
         lname = name.lower()
@@ -686,26 +728,31 @@ def apply_iface_selection(interfaces, ifaces_arg) -> dict:
             # Literal match
             if lname == p.lower():
                 selected[name] = iface
+                matched_patterns.add(p)
                 break
 
             # Substring match
             if p.lower() in lname:
                 selected[name] = iface
+                matched_patterns.add(p)
                 break
 
             # Regex match
             try:
                 if re.search(p, name, re.IGNORECASE):
                     selected[name] = iface
+                    matched_patterns.add(p)
                     break
             except re.error:
                 # Invalid regex → ignore and fall back to substring only
                 pass
 
-    return selected
-def evaluate_status(interfaces, status_target) -> dict:
+    unmatched = [p for p in patterns if p not in matched_patterns]
+    return selected, unmatched
+def evaluate_status(interfaces, status_target, unmatched=None) -> dict:
     """
     Evaluates the selected interfaces based on the --status target.
+    Injects unmatched --ifaces patterns as CRITICAL failures.
     Returns a dict:
         {
             "state": "OK" | "WARNING" | "CRITICAL",
@@ -764,6 +811,12 @@ def evaluate_status(interfaces, status_target) -> dict:
         if not ok:
             failures.append(name)
 
+    # Inject unmatched --ifaces patterns as CRITICAL failures
+    if unmatched:
+        for name in unmatched:
+            results[name] = {"ok": False, "value": "not found"}
+            failures.append(name)
+
     # Determine overall state
     if failures:
         state = "CRITICAL"
@@ -791,7 +844,7 @@ def output_json(meta, interfaces, exit_code):
         "interfaces": interfaces,
         "status": exit_code
     }
-
+    meta.pop("_log_warn_emitted", None)
     print(json.dumps(payload, indent=2, sort_keys=True))
     return exit_code
 def output_verbose(meta, interfaces, result):
@@ -825,6 +878,11 @@ def output_verbose(meta, interfaces, result):
             f"{name:<10} {mac:<20} {mtu:<6} {speed:<7} "
             f"{duplex:<8} {admin:<6} {oper:<6} {eval_str:<8} {flags}"
         )
+    print()
+    if meta.get("warnings"):
+        for w in meta.get("warnings"):
+            print(w)
+        
 def output_single_line(meta, interfaces, result):
     """
     Produces a single-line Nagios-compatible output string and exit code.
@@ -877,8 +935,14 @@ def write_log(meta, message):
         with open(logfile, "a") as f:
             f.write(f"{ts()}; {message}\n")
     except Exception as e:
-        # optional: print to stderr
-        pass
+        if not meta.get("_log_warn_emitted"):
+            meta["_log_warn_emitted"] = True
+            warning = f"[WARN] Unable to write to log directory: {log_dir} — {e}"
+            if meta["mode"] == "verbose":
+                print(f"[WARN] {warning}")
+            if "warnings" not in meta:
+                meta["warnings"] = []
+            meta["warnings"].append(warning)
 def rotate_log_if_needed(meta):
     log_dir = meta.get("log_dir")
     if not log_dir:
@@ -995,7 +1059,7 @@ def main():
     # ------------------------------------------------------------
     # Interface selection (--ifaces)
     # ------------------------------------------------------------
-    selected = apply_iface_selection(filtered, args.ifaces)
+    selected, unmatched = apply_iface_selection(filtered, args.ifaces)
 
     # ------------------------------------------------------------
     # Status target
@@ -1018,8 +1082,8 @@ def main():
     # ------------------------------------------------------------
     # Status evaluation (--status)
     # ------------------------------------------------------------
-    result = evaluate_status(selected, status_target)
-    #sys.exit(result)
+    result = evaluate_status(selected, status_target, unmatched)
+
     # ------------------------------------------------------------
     # Per-interface logging
     # ------------------------------------------------------------
@@ -1028,6 +1092,11 @@ def main():
             iface_meta = data[iface_name]          # full metadata dict
             iface_result = result["results"][iface_name] # ok/value dict
             write_log(meta, log_interface(iface_name, iface_meta, iface_result))
+
+        # Log unmatched --ifaces as missing interfaces
+        for name in unmatched:
+            iface_result = result["results"][name]
+            write_log(meta, log_interface(name, {"name": name}, iface_result))
 
         write_log(meta, log_summary(result["state"], result["failures"]))
         write_log(meta, end_banner())
