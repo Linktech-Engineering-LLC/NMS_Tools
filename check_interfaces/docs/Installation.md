@@ -2,6 +2,8 @@
 
 ## Prerequisites
 
+**Resolvable hostname** — All NMS_Tools scripts require the -H target to be resolvable via DNS or /etc/hosts.
+
 | Requirement  | Details                                                              |
 |--------------|----------------------------------------------------------------------|
 | Python       | 3.6 or later                                                        |
@@ -9,7 +11,7 @@
 | SNMP access  | SNMPv2c community string for each remote target device               |
 | Nagios       | Nagios, Icinga, or compatible monitoring platform (optional)         |
 
-> **Note:** Local host inspection uses kernel interface data and does not require pysnmp or SNMP access.
+> **Note:** Local host inspection does not use SNMP, but pysnmp is still required because it is imported at startup. The tool will not run without it.
 
 ---
 

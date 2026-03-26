@@ -7,162 +7,303 @@
 ![NMS_Tools](https://img.shields.io/badge/NMS_Tools-check__interfaces-blueviolet)
 
 `check_interfaces.py` is an operator‑grade network interface monitoring plugin for Nagios and compatible monitoring systems.  
-It performs deterministic, rule‑driven validation of interface state, speed, and attributes across local and remote network devices, with canonical filtering and enforcement logic built for production infrastructure.
+It provides deterministic interface discovery, attribute evaluation, and perfdata emission across both **local Linux hosts** and **remote SNMP devices**, using a unified, normalized interface schema.
+
+The tool supports three output modes — **Nagios**, **verbose**, and **JSON** — making it equally suitable for alerting, diagnostics, and automation.
 
 ---
 
 ## Features
 
-- **Local / Remote Auto‑Detection** — Automatically determines whether the target host is local or remote. Local hosts are inspected using kernel interface data; remote hosts are inspected via SNMPv2c using IF‑MIB.
-- **Attribute‑Based Evaluation** — Validates interfaces against a selectable attribute: operational status, administrative status, link speed, duplex, MTU, or alias.
-- **Canonical Filtering** — Operators control which interfaces are evaluated using alias inclusion, virtual exclusion, local exclusion, pattern‑based ignore rules, and explicit interface targeting.
-- **Deterministic Output** — Produces clean, predictable output suitable for operator review, automated parsing, and Nagios integration.
-- **Nagios‑Compatible Exit Codes** — Returns standard plugin exit codes (OK, WARNING, CRITICAL, UNKNOWN) for direct integration with Nagios, Icinga, and compatible monitoring platforms.
-- **Perfdata Output** — Emits valid performance data parseable by standard Nagios graphing and trending tools.
-- **Multiple Output Modes** — Supports verbose, JSON, and quiet modes alongside the default Nagios‑compatible output.
-- **Opt‑In Logging** — When a log directory is specified via `--log-dir`, appends timestamped, single‑line entries with configurable size‑based rotation. Logging is disabled in default (Nagios) mode.
+### ✔ Unified SNMP + Local Interface Discovery
+- Local mode uses kernel interface data (`/sys/class/net`, psutil).
+- Remote mode uses SNMPv2c (IF‑MIB).
+- All interfaces are normalized into a consistent schema.
+
+### ✔ Multiple Output Modes
+- **Nagios single‑line** (default)
+- **Verbose diagnostic mode** (`-v`)
+- **JSON structured mode** (`-j`)
+- **Quiet mode** (`-q`)
+
+### ✔ Perfdata Mode
+Select a single counter to emit as perfdata:
+
+--perfdata in_octets
+--perfdata out_errors
+--perfdata in_errors
+--perfdata out_errors
+--perfdata in_discards
+--perfdata out_discards
+--perfdata in_ucast
+--perfdata out_ucast
+--perfdata in_multicast
+--perfdata out_multicast
+--perfdata in_broadcast
+--perfdata out_broadcast
+
+Perfdata is always raw (Nagios‑safe) and always included in single‑line output.
+
+### ✔ Attribute‑Based Evaluation
+Evaluate interfaces using:
+
+- `oper-status` (default)
+- `linkspeed`
+- `duplex`
+- `mtu`
+- `flags`
+
+Each interface produces an evaluation result; the global state is derived from failures.
+
+### ✔ Canonical Filtering Pipeline
+Operators can control which interfaces are evaluated using:
+
+- `--ifaces` (explicit list or regex)
+- `--ignore` (repeatable)
+- `--exclude-local`
+- `--include-aliases`
+
+Filtering is deterministic and backend‑agnostic.
+
+### ✔ Normalized Counters (IF‑MIB)
+All counters follow the IF‑MIB model:
+
+- Octets (in/out)
+- Ucast (in/out)
+- Multicast (in/out)
+- Broadcast (in/out)
+- Discards (in/out)
+- Errors (in/out)
+- Unknown protocols
+
+### ✔ Clean Speed Normalization
+Speeds are normalized to Mbps and displayed as:
+
+- `10G`
+- `1G`
+- `100M`
+- `10M`
+- `-` (unknown)
+
+### ✔ Nagios‑Compatible Exit Codes
+Returns standard plugin exit codes:
+
+- `0` OK  
+- `1` WARNING  
+- `2` CRITICAL  
+- `3` UNKNOWN  
 
 ---
 
 ## Requirements
 
 - Python 3.6+
-- [pysnmp](https://pysnmp.readthedocs.io/) — SNMPv2c interface discovery (required for remote hosts)
-- SNMPv2c access to the target device (required for remote hosts only)
-- Target hostname must be DNS‑resolvable or reachable by IP
+- `pysnmp` (required for SNMP mode)
+- SNMPv2c access for remote hosts
+- Target hostname must be resolvable
 
 ---
 
 ## Quick Start
 
+### Local Host
+
 ```bash
-# Local host — uses kernel interface data automatically
 ./check_interfaces.py -H localhost
-
-# Remote host — requires SNMP community string
-./check_interfaces.py -H switch01.example.com -C public
-
-# Evaluate link speed instead of operational status
-./check_interfaces.py -H switch01.example.com -C public --status linkspeed
-
-# Check specific interfaces only
-./check_interfaces.py -H switch01.example.com -C public --ifaces "GigabitEthernet0/1,GigabitEthernet0/2"
-
-# Exclude virtual and loopback interfaces
-./check_interfaces.py -H switch01.example.com -C public --ignore-virtual --exclude-local
-
-# Ignore interfaces matching a pattern (repeatable)
-./check_interfaces.py -H switch01.example.com -C public --ignore "vnet.*" --ignore "docker0"
-
-# Verbose output for diagnostics
-./check_interfaces.py -H switch01.example.com -C public -v
-
-# JSON output for automation
-./check_interfaces.py -H switch01.example.com -C public -j
-
-# Enable logging with custom directory
-./check_interfaces.py -H switch01.example.com -C public -v --log-dir /var/log/nms_tools
 ```
 
-> **Note:** Full CLI reference, argument details, and advanced usage patterns are documented in [Usage.md](docs/Usage.md).
+### Remote Host (SNMP)
 
----
+```bash
+./check_interfaces.py -H switch01 -C public
+```
 
-## Attribute Evaluation
+### Evaluate Link Speed
 
-The `--status` flag selects which interface attribute is validated. Defaults to `oper-status`.
+```bash
+./check_interfaces.py -H switch01 -C public --status linkspeed
+```
 
-| Attribute      | Evaluates                                                        |
-|----------------|------------------------------------------------------------------|
-| `oper-status`  | Operational state of each interface (up/down)                    |
-| `admin-status` | Administrative state (enabled/disabled)                          |
-| `linkspeed`    | Negotiated link speed against expected thresholds                |
-| `duplex`       | Duplex mode (full/half)                                          |
-| `mtu`          | Maximum transmission unit value                                  |
-| `alias`        | Interface alias or description field                             |
+### Select Perfdata Metric
 
----
+```bash
+./check_interfaces.py -H switch01 -C public --perfdata in_octets
+```
 
-## Filtering
+### Verbose Diagnostic Output
 
-`check_interfaces.py` uses a canonical filtering pipeline to determine which interfaces are evaluated. Connection types are detected automatically — operators control filtering through explicit flags:
+```bash
+./check_interfaces.py -H switch01 -C public -v
+```
 
-| Flag               | Purpose                                                                    |
-|--------------------|----------------------------------------------------------------------------|
-| `--ifaces`         | Target specific interfaces by name (comma‑delimited) or regex pattern      |
-| `--include-aliases`| Include alias interfaces (e.g., `eth0:1`, `br0:backup`) in discovery       |
-| `--ignore-virtual` | Exclude virtual interfaces (e.g., `vnet*`, `virbr*`, `docker0`)            |
-| `--exclude-local`  | Exclude local‑only interfaces such as `lo`                                 |
-| `--ignore`         | Ignore interfaces matching a substring or regex pattern (repeatable)       |
+### JSON Output
 
-Filters are applied in a deterministic order to ensure consistent, reproducible results regardless of enumeration sequence.
+```bash
+./check_interfaces.py -H switch01 -C public -j | jq
+```
 
-> **Note:** Detailed enforcement logic, filter precedence, and edge‑case behavior are documented in [Enforcement.md](docs/Enforcement.md).
+### Exclude Local Interfaces
 
----
+```bash
+./check_interfaces.py -H switch01 -C public --exclude-local
+```
+
+### Ignore Interfaces by Pattern
+
+```bash
+./check_interfaces.py -H switch01 -C public --ignore "vnet.*" --ignore docker0
+```
 
 ## Output Modes
 
-| Mode                | Description                                                                      |
-|---------------------|----------------------------------------------------------------------------------|
-| Default             | Clean, single‑line status output with perfdata — suitable for Nagios integration |
-| `-v`, `--verbose`   | Extended diagnostics including per‑interface state, filtered entries, and reasons |
-| `-j`, `--json`      | Structured JSON output for programmatic consumption and automation               |
-| `-q`, `--quiet`     | Exit code only — no stdout output                                                |
+### ✔ Nagios Mode (default)
 
-In default (Nagios) mode, output is a single clean status line with exit code. All diagnostic detail is suppressed unless `-v` is explicitly specified. Logging is disabled in default mode.
+Single‑line output with perfdata:
 
----
+```Code
+OK: all interfaces oper-status | eth0_in_octets=12345c br0_in_octets=67890c
+```
+
+### ✔ Verbose Mode (-v)
+
+Human‑readable diagnostic output:
+
+```Code
+Interface: eth0
+  MAC: 98:4b:e1:60:65:a8
+  MTU: 1500
+  Speed: 1G
+  Duplex: full
+  Admin: up
+  Oper: up
+  Flags: UP,RUNNING
+  Eval: OK (oper-status)
+  IPv4: none
+  IPv6: none
+  Counters:
+    Octets:     In=1170978183  Out=2859282825
+    Ucast:      In=34768217   Out=28905155
+    ...
+```
+
+### ✔ JSON Mode (-j)
+Structured output for automation:
+
+```json
+{
+  "interfaces": {
+    "eth0": {
+      "mac": "98:4b:e1:60:65:a8",
+      "mtu": 1500,
+      "speed": 1000,
+      "duplex": "full",
+      "admin_up": true,
+      "oper_up": true,
+      "counters": { ... }
+    }
+  },
+  "status": { ... },
+  "meta": { ... }
+}
+```
+
+## Filtering
+
+`check_interfaces.py` uses a canonical filtering pipeline to determine which interfaces are evaluated.  
+Filtering is deterministic, backend‑agnostic, and applied identically in both SNMP and local modes.
+
+### `--ifaces`
+Select specific interfaces to evaluate. Supports:
+
+- **Literal names**
+
+```--ifaces eth0,eth1,br0```
+
+
+- **Regex patterns**
+
+```
+--ifaces "eth[0-2]"
+--ifaces "^br[0-9]+$"
+```
+
+
+- **Mixed literal + regex**
+
+```--ifaces "eth0,eth1,^vnet[0-9]+$"```
+
+
+The argument is parsed as a **single comma‑delimited expression**, where each element may be a literal or a regex.  
+If any regex metacharacters are detected, that element is treated as a pattern.
+
+### Additional Filters
+
+| Flag               | Purpose                                                                    |
+|--------------------|----------------------------------------------------------------------------|
+| `--ignore`         | Ignore interfaces matching a substring or regex (repeatable)               |
+| `--exclude-local`  | Exclude loopback and local‑only interfaces                                 |
+| `--ignore-virtual` | Exclude virtual interfaces (e.g., `vnet*`, `virbr*`, `docker0`)            |
+| `--include-aliases`| Include SNMP alias interfaces (e.g., `eth0:1`, `br0:backup`)               |
+
+Filters are applied in a deterministic order to ensure consistent, reproducible results regardless of enumeration sequence.
+
 
 ## Exit Codes
 
-| Code | Status   | Meaning                                                    |
-|------|----------|------------------------------------------------------------|
-| 0    | OK       | All evaluated interfaces pass validation                   |
-| 1    | WARNING  | One or more interfaces have non‑critical attribute issues  |
-| 2    | CRITICAL | Interface down, SNMP failure, or required interface missing|
-| 3    | UNKNOWN  | Unreachable host, invalid arguments, or unhandled error    |
+| Code | Meaning |
+| :---: | :--- |
+| 0 | All interfaces OK |
+| 1 | Non‑critical issues |
+| 2 | Critical failure |
+| 3 | Unknown / error |
 
-SNMP connection failures return CRITICAL or UNKNOWN — never WARNING.
-
----
+SNMP failures return CRITICAL or UNKNOWN.
 
 ## Logging
 
-Logging is **opt‑in** and **disabled in default (Nagios) mode** to keep Nagios output clean and deterministic.
+Logging is **opt‑in** and disabled in default mode.
 
-To enable logging, specify a log directory with `--log-dir`:
+Enable logging:
 
 ```bash
-./check_interfaces.py -H switch01.example.com -C public -v --log-dir /var/log/nms_tools
+./check_interfaces.py -H switch01 -C public -v --log-dir /var/log/nms_tools
 ```
 
-| Option          | Description                                           | Default     |
-|-----------------|-------------------------------------------------------|-------------|
-| `--log-dir DIR` | Directory to store logs; logging disabled if omitted   | *(disabled)*|
-| `--log-max-mb MB`| Maximum log file size in MB before rotation           | 50          |
+Logging follows NMS_Tools conventions:
 
-When enabled, logging follows NMS_Tools suite conventions:
+* Single‑line, timestamped entries
+* Size‑based rotation
+* No logging in default Nagios mode
 
-- **Format:** Single‑line, timestamped entries for deterministic audit trails
-- **Mode:** Append‑only with size‑based rotation
-- **Gating:** Diagnostic detail stays in verbose output; the log captures operational events
+## Document
 
----
-
-## Documentation
-
-| Document                                       | Description                                   |
-|------------------------------------------------|-----------------------------------------------|
-| [Usage.md](docs/Usage.md)                      | Complete CLI reference and argument details    |
-| [Operation.md](docs/Operation.md)              | Operational behavior, inspection internals     |
-| [Enforcement.md](docs/Enforcement.md)          | Filter pipeline, precedence, and edge cases    |
-
----
+| Document | Description |
+|----------|-------------|
+| [Installation.md](docs/Installation.md) | Installation and environment setup |
+| [Usage.md](docs/Usage.md)        | Full CLI reference and examples |
+| [Operation.md](docs/Operation.md)    | Discovery, normalization, and output pipeline |
+| [Enforcement.md](docs/Enforcement.md)  | Status evaluation and filtering logic |
+| [Metadata_schema.md](docs/Metadata_schema.md) | Normalized interface schema |
 
 ## License
 
-This tool is part of the **NMS_Tools** suite by [Linktech Engineering LLC](https://github.com/Linktech-Engineering).  
-Licensed under the [MIT License](../LICENSE).
+Part of the **NMS_Tools** suite by Linktech Engineering LLC.
+Licensed under MIT.
 
-See the [NMS_Tools README](../README.md) for suite‑wide documentation, community standards, and contributor guidelines.
+See the suite‑wide README for contributor guidelines and community standards.
+
+---
+
+# 🎯 **This README is now fully aligned with the tool’s current behavior**
+
+It reflects:
+
+- perfdata mode  
+- verbose diagnostic output  
+- JSON schema  
+- normalized counters  
+- speed formatting  
+- SNMP/local parity  
+- filtering pipeline  
+- evaluation logic  
+- logging behavior  

@@ -4,7 +4,7 @@ File: check_interfaces.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-22
-Modified: 2026-03-25
+Modified: 2026-03-26
 Required: Python 3.6+
 Description:
         Interface Checker: If the host is local, local libraries are used, otherwise SNMP v2 is used
@@ -42,9 +42,8 @@ VIRTUAL_PREFIXES = (
     "vnet", "virbr", "docker", "br-", "tap", "tun", "veth"
 )
 SPEED_UNITS = {
-    "G": 1_000_000_000,
-    "M": 1_000_000,
-    "K": 1000,
+    "G": 1000,
+    "M": 1,
 }
 # -----------------------------
 # Custom Formatter
@@ -174,10 +173,36 @@ def build_parser():
 
     targeting.add_argument(
         "--status",
-        choices=["oper-status", "admin-status", "linkspeed", "duplex", "mtu", "alias"],
+        choices=[
+            "oper-status",
+            "admin-status",
+            "linkspeed",
+            "duplex",
+            "mtu",
+            "alias",
+            "flags",
+            "iftype"
+        ],
         help="Interface attribute to evaluate. Defaults to 'oper-status'."
     )
-
+    targeting.add_argument(
+        "--perfdata",
+        choices=[
+            "in_octets",
+            "out_octets",
+            "in_errors",
+            "out_errors",
+            "in_discards",
+            "out_discards",
+            "in_ucast",
+            "out_ucast",
+            "in_multicast",
+            "out_multicast",
+            "in_broadcast",
+            "out_broadcast"
+        ],
+        help="Select a perfdata metric to output. Only one may be chosen."
+    )
     targeting.add_argument(
         "--ifaces",
         metavar="LIST",
@@ -361,6 +386,27 @@ def gather_local_interfaces(timeout=None):
     stats = psutil.net_if_stats()
 
     for iface in sorted(addrs.keys()):
+
+        stats_path = f"/sys/class/net/{iface}/statistics"
+        counters = {}
+        try:
+            counters = {
+                "in_octets": int(open(f"{stats_path}/rx_bytes").read()),
+                "out_octets": int(open(f"{stats_path}/tx_bytes").read()),
+                "in_ucast": int(open(f"{stats_path}/rx_packets").read()),
+                "out_ucast": int(open(f"{stats_path}/tx_packets").read()),
+                "in_multicast": int(open(f"{stats_path}/multicast").read()),
+                "out_multicast": int(open(f"{stats_path}/tx_multicast").read()) if os.path.exists(f"{stats_path}/tx_multicast") else 0,
+                "in_broadcast": int(open(f"{stats_path}/broadcast").read()) if os.path.exists(f"{stats_path}/broadcast") else 0,
+                "out_broadcast": int(open(f"{stats_path}/tx_broadcast").read()) if os.path.exists(f"{stats_path}/tx_broadcast") else 0,
+                "in_discards": int(open(f"{stats_path}/rx_dropped").read()),
+                "out_discards": int(open(f"{stats_path}/tx_dropped").read()),
+                "in_errors": int(open(f"{stats_path}/rx_errors").read()),
+                "out_errors": int(open(f"{stats_path}/tx_errors").read())
+            }
+        except Exception:
+            counters = {}
+
         iface_info = {
             "name": iface,
             "mac": None,
@@ -371,6 +417,7 @@ def gather_local_interfaces(timeout=None):
             "duplex": None,
             "oper_up": None,
             "running": None,
+            "counters": counters,
             "flags": []
         }
 
@@ -461,6 +508,21 @@ def gather_snmp_interfaces(ip, community, port=161, timeout=3):
     # -----------------------------
     ipAdEntIfIndex = snmp_walk(ip, community, "1.3.6.1.2.1.4.20.1.2", port, timeout, index_components=4)
     ipAdEntNetMask = snmp_walk(ip, community, "1.3.6.1.2.1.4.20.1.3", port, timeout, index_components=4)
+    # -----------------------------
+    # Counters
+    # -----------------------------
+    ifInOctets       = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.10", port, timeout)
+    ifOutOctets      = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.16", port, timeout)
+    ifInUcast        = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.11", port, timeout)
+    ifOutUcast       = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.17", port, timeout)
+    ifInMulticast    = snmp_walk(ip, community, "1.3.6.1.2.1.31.1.1.1.2", port, timeout)
+    ifOutMulticast   = snmp_walk(ip, community, "1.3.6.1.2.1.31.1.1.1.4", port, timeout)
+    ifInBroadcast    = snmp_walk(ip, community, "1.3.6.1.2.1.31.1.1.1.3", port, timeout)
+    ifOutBroadcast   = snmp_walk(ip, community, "1.3.6.1.2.1.31.1.1.1.5", port, timeout)
+    ifInDiscards     = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.13", port, timeout)
+    ifOutDiscards    = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.19", port, timeout)
+    ifInErrors       = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.14", port, timeout)
+    ifOutErrors      = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.20", port, timeout)
 
     # Build reverse map: ifIndex → list of {address, netmask, broadcast}
     ip_by_ifindex = {}
@@ -522,6 +584,20 @@ def gather_snmp_interfaces(ip, community, port=161, timeout=3):
             "duplex": dot3Duplex.get(idx),
             "admin_up": (int(ifAdminStatus.get(idx, 0)) == 1),
             "oper_up": (int(ifOperStatus.get(idx, 0)) == 1),
+            "counters": {
+                "in_octets": int(ifInOctets.get(idx, 0)),
+                "out_octets": int(ifOutOctets.get(idx, 0)),
+                "in_ucast": int(ifInUcast.get(idx, 0)),
+                "out_ucast": int(ifOutUcast.get(idx, 0)),
+                "in_multicast": int(ifInMulticast.get(idx, 0)),
+                "out_multicast": int(ifOutMulticast.get(idx, 0)),
+                "in_broadcast": int(ifInBroadcast.get(idx, 0)),
+                "out_broadcast": int(ifOutBroadcast.get(idx, 0)),
+                "in_discards": int(ifInDiscards.get(idx, 0)),
+                "out_discards": int(ifOutDiscards.get(idx, 0)),
+                "in_errors": int(ifInErrors.get(idx, 0)),
+                "out_errors": int(ifOutErrors.get(idx, 0))
+            },
             "flags": [],
             "ifType": int(ifType.get(idx, 0))   # <-- ADD THIS
         }
@@ -550,31 +626,6 @@ def normalize_interfaces(raw, source):
         if not mac:
             mac = "00:00:00:00:00:00"
 
-        # Normalize duplex
-        duplex = iface.get("duplex")
-        if source == "local":
-            if duplex is None:
-                duplex = "unknown"
-            else:
-                duplex = {
-                    0: "unknown",
-                    1: "half",
-                    2: "full"
-                }.get(int(duplex.value), "unknown")
-        else:  # SNMP
-            duplex = {
-                "1": "unknown",
-                "2": "half",
-                "3": "full"
-            }.get(str(duplex), "unknown")
-
-        # Normalize speed
-        speed = iface.get("speed")
-        if speed in (0, None, 4294967295):
-            speed = None
-        elif source == "snmp":
-            speed = speed // 1_000_000  # Convert bps to Mbps
-
         # Normalize admin/oper
         admin_up = iface.get("admin_up", True)
         oper_up = iface.get("oper_up", False)
@@ -592,15 +643,83 @@ def normalize_interfaces(raw, source):
             "ipv4": iface.get("ipv4", []),
             "ipv6": iface.get("ipv6", []),
             "mtu": iface.get("mtu"),
-            "speed": speed,
-            "duplex": duplex,
+            "speed": normalize_speed(iface.get("speed")),
+            "duplex": normalize_duplex(iface.get("duplex")),
             "admin_up": admin_up,
             "oper_up": oper_up,
+            "counters": normalize_counters(iface.get("counters",{})),
             "flags": flags,
             "ifType": iface.get("ifType")
         }
 
     return normalized
+def normalize_counters(raw):
+    """
+    Normalize interface counters from either local or SNMP collectors.
+    Ensures all fields exist, are integers, and follow the canonical schema.
+    """
+
+    def to_int(value):
+        try:
+            return int(value)
+        except Exception:
+            return 0
+
+    return {
+        "in_octets":     to_int(raw.get("in_octets")),
+        "out_octets":    to_int(raw.get("out_octets")),
+        "in_ucast":      to_int(raw.get("in_ucast")),
+        "out_ucast":     to_int(raw.get("out_ucast")),
+        "in_multicast":  to_int(raw.get("in_multicast")),
+        "out_multicast": to_int(raw.get("out_multicast")),
+        "in_broadcast":  to_int(raw.get("in_broadcast")),
+        "out_broadcast": to_int(raw.get("out_broadcast")),
+        "in_discards":   to_int(raw.get("in_discards")),
+        "out_discards":  to_int(raw.get("out_discards")),
+        "in_errors":     to_int(raw.get("in_errors")),
+        "out_errors":    to_int(raw.get("out_errors"))
+    }
+def normalize_speed(value):
+    """
+    Normalize speed to Mbps.
+    SNMP reports bits per second.
+    psutil reports Mbps.
+    """
+    try:
+        v = int(value)
+        if v in (0, None, 4294967295, 4294):
+            return None
+        if v > 100000:  # SNMP bps threshold
+            return v // 1_000_000
+        return v
+    except Exception:
+        return None
+def normalize_duplex(value):
+    """
+    Normalize duplex to 'full', 'half', or 'unknown'.
+    SNMP EtherLike-MIB uses integers.
+    psutil uses constants.
+    """
+    if value in (None, "unknown"):
+        return "unknown"
+
+    # psutil constants
+    if value == psutil.NIC_DUPLEX_FULL:
+        return "full"
+    if value == psutil.NIC_DUPLEX_HALF:
+        return "half"
+
+    # SNMP EtherLike-MIB
+    try:
+        v = int(value)
+        if v == 3:
+            return "full"
+        if v == 2:
+            return "half"
+    except Exception:
+        pass
+
+    return "unknown"
 def fmt_speed(speed):
     if speed is None:
         return "-"
@@ -831,6 +950,26 @@ def evaluate_status(interfaces, status_target, unmatched=None) -> dict:
 # -----------------------------
 # Display the Information
 # -----------------------------
+def build_perfdata(interfaces, metric):
+    """
+    Build perfdata for a single selected metric.
+    Returns a string like:
+        'in_octets=12345c br0_in_octets=12345c eth0_in_octets=67890c'
+    """
+    parts = []
+
+    for name, iface in interfaces.items():
+        value = iface["counters"].get(metric)
+        if value is None:
+            continue
+
+        # perfdata label: iface_metric
+        label = f"{name}_{metric}"
+
+        # perfdata value: <value>c (counter)
+        parts.append(f"{label}={value}c")
+
+    return " ".join(parts)
 def output_json(meta, interfaces, exit_code):
     """
     JSON output mode.
@@ -845,6 +984,7 @@ def output_json(meta, interfaces, exit_code):
         "status": exit_code
     }
     meta.pop("_log_warn_emitted", None)
+    
     print(json.dumps(payload, indent=2, sort_keys=True))
     return exit_code
 def output_verbose(meta, interfaces, result):
@@ -853,39 +993,57 @@ def output_verbose(meta, interfaces, result):
     print(f"Interfaces: {meta['interface_count']}")
     print(f"Status Target: {meta['status_target']}\n")
 
-    header = (
-        f"{'Name':<10} {'MAC':<20} {'MTU':<6} {'Speed':<7} "
-        f"{'Duplex':<8} {'Admin':<6} {'Oper':<6} {'Eval':<8} Flags"
-    )
-    print(header)
-    print("-" * len(header))
-
     for name, iface in interfaces.items():
-        mac = iface["mac"] or "-"
-        mtu = iface["mtu"] if iface["mtu"] is not None else "-"
-        speed = fmt_speed(iface["speed"])
-        duplex = iface["duplex"]
-        admin = "up" if iface["admin_up"] else "down"
-        oper = "up" if iface["oper_up"] else "down"
-        flags = fmt_flags(iface["flags"])
+        print(f"Interface: {name}")
 
-        # Evaluation result for this interface
+        # Basic metadata
+        print(f"  MAC: {iface['mac'] or '-'}")
+        print(f"  MTU: {iface['mtu'] if iface['mtu'] is not None else '-'}")
+        print(f"  Speed: {fmt_speed(iface['speed'])}")
+        print(f"  Duplex: {iface['duplex']}")
+        print(f"  Admin: {'up' if iface['admin_up'] else 'down'}")
+        print(f"  Oper: {'up' if iface['oper_up'] else 'down'}")
+        print(f"  Flags: {fmt_flags(iface['flags'])}")
+
+        # Evaluation result
         eval_ok = result["results"][name]["ok"]
         eval_val = result["results"][name]["value"]
         eval_str = "OK" if eval_ok else str(eval_val)
+        print(f"  Eval: {eval_str} ({meta['status_target']})")
 
-        print(
-            f"{name:<10} {mac:<20} {mtu:<6} {speed:<7} "
-            f"{duplex:<8} {admin:<6} {oper:<6} {eval_str:<8} {flags}"
-        )
-    print()
+        # IP addresses
+        if iface["ipv4"]:
+            ipv4_list = [f"{ip['address']}/{ip['netmask']}" for ip in iface["ipv4"]]
+            print(f"  IPv4: {', '.join(ipv4_list)}")
+        else:
+            print("  IPv4: none")
+
+        if iface["ipv6"]:
+            ipv6_list = [ip["address"] for ip in iface["ipv6"]]
+            print(f"  IPv6: {', '.join(ipv6_list)}")
+        else:
+            print("  IPv6: none")
+
+        # Counters
+        c = iface["counters"]
+        print("  Counters:")
+        print(f"    Octets:     In={c['in_octets']}  Out={c['out_octets']}")
+        print(f"    Ucast:      In={c['in_ucast']}   Out={c['out_ucast']}")
+        print(f"    Multicast:  In={c['in_multicast']} Out={c['out_multicast']}")
+        print(f"    Broadcast:  In={c['in_broadcast']} Out={c['out_broadcast']}")
+        print(f"    Discards:   In={c['in_discards']} Out={c['out_discards']}")
+        print(f"    Errors:     In={c['in_errors']}   Out={c['out_errors']}")
+        print(f"    Unknown:    {c.get('in_unknown', 0)}")
+
+        print()  # blank line between interfaces
+
+    # Warnings (log failures, etc.)
     if meta.get("warnings"):
-        for w in meta.get("warnings"):
+        for w in meta["warnings"]:
             print(w)
-        
-def output_single_line(meta, interfaces, result):
+def output_single_line(meta, interfaces, result, primary_mode, perfdata_metric):
     """
-    Produces a single-line Nagios-compatible output string and exit code.
+    Build a Nagios-compatible single-line output with optional perfdata.
     Returns: (message, exit_code)
     """
 
@@ -893,29 +1051,56 @@ def output_single_line(meta, interfaces, result):
     failures = result["failures"]
     status_target = meta["status_target"]
 
-    parts = []
-    for name, iface in interfaces.items():
-        ok = result["results"][name]["ok"]
-        val = result["results"][name]["value"]
+    # -----------------------------
+    # Build human-readable message
+    # -----------------------------
+    if primary_mode == "perfdata":
+        # Perfdata-centric message
+        msg = f"{state}: {perfdata_metric} perfdata"
 
-        if status_target == "oper-status":
-                parts.append(f"{name} {'UP' if ok else 'DOWN'}")
-        elif status_target == "linkspeed":
-            parts.append(f"{name} {fmt_speed(val)}")
+    else:
+        # Status-centric message
+        if state == "OK":
+            msg = f"OK: all interfaces {status_target}"
         else:
-            # Generic formatting for other status types
-            parts.append(f"{name} {val}")
+            failed_list = ", ".join(failures)
+            msg = f"{state}: {failed_list} failed {status_target}"
 
-    summary = ", ".join(parts)
+    # -----------------------------
+    # Build perfdata (always included)
+    # -----------------------------
+    if perfdata_metric:
+        # Only the selected metric
+        perf = []
+        for name, iface in interfaces.items():
+            val = iface["counters"].get(perfdata_metric)
+            if val is not None:
+                perf.append(f"{name}_{perfdata_metric}={val}c")
+        perfdata = " ".join(perf)
 
-    if state == "OK":
-        msg = f"OK - {len(interfaces)} interfaces: {summary}"
-        return msg, OK
+    else:
+        # Emit all counters
+        perf = []
+        for name, iface in interfaces.items():
+            for metric, val in iface["counters"].items():
+                if val is not None:
+                    perf.append(f"{name}_{metric}={val}c")
+        perfdata = " ".join(perf)
 
-    # CRITICAL case
-    failed_list = ", ".join(failures)
-    msg = f"CRITICAL - {failed_list} failed {status_target}: {summary}"
-    return msg, CRITICAL
+    # -----------------------------
+    # Final output
+    # -----------------------------
+    line = f"{msg} | {perfdata}"
+
+    exit_code = {
+        "OK": 0,
+        "WARNING": 1,
+        "CRITICAL": 2,
+        "UNKNOWN": 3
+    }.get(state, 3)
+
+    return line, exit_code
+
 # --------------------------------------
 # Logging Functions
 # --------------------------------------
@@ -994,6 +1179,16 @@ def end_banner():
 # --------------------------------------
 def main():
     args = build_parser()
+    if args.perfdata and args.status:
+        # allowed, but perfdata becomes the primary message
+        primary_mode = "perfdata"
+    elif args.perfdata:
+        primary_mode = "perfdata"
+    elif args.status:
+        primary_mode = "status"
+    else:
+        primary_mode = "status"
+        args.status = "oper-status"
 
     # ------------------------------------------------------------
     # Host validation (local vs remote)
@@ -1006,7 +1201,7 @@ def main():
     # ------------------------------------------------------------
     # Determine Nagios mode
     # ------------------------------------------------------------
-    nagios_mode = not args.json and not args.verbose
+    nagios_mode = not args.json and not args.verbose and not args.quiet
 
     # ------------------------------------------------------------
     # Build initial metadata BEFORE logging
@@ -1015,7 +1210,7 @@ def main():
         "script_name": Path(sys.argv[0]).stem,
         "host": args.host,
         "ip": rc["ip"],
-        "mode": "nagios" if nagios_mode else ("local" if rc["local"] else "snmp"),
+        "mode": "local" if rc["local"] else "snmp",
         "ignore": args.ignore,
         "exclude_local": args.exclude_local,
         "include_aliases": args.include_aliases,
@@ -1023,7 +1218,7 @@ def main():
         "log_max_mb": args.log_max_mb,
     }
 
-    logging_enabled = meta["mode"] != "nagios" and meta["log_dir"]
+    logging_enabled = not nagios_mode and meta["log_dir"]
     # ------------------------------------------------------------
     # Determine effective timeout
     # ------------------------------------------------------------
@@ -1037,7 +1232,6 @@ def main():
     # ------------------------------------------------------------
     if rc["local"]:
         raw = gather_local_interfaces(timeout=effective_timeout)
-        data = normalize_interfaces(raw, "local")
     else:
         if not args.community:
             print("CRITICAL - remote host requires SNMP community string")
@@ -1049,8 +1243,7 @@ def main():
             port=args.snmp_port,
             timeout=effective_timeout
         )
-        data = normalize_interfaces(raw, "snmp")
-
+    data = normalize_interfaces(raw, meta.get("mode"))
     # ------------------------------------------------------------
     # Filtering
     # ------------------------------------------------------------
@@ -1083,7 +1276,6 @@ def main():
     # Status evaluation (--status)
     # ------------------------------------------------------------
     result = evaluate_status(selected, status_target, unmatched)
-
     # ------------------------------------------------------------
     # Per-interface logging
     # ------------------------------------------------------------
@@ -1111,15 +1303,22 @@ def main():
     # ------------------------------------------------------------
     # Verbose output
     # ------------------------------------------------------------
-    if args.verbose:
+    elif args.verbose:
         output_verbose(meta, selected, result)
         sys.exit(0 if result["state"] == "OK" else 2)
 
     # ------------------------------------------------------------
     # Single-line Nagios output
     # ------------------------------------------------------------
-    msg, code = output_single_line(meta, selected, result)
-    print(msg)
+    msg, code = output_single_line(
+        meta=meta, 
+        interfaces=selected, 
+        result=result, 
+        primary_mode=primary_mode, 
+        perfdata_metric=args.perfdata
+        )
+    if not args.quiet:
+        print(msg)
     sys.exit(code)
 
 if __name__ == "__main__":

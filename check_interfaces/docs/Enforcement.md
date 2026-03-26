@@ -51,55 +51,71 @@ The pipeline has two phases: **filtering** applies exclusion rules to the full i
           SELECTION PHASE
                 │
  ┌──────────────▼───────────────┐
- │  5. --ifaces (targeting)     │  ← If specified, restrict to named/matched interfaces
- └──────────────┬───────────────┘
+ │  5. --ifaces (targeting)     │  ← If specified, restrict to named/matched interfaces.
+ └──────────────┬───────────────┘    This is the only flag that accepts a comma-deliminated list.
                 │
  ┌──────────────▼───────────────┐
  │   Evaluation Candidate Set   │  ← Surviving interfaces proceed to --status evaluation
  └──────────────────────────────┘
 ```
 
-**Filters take precedence over selection.** An interface removed during filtering is no longer available for `--ifaces` to target. If `--ifaces` references an interface that was already excluded by a filter, that pattern is unmatched and treated as a CRITICAL failure.
+
+**Filters always take precedence over selection.**  
+If a filter removes an interface, `--ifaces` cannot re‑include it.
 
 ---
 
 ## Filtering Phase
 
-Handled by `apply_filters()`. Each stage operates on the output of the previous stage.
+Filtering is handled by `apply_filters()`. Each stage is cumulative and subtractive.
 
-### Stage 1: Alias Exclusion
+### Stage 1 — Alias Exclusion
 
-By default, alias interfaces (e.g., `eth0:1`, `br0:backup`) are **excluded** from the candidate set.
+Alias interfaces (e.g., `eth0:1`, `br0:backup`) are excluded unless:
 
-- If `--include-aliases` is specified, alias interfaces are retained.
-- **Special case:** When `--status alias` is selected, alias filtering is **skipped entirely** — all interfaces (including aliases) pass through this stage regardless of the `--include-aliases` flag. This ensures the alias attribute can be evaluated across the full inventory.
+- `--include-aliases` is specified, or
+- `--status alias` is selected (alias filtering is skipped entirely)
 
-### Stage 2: `--ignore-virtual` — Virtual Interface Exclusion
+This ensures alias evaluation is performed on the full inventory.
 
-When specified, removes virtual interfaces from the candidate set. Virtual interfaces are identified by the `is_virtual()` helper and include patterns such as:
+---
 
-- `vnet*` — Virtual network devices (KVM/libvirt)
-- `virbr*` — Virtual bridge devices
-- `docker0` — Docker default bridge
-- Other hypervisor and container‑managed interfaces
+### Stage 2 — `--ignore-virtual`
 
-### Stage 3: `--exclude-local` — Local Interface Exclusion
+Removes virtual interfaces such as:
 
-When specified, removes local‑only interfaces from the candidate set. Local interfaces are identified by the `is_local()` helper, which evaluates both the interface name and its properties (e.g., `lo`, loopback flag).
+- `vnet*`
+- `virbr*`
+- `docker0`
+- hypervisor/container‑managed devices
 
-### Stage 4: `--ignore PATTERN` — Pattern‑Based Exclusion
+Virtual detection is performed by `is_virtual()`.
 
-Removes interfaces matching a substring or regex pattern. This flag is **repeatable** — multiple patterns can be specified to build a cumulative exclusion list.
+---
+
+### Stage 3 — `--exclude-local`
+
+Removes loopback and local‑only interfaces (`lo`, interfaces with loopback flags).  
+Detection is performed by `is_local()`.
+
+---
+
+### Stage 4 — `--ignore PATTERN`
+
+Removes interfaces matching substring or regex patterns.
+
+- Flag is **repeatable**
+- Regex is detected automatically when metacharacters are present
+- Substring match is case‑insensitive
+- Regex uses `re.search(..., IGNORECASE)`
+
+Examples:
 
 ```bash
-# Ignore all vnet interfaces and docker0
---ignore "vnet.*" --ignore "docker0"
-
-# Ignore a specific interface by name
---ignore "eth2"
+--ignore "vnet.*"
+--ignore "docker0"
+--ignore "^eth2$"
 ```
-
-Pattern matching is handled by the `matches_ignore()` helper, which supports both substring and regex evaluation.
 
 ---
 
@@ -115,21 +131,24 @@ When specified, only interfaces matching the argument are retained from the filt
 2. **Substring match** — case‑insensitive substring search
 3. **Regex match** — `re.search()` with `re.IGNORECASE`; invalid regex patterns are silently ignored
 
-The first tier that matches wins — an interface will not be re‑evaluated by lower tiers.
+TRegex is not attempted for plain tokens like "eth0".
 
-- Accepts a comma‑delimited list of patterns (each pattern is tried independently).
-- If `--ifaces` is omitted, all filtered interfaces proceed to evaluation.
-- This is the only flag that accepts a comma‑delimited list.
+Examples:
 
 ```bash
-# Literal names
---ifaces "eth0,eth1,br0"
-
-# Regex pattern
---ifaces "GigabitEthernet0/[0-3]"
+--ifaces "eth0,eth1"
+--ifaces "^GigabitEthernet0/[0-3]$"
 ```
 
-Any pattern that does not match an interface in the filtered set is tracked as **unmatched** and injected into the evaluation results as a CRITICAL failure.
+Unmatched Patterns
+Any pattern that does not match a surviving interface is:
+
+* recorded as an unmatched pattern
+* injected into the evaluation results as a synthetic failure
+* assigned the value "not found"
+* forces the overall state to CRITICAL
+
+This occurs even if other interfaces pass evaluation.
 
 ---
 
@@ -150,11 +169,11 @@ After the pipeline produces the evaluation candidate set, each surviving interfa
 
 ### Duplex — Bridge Exception
 
-Bridge interfaces (`br*`) are given an automatic pass for duplex evaluation with a value of `"n/a"`. Bridges operate at the virtual switching layer and do not negotiate duplex in the traditional sense.
+Bridge interfaces (br*) always pass duplex evaluation, regardless of reported value.
 
 ### Linkspeed — Zero and Null
 
-A speed of `0` or `None` is treated as a failure. This catches interfaces that are operationally up but report no negotiated speed — a condition that typically indicates a misconfiguration or driver issue.
+A speed of `0` or `None` is treated as a failure. 
 
 ### Alias — Identity Check
 
@@ -176,17 +195,59 @@ When `--status alias` is used, the evaluation checks whether an interface **is**
 
 ### SNMP Connection Failures
 
-SNMP connection failures (unreachable host, authentication failure, timeout) return **CRITICAL** or **UNKNOWN** — never WARNING or OK.
+| Connection | Code |
+| :--- | :---: |
+| Authentication | CRITICAL |
+| Timeout | UNKNOWN |
+| Host unreachable | UNKNOWN |
+| Invalid OIDs | CRITICAL |
+| SNMP engine error | UNKNOWN |
+
+---
+
+## JSON Output Behavior
+
+JSON mode (-j, --json) includes:
+
+* "interfaces" — surviving interfaces only
+* "failures" — synthetic entries for unmatched patterns
+* "meta" — host, mode, timing, flags
+* "status" — OK/CRITICAL/UNKNOWN
+
+Filtered interfaces do not appear in JSON.
+
+---
+
+## Verbose Output Behavior
+
+Verbose mode (-v, --verbose) logs:
+
+* every filter decision with reason
+* selection decisions
+* unmatched patterns
+* SNMP errors
+* evaluation results per interface
+
+Verbose output is suppressed in default Nagios mode unless -v is used.
 
 ---
 
 ## Edge Cases
+
+### Empty Candidate Set
+
+| Condition | Behavior |
+| :--- | :--- |
+| No filters, no selection, but discovery returns zero interfaces | CRITICAL — no evaluable interfaces |
+| Filters remove all interfaces, no `--ifaces` | CRITICAL — nothing to evaluate |
+| Filters remove all interfaces, `--ifaces` present |	CRITICAL — all patterns unmatched |
 
 ### Partial and Missing `--ifaces` Matches
 
 When `--ifaces` is specified, the tool evaluates every pattern independently:
 
 - **Matched patterns** proceed through evaluation normally.
+- **Unmatched patterns** are injected into the evaluation result as synthetic interfaces with status="not found".
 - **Unmatched patterns** are injected into the final result as CRITICAL failures with a value of `"not found"`.
 
 The overall state is forced to CRITICAL if any pattern goes unmatched, regardless of whether the matched interfaces pass evaluation. Unmatched interfaces are logged when logging is enabled.
@@ -231,6 +292,7 @@ When the target is detected as local, SNMP‑specific options (`-C`, `-p`, `-T`)
 ### Regex Patterns in `--ifaces` and `--ignore`
 
 Both `--ifaces` and `--ignore` support regex patterns. Operators should anchor patterns when precision is required:
+Each --ignore pattern may be a literal substring or a regex. Regex is detected automatically when metacharacters are present.
 
 ```bash
 # Matches "eth0", "eth01", "eth0:1" — may be too broad

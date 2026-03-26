@@ -2,172 +2,196 @@
 
 ## Overview
 
-This document defines the JSON output schema produced by `check_interfaces.py` when invoked with `-j` or `--json`. The output is a single JSON object with three top‑level keys: `interfaces`, `meta`, and `status`.
-
-For CLI usage, see [Usage.md](Usage.md). For runtime behavior and output mode details, see [Operation.md](Operation.md).
+This document defines the JSON output schema produced by `check_interfaces.py` when invoked with -j or --json. The output is a single JSON object with three top‑level keys: interfaces, meta, and status.
 
 ---
 
 ## Top‑Level Structure
 
-```json
 {
   "interfaces": { ... },
   "meta": { ... },
   "status": { ... }
 }
-```
 
-| Key          | Type   | Description                                          |
-|--------------|--------|------------------------------------------------------|
-| `interfaces` | object | Per‑interface metadata, keyed by interface name      |
-| `meta`       | object | Operational metadata for the invocation              |
-| `status`     | object | Evaluation results and overall state                 |
+| Key        | Type   | Description                                          |
+|------------|--------|------------------------------------------------------|
+| interfaces | object | Per‑interface metadata, keyed by interface name      |
+| meta       | object | Operational metadata for the invocation              |
+| status     | object | Evaluation results and overall state                 |
 
 ---
 
-## `interfaces`
+## interfaces
 
 An object where each key is an interface name and each value is an interface metadata object.
 
-```json
+Example:
+
 "interfaces": {
   "eth0": { ... },
   "br0": { ... }
 }
-```
 
 ### Interface Object
 
-| Field       | Type             | Description                                                        |
-|-------------|------------------|--------------------------------------------------------------------|
-| `name`      | string           | Interface name (matches the object key)                            |
-| `mac`       | string           | MAC address (e.g., `"0c:c4:7a:32:c2:02"`)                         |
-| `mtu`       | integer          | Maximum transmission unit                                          |
-| `speed`     | integer \| null  | Negotiated link speed in Mbps. `null` if unavailable (e.g., loopback) |
-| `duplex`    | string           | Duplex mode: `"full"`, `"half"`, or `"unknown"`                    |
-| `admin_up`  | boolean          | Administrative status — is the interface enabled?                  |
-| `oper_up`   | boolean          | Operational status — is the interface up?                          |
-| `flags`     | array of strings | Kernel flags (e.g., `["UP", "RUNNING"]`)                           |
-| `ifType`    | string \| null   | SNMP interface type (IF‑MIB). `null` for local discovery.          |
-| `ipv4`      | array of objects | IPv4 addresses assigned to the interface. See **Address Object**.   |
-| `ipv6`      | array of objects | IPv6 addresses assigned to the interface. See **Address Object**.   |
+| Field     | Type             | Description                                                        |
+|-----------|------------------|--------------------------------------------------------------------|
+| name      | string           | Interface name                                                     |
+| mac       | string           | MAC address (normalized; zeroed if unavailable)                    |
+| mtu       | integer          | Maximum transmission unit                                          |
+| speed     | integer or null  | Negotiated link speed in Mbps; null if unavailable                 |
+| duplex    | string           | "full", "half", "unknown", or "n/a" for bridge interfaces          |
+| admin_up  | boolean          | Administrative status                                              |
+| oper_up   | boolean          | Operational status                                                 |
+| flags     | array of strings | Kernel flags                                                       |
+| ifType    | integer or null  | SNMP IF‑MIB type; null for local discovery                         |
+| ipv4      | array of objects | IPv4 addresses; see Address Object                                 |
+| ipv6      | array of objects | IPv6 addresses; see Address Object                                 |
+| counters  | object           | Traffic counters; see Counters Object                              |
 
 ### Address Object
 
-| Field       | Type            | Description                                                    |
-|-------------|-----------------|----------------------------------------------------------------|
-| `address`   | string          | IP address (e.g., `"192.168.0.1"`)                             |
-| `netmask`   | string          | Subnet mask (e.g., `"255.255.255.0"`)                          |
-| `broadcast` | string \| null  | Broadcast address. `null` for point‑to‑point or loopback.      |
+| Field     | Type            | Description                                                    |
+|-----------|-----------------|----------------------------------------------------------------|
+| address   | string          | IP address                                                     |
+| netmask   | string          | Subnet mask                                                    |
+| broadcast | string or null  | Broadcast address or null                                      |
+
+### Counters Object
+
+These counters come directly from IF‑MIB and EtherLike‑MIB.
+
+| Field          | Type    | Description                                 |
+|----------------|---------|---------------------------------------------|
+| in_octets      | integer | Total inbound octets                        |
+| in_ucast       | integer | Inbound unicast packets                     |
+| in_multicast   | integer | Inbound multicast packets                   |
+| in_broadcast   | integer | Inbound broadcast packets                   |
+| in_discards    | integer | Inbound discards                            |
+| in_errors      | integer | Inbound errors                              |
+| in_unknown     | integer | Inbound unknown protocol packets (if present) |
+| out_octets     | integer | Total outbound octets                       |
+| out_ucast      | integer | Outbound unicast packets                    |
+| out_multicast  | integer | Outbound multicast packets                  |
+| out_broadcast  | integer | Outbound broadcast packets                  |
+| out_discards   | integer | Outbound discards                           |
+| out_errors     | integer | Outbound errors                             |
+
+Note: Some devices omit in_unknown; the field may be absent.
 
 ---
 
-## `meta`
+## meta
 
 Operational metadata describing the invocation context, host detection, and active filters.
 
-```json
+Example:
+
 "meta": {
-  "host": "localhost",
-  "ip": "127.0.0.1",
-  "mode": "local",
+  "host": "mom",
+  "ip": "192.168.0.2",
+  "mode": "snmp",
   "script_name": "check_interfaces",
   "status_target": "oper-status",
-  "interface_count": 6,
-  "exclude_local": false,
+  "interface_count": 7,
+  "exclude_local": true,
   "include_aliases": false,
   "ignore": null,
-  "log_dir": "/var/log/nms_tools",
-  "log_max_mb": 50,
-  "warnings": [
-    "[WARN] Unable to write to log directory: /root/logs — [Errno 13] Permission denied: '/root/logs'"
-  ]
+  "log_dir": null,
+  "log_max_mb": 50
 }
-```
 
-| Field             | Type             | Description                                                          |
-|-------------------|------------------|----------------------------------------------------------------------|
-| `host`            | string           | Target hostname as provided via `-H`                                 |
-| `ip`              | string           | Resolved IP address of the target                                    |
-| `mode`            | string           | Host detection mode: `"local"` or `"remote"`                         |
-| `script_name`     | string           | Script basename without extension (e.g., `"check_interfaces"`)       |
-| `status_target`   | string           | Evaluation attribute (e.g., `"oper-status"`, `"duplex"`)             |
-| `interface_count` | integer          | Total number of interfaces after filtering                           |
-| `exclude_local`   | boolean          | Whether `--exclude-local` was specified                              |
-| `include_aliases` | boolean          | Whether `--include-aliases` was specified                            |
-| `ignore`          | string \| null   | Ignore pattern(s) provided via `--ignore`. `null` if not specified.  |
-| `log_dir`         | string \| null   | Log directory path provided via `--log-dir`. `null` if not specified.|
-| `log_max_mb`      | integer          | Log rotation threshold in MB                                         |
-| `warnings`        | array of strings | **Conditional.** Present only when warnings were emitted during execution. Absent on clean runs. |
+### Meta Fields
+
+| Field           | Type             | Description                                                          |
+|-----------------|------------------|----------------------------------------------------------------------|
+| host            | string           | Target hostname from -H                                              |
+| ip              | string           | Resolved IP address                                                  |
+| mode            | string           | "local" or "snmp"                                                    |
+| script_name     | string           | Basename of the script                                               |
+| status_target   | string           | Attribute selected via --status                                      |
+| interface_count | integer          | Number of interfaces after filtering                                 |
+| exclude_local   | boolean          | Whether --exclude-local was used                                     |
+| include_aliases | boolean          | Whether --include-aliases was used                                   |
+| ignore          | array or null    | List of ignore patterns, or null                                     |
+| log_dir         | string or null   | Log directory path, or null                                          |
+| log_max_mb      | integer          | Log rotation threshold                                               |
+| warnings        | array of strings | Present only when warnings were emitted                              |
+
+Note: warnings is omitted entirely when no warnings occur.
 
 ---
 
-## `status`
+## status
 
-Evaluation results for all interfaces against the selected `--status` attribute.
+Evaluation results and overall state for the selected attribute.
 
-```json
+Example:
+
 "status": {
   "state": "OK",
   "failures": [],
   "results": {
-    "eth0": { "ok": true, "value": "up" },
-    "eth1": { "ok": false, "value": "down" }
+    "eth0": { "ok": true, "value": "up" }
   }
 }
-```
 
-| Field      | Type             | Description                                                      |
-|------------|------------------|------------------------------------------------------------------|
-| `state`    | string           | Overall evaluation state: `"OK"`, `"CRITICAL"`, or `"UNKNOWN"`  |
-| `failures` | array of strings | Interface names that failed evaluation. Empty when all pass.     |
-| `results`  | object           | Per‑interface evaluation results, keyed by interface name        |
+### Status Fields
+
+| Field     | Type             | Description                                                      |
+|-----------|------------------|------------------------------------------------------------------|
+| state     | string           | "OK", "CRITICAL", or "UNKNOWN"                                  |
+| failures  | array of strings | Names of interfaces or patterns that failed                     |
+| results   | object           | Per‑interface evaluation results                                |
 
 ### Result Object
 
-| Field   | Type    | Description                                                                  |
-|---------|---------|------------------------------------------------------------------------------|
-| `ok`    | boolean | Whether the interface passed the selected attribute check                    |
-| `value` | string  | Evaluated value (e.g., `"up"`, `"down"`, `"full"`, `"not found"`)            |
+| Field | Type    | Description                                                                  |
+|-------|---------|------------------------------------------------------------------------------|
+| ok    | boolean | Whether the interface passed the selected attribute check                    |
+| value | string  | Evaluated value ("up", "down", "full", "not found", etc.)                    |
 
 ### State Determination
 
-| Condition                            | `state`      | Exit Code |
+| Condition                            | state        | Exit Code |
 |--------------------------------------|--------------|-----------|
-| `failures` is empty                  | `"OK"`       | 0         |
-| `failures` contains one or more entries | `"CRITICAL"` | 2      |
-| Infrastructure error                 | `"UNKNOWN"`  | 3         |
-
----
-
-## Conditional Fields
-
-| Field            | Condition                                                         |
-|------------------|-------------------------------------------------------------------|
-| `meta.warnings`  | Present only when at least one warning was emitted (e.g., log directory failure). Absent on clean runs. |
-| `meta.log_dir`   | `null` when `--log-dir` is not specified                          |
-| `meta.ignore`    | `null` when `--ignore` is not specified                           |
+| No failures                          | OK           | 0         |
+| One or more failures                 | CRITICAL     | 2         |
+| Infrastructure error                 | UNKNOWN      | 3         |
 
 ---
 
 ## Example — Clean Run
 
-```json
 {
   "interfaces": {
     "eth0": {
       "admin_up": true,
       "duplex": "full",
       "flags": ["UP", "RUNNING"],
-      "ifType": null,
+      "ifType": 6,
       "ipv4": [],
       "ipv6": [],
       "mac": "0c:c4:7a:32:c2:02",
       "mtu": 1500,
       "name": "eth0",
       "oper_up": true,
-      "speed": 1000
+      "speed": 1000,
+      "counters": {
+        "in_broadcast": 0,
+        "in_discards": 0,
+        "in_errors": 0,
+        "in_multicast": 0,
+        "in_octets": 123456,
+        "in_ucast": 789,
+        "out_broadcast": 0,
+        "out_discards": 0,
+        "out_errors": 0,
+        "out_multicast": 0,
+        "out_octets": 654321,
+        "out_ucast": 987
+      }
     }
   },
   "meta": {
@@ -194,14 +218,11 @@ Evaluation results for all interfaces against the selected `--status` attribute.
     "state": "OK"
   }
 }
-```
-
-Note: `meta.warnings` is absent on clean runs — it is not emitted as an empty array.
 
 ---
 
 ## See Also
 
-- [Usage.md](Usage.md) — CLI reference and examples
-- [Operation.md](Operation.md) — Runtime behavior, output formatting, and logging lifecycle
-- [Enforcement.md](Enforcement.md) — Filter pipeline, precedence, and edge cases
+[Usage.md](Usage.md)
+[Operation.md](Operation.md)  
+[Enforcement.md](Enforcement.md)

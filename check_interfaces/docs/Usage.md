@@ -2,9 +2,8 @@
 
 ## Synopsis
 
-```
-check_interfaces.py -H <host> [-C <community>] [options]
-```
+`check_interfaces.py -H <host> [options]`
+
 
 ---
 
@@ -12,7 +11,19 @@ check_interfaces.py -H <host> [-C <community>] [options]
 
 | Flag            | Description                                                            |
 |-----------------|------------------------------------------------------------------------|
-| `-H`, `--host`  | Target hostname or IP address. Determines local vs. remote detection automatically. A resolvable hostname is required. |
+| -H, --host      | Target hostname or IP address. Determines local vs remote detection automatically. A resolvable hostname is required. |
+
+---
+
+## Core Options
+
+| Flag                | Description                                      | Default |
+|---------------------|--------------------------------------------------|---------|
+| -t, --timeout       | General connection timeout in seconds            | 5       |
+| --log-dir DIR       | Directory to store logs (verbose/JSON only)      | —       |
+| --log-max-mb MB     | Maximum log size before rotation                 | 50      |
+
+Logging is disabled in Nagios mode.
 
 ---
 
@@ -20,11 +31,11 @@ check_interfaces.py -H <host> [-C <community>] [options]
 
 Required for remote hosts. Ignored when the target is detected as local.
 
-| Flag                  | Description                                           | Default      |
-|-----------------------|-------------------------------------------------------|--------------|
-| `-C`, `--community`   | SNMPv2c community string. Required for remote hosts. | —            |
-| `-p`, `--snmp-port`   | SNMP port on the target device.                      | `161`        |
-| `-T`, `--snmp-timeout` | SNMP‑specific timeout in seconds. Overrides `--timeout` for SNMP operations. If not specified, falls back to `--timeout`. | —  |
+| Flag                    | Description                                           | Default |
+|-------------------------|-------------------------------------------------------|---------|
+| -C, --community         | SNMPv2c community string (required for remote hosts) | —       |
+| -p, --snmp-port         | SNMP port                                             | 161     |
+| -T, --snmp-timeout      | SNMP timeout; overrides --timeout for SNMP           | —       |
 
 ---
 
@@ -32,20 +43,53 @@ Required for remote hosts. Ignored when the target is detected as local.
 
 | Flag               | Description                                                        | Default        |
 |--------------------|--------------------------------------------------------------------|----------------|
-| `--status <attr>`  | Attribute to evaluate on each interface. See **Evaluation Attributes** below. | `oper-status` |
+| --status <attr>    | Attribute to evaluate on each interface                            | oper-status    |
 
 ### Evaluation Attributes
 
-| Value          | Evaluates                                                                |
-|----------------|--------------------------------------------------------------------------|
-| `oper-status`  | Operational status — is the interface up?                                |
-| `admin-status` | Administrative status — is the interface enabled?                        |
-| `linkspeed`    | Negotiated link speed — is a non‑zero speed reported?                    |
-| `duplex`       | Duplex mode — is full‑duplex negotiated? (bridges pass automatically)    |
-| `mtu`          | MTU value — is a valid MTU reported?                                     |
-| `alias`        | Alias identity — is the interface an alias (e.g., `eth0:1`)?             |
+| Value          | Meaning                                                                |
+|----------------|------------------------------------------------------------------------|
+| oper-status    | Operational status (is the interface up?)                              |
+| admin-status   | Administrative status (is the interface enabled?)                      |
+| linkspeed      | Negotiated link speed (non-zero required)                              |
+| duplex         | Duplex mode (full required; bridges pass automatically)                |
+| mtu            | MTU value (must be > 0)                                                |
+| alias          | Alias identity (fails if interface is an alias)                        |
+| flags          | Kernel flags (evaluates presence of UP/RUNNING)                        |
+| iftype         | SNMP ifType (evaluates type validity)                                  |
 
-All attribute violations result in **CRITICAL**. There is no WARNING tier. See [Enforcement.md](Enforcement.md) for detailed evaluation rules and edge cases.
+All attribute violations result in CRITICAL.  
+There is no WARNING tier.
+
+---
+
+## Perfdata Metrics
+
+The `--perfdata` flag selects a single SNMP counter to output in Nagios perfdata.
+
+Valid values:
+
+Inbound:
+
+- in_octets  
+- in_ucast  
+- in_multicast  
+- in_broadcast  
+- in_discards  
+- in_errors  
+
+Outbound:
+
+- out_octets  
+- out_ucast  
+- out_multicast  
+- out_broadcast  
+- out_discards  
+- out_errors  
+
+Only one metric may be selected.
+
+Perfdata is only emitted in Nagios mode.
 
 ---
 
@@ -53,36 +97,46 @@ All attribute violations result in **CRITICAL**. There is no WARNING tier. See [
 
 | Flag                  | Description                                                              | Repeatable |
 |-----------------------|--------------------------------------------------------------------------|------------|
-| `--ifaces <list>`     | Comma‑delimited list of interfaces to target. Supports literal, substring, and regex matching. | No |
-| `--ignore <pattern>`  | Exclude interfaces matching a substring or regex pattern.                | Yes        |
-| `--ignore-virtual`    | Exclude virtual interfaces (vnet\*, virbr\*, docker0, etc.).              | No         |
-| `--exclude-local`     | Exclude loopback and local‑only interfaces (e.g., `lo`).                 | No         |
-| `--include-aliases`   | Include alias interfaces (excluded by default).                          | No         |
+| --ifaces LIST         | Comma‑delimited list or regex pattern of interfaces to evaluate          | No         |
+| --ignore PATTERN      | Exclude interfaces matching substring or regex                           | Yes        |
+| --ignore-virtual      | Exclude virtual interfaces (vnet*, virbr*, docker0, etc.)                | No         |
+| --exclude-local       | Exclude loopback and local‑only interfaces (lo)                          | No         |
+| --include-aliases     | Include alias interfaces (excluded by default)                           | No         |
 
-> **Pipeline order:** Filters are applied before selection. An interface removed by `--ignore-virtual` cannot be targeted by `--ifaces`. See [Enforcement.md](Enforcement.md) for the full pipeline and precedence rules.
+Filtering always occurs before selection.  
+See Enforcement.md for full pipeline details.
 
 ---
 
 ## Output Modes
 
-| Flag                    | Mode    | Description                                                     |
-|-------------------------|---------|-----------------------------------------------------------------|
-| *(default)*             | Nagios  | Single‑line output with exit code. Logging is disabled.          |
-| `-v`, `--verbose`       | Verbose | Tabular per‑interface output with header block. Logging eligible.|
-| `-j`, `--json`          | JSON    | Structured JSON output with full metadata. Logging eligible.     |
+| Flag              | Mode    | Description                                                     |
+|-------------------|---------|-----------------------------------------------------------------|
+| *(default)*       | Nagios  | Single‑line output with exit code; logging disabled             |
+| -v, --verbose     | Verbose | Human‑readable table; logging enabled                           |
+| -j, --json        | JSON    | Full structured output including counters; logging enabled      |
+| -q, --quiet       | Quiet   | Exit code only                                                  |
 
-Only one output mode can be active at a time. If both `-j` and `-v` are specified, `-j` is evaluated first and the tool exits after JSON output.
+Output mode precedence:
+
+1. JSON  
+2. Verbose  
+3. Nagios (default)  
+
+If both -j and -v are provided, JSON wins.
 
 ---
 
 ## Logging
 
-Logging is opt‑in and only available in verbose and JSON modes. Disabled in default Nagios mode.
+Logging is opt‑in and only active in verbose and JSON modes.
 
-| Flag                  | Description                                            | Default  |
-|-----------------------|--------------------------------------------------------|----------|
-| `--log-dir <path>`    | Directory for log output. Created automatically if it does not exist; parent path must be writable. | —  |
-| `--log-max-mb <size>` | Maximum log file size in MB before rotation.           | `50`     |
+| Flag                | Description                                            | Default |
+|---------------------|--------------------------------------------------------|---------|
+| --log-dir PATH      | Directory for log output                               | —       |
+| --log-max-mb MB     | Maximum log size before rotation                       | 50      |
+
+Nagios mode never logs.
 
 ---
 
@@ -90,138 +144,107 @@ Logging is opt‑in and only available in verbose and JSON modes. Disabled in de
 
 | Flag              | Description                                      | Default |
 |-------------------|--------------------------------------------------|---------|
-| `--timeout <sec>` | General operation timeout in seconds.            | `5`     |
-| `-V`, `--version` | Print version and exit.                          | —       |
+| --timeout SEC     | General timeout for all operations               | 5       |
+| -V, --version     | Print version and exit                           | —       |
 
 ---
 
 ## Examples
 
-### Basic — Local Host
+### Local Host
 
-Check all local interfaces for operational status:
+Check all local interfaces:
 
-```bash
-./check_interfaces.py -H localhost
-```
+`./check_interfaces.py -H localhost`
 
-Verbose output for diagnostics:
 
-```bash
-./check_interfaces.py -H localhost -v
-```
+Verbose diagnostics:
 
-### Basic — Remote Host
+`./check_interfaces.py -H localhost -v`
 
-Check all interfaces on a switch via SNMP:
 
-```bash
-./check_interfaces.py -H switch01.example.com -C public
-```
+### Remote Host (SNMP)
+
+`/check_interfaces.py -H switch01 -C public`
+
 
 ### Targeted Interfaces
 
-Monitor specific uplinks:
+Literal list:
 
-```bash
-./check_interfaces.py -H switch01 -C public --ifaces "GigabitEthernet0/1,GigabitEthernet0/2"
-```
+`./check_interfaces.py -H switch01 -C public --ifaces "eth0,eth1"`
 
-Monitor interfaces matching a regex pattern:
 
-```bash
-./check_interfaces.py -H switch01 -C public --ifaces "GigabitEthernet0/[0-3]"
-```
+Regex:
+
+`./check_interfaces.py -H switch01 -C public --ifaces "GigabitEthernet0/[0-3]"`
+
 
 ### Attribute Checks
 
-Check link speed on all interfaces:
+Linkspeed:
 
-```bash
-./check_interfaces.py -H switch01 -C public --status linkspeed
-```
+`./check_interfaces.py -H switch01 -C public --status linkspeed`
 
-Check duplex negotiation:
 
-```bash
-./check_interfaces.py -H switch01 -C public --status duplex
-```
+Duplex:
 
-Verify MTU configuration:
+`./check_interfaces.py -H switch01 -C public --status duplex`
 
-```bash
-./check_interfaces.py -H switch01 -C public --status mtu
-```
 
-Identify alias interfaces:
+MTU:
 
-```bash
-./check_interfaces.py -H switch01 -C public --status alias
-```
+`./check_interfaces.py -H switch01 -C public --status mtu`
+
+
+Alias identity:
+
+`./check_interfaces.py -H switch01 -C public --status alias`
+
 
 ### Filtering
 
 Exclude virtual and local interfaces:
 
-```bash
-./check_interfaces.py -H linux-server01 --ignore-virtual --exclude-local
-```
+`./check_interfaces.py -H linux01 --ignore-virtual --exclude-local`
 
-Exclude specific interfaces by pattern:
 
-```bash
-./check_interfaces.py -H switch01 -C public --ignore "vnet.*" --ignore "docker0"
-```
+Ignore patterns:
 
-Include alias interfaces (excluded by default):
+`./check_interfaces.py -H switch01 -C public --ignore "vnet.*" --ignore "docker0"`
 
-```bash
-./check_interfaces.py -H switch01 -C public --include-aliases
-```
 
-### Combined Filtering and Selection
+Include alias interfaces:
 
-Monitor physical uplinks, excluding management interfaces:
+`./check_interfaces.py -H switch01 -C public --include-aliases`
 
-```bash
-./check_interfaces.py -H switch01 -C public --ignore "mgmt" --ifaces "GigabitEthernet0/[0-9]"
-```
+
+### Combined Filtering + Selection
+
+`./check_interfaces.py -H switch01 -C public --ignore "mgmt" --ifaces "GigabitEthernet0/[0-9]"`
+
 
 ### JSON Output
 
-Full structured output for automation or dashboards:
-
-```bash
-./check_interfaces.py -H switch01 -C public -j
-```
+`/check_interfaces.py -H switch01 -C public -j`
 
 ### Logging
 
-Enable logging with verbose output:
+`./check_interfaces.py -H switch01 -C public -v --log-dir /var/log/nms_tools`
 
-```bash
-./check_interfaces.py -H switch01 -C public -v --log-dir /var/log/nms_tools
-```
+Custom rotation:
 
-With a custom log rotation threshold:
-
-```bash
-./check_interfaces.py -H switch01 -C public -v --log-dir /var/log/nms_tools --log-max-mb 100
-```
+`./check_interfaces.py -H switch01 -C public -v --log-dir /var/log/nms_tools --log-max-mb 100`
 
 ### SNMP Options
 
-Non‑standard SNMP port:
+Non‑standard port:
 
-```bash
-./check_interfaces.py -H switch01 -C public -p 1161
-```
+`./check_interfaces.py -H switch01 -C public -p 1161`
 
-Extended SNMP timeout for slow devices:
+Extended timeout:
 
-```bash
-./check_interfaces.py -H switch01 -C public -T 30
-```
+`./check_interfaces.py -H switch01 -C public -T 30`
 
 ---
 
@@ -229,17 +252,17 @@ Extended SNMP timeout for slow devices:
 
 | Code | Status   | Meaning                                                                  |
 |------|----------|--------------------------------------------------------------------------|
-| 0    | OK       | All evaluated interfaces pass the selected attribute check               |
-| 2    | CRITICAL | One or more failures: attribute violation, missing `--ifaces` target, or SNMP failure |
-| 3    | UNKNOWN  | Unreachable host, invalid arguments, timeout, or unhandled error         |
+| 0    | OK       | All evaluated interfaces pass                                            |
+| 2    | CRITICAL | Attribute failure, unmatched --ifaces pattern, or SNMP failure           |
+| 3    | UNKNOWN  | DNS failure, timeout, invalid arguments, or unhandled error              |
 
-There is no WARNING (exit code 1) in the current evaluation model.
+There is no WARNING tier.
 
 ---
 
 ## See Also
 
-- [Installation.md](Installation.md) — Deployment and Nagios integration
-- [Enforcement.md](Enforcement.md) — Filter pipeline, precedence, and edge cases
-- [Operation.md](Operation.md) — Operational behavior, logging lifecycle, and output formatting
-- [Metadata_schema.md](Metadata_schema.md) — JSON output schema reference
+[Installation.md](Installation.md)
+[Enforcement.md](Enforcement.md)
+[Operation.md](Operation.md)
+[Metadata_schema.md](Metadata_schema.md)
