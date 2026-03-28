@@ -4,7 +4,7 @@ File: check_interfaces.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-22
-Modified: 2026-03-26
+Modified: 2026-03-28
 Required: Python 3.6+
 Description:
         Interface Checker: If the host is local, local libraries are used, otherwise SNMP v2 is used
@@ -37,7 +37,7 @@ WARNING = 1
 CRITICAL = 2
 UNKNOWN = 3
 # Other Global Constants
-SCRIPT_VERSION = "1.0.0"
+SCRIPT_VERSION = "1.1.0"
 VIRTUAL_PREFIXES = (
     "vnet", "virbr", "docker", "br-", "tap", "tun", "veth"
 )
@@ -1107,12 +1107,7 @@ def output_single_line(meta, interfaces, result, primary_mode, perfdata_metric):
 def ts():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 def write_log(meta, message):
-    if meta["mode"] == "nagios":
-        return
-
     log_dir = meta.get("log_dir")
-    if not log_dir:
-        return
 
     try:
         os.makedirs(log_dir, exist_ok=True)
@@ -1129,27 +1124,53 @@ def write_log(meta, message):
                 meta["warnings"] = []
             meta["warnings"].append(warning)
 def rotate_log_if_needed(meta):
-    log_dir = meta.get("log_dir")
-    if not log_dir:
-        return
+    """
+    Deterministic log rotation for check_cert.
+    Assumes caller has already checked logging_enabled.
+    Uses meta['log_max_mb'] as the rotation threshold.
+    """
 
-    logfile = os.path.join(log_dir, "check_interfaces.log")
+    log_dir = meta["log_dir"]
+    logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
+
     if not os.path.exists(logfile):
         return
 
-    max_mb = meta.get("log_max_mb", 5)
+    # Rotation threshold (default 50 MB)
+    max_mb = meta.get("log_max_mb", 50)
     max_bytes = max_mb * 1024 * 1024
 
-    if os.path.getsize(logfile) < max_bytes:
-        return
+    try:
+        if os.path.getsize(logfile) < max_bytes:
+            return
 
-    archive_path = build_archive_path(log_dir)
-    shutil.move(logfile, archive_path)
-    compress_file(archive_path)
-def build_archive_path(log_dir):
-    base = "check_interfaces"
+        # Build archive path
+        archive_path = build_archive_path(meta)
+
+        # Atomic move
+        shutil.move(logfile, archive_path)
+
+        # Compress archive
+        compress_file(archive_path)
+
+        # Write rotation notice to new log
+        with open(logfile, "w", encoding="utf-8") as f:
+            f.write(f"{ts()}; [INFO] log rotated to {os.path.basename(archive_path)}.zip\n")
+
+    except Exception as e:
+        if not meta.get("_log_warn_emitted"):
+            meta["_log_warn_emitted"] = True
+
+            warn = f"[WARN] Unable to rotate log file '{logfile}': {e}"
+
+            if meta.get("mode") == "verbose":
+                print(warn)
+
+            meta.setdefault("warnings", []).append(warn)
+def build_archive_path(meta):
+    base = meta["script_name"]
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(log_dir, f"{base}_{ts}.log")
+    return os.path.join(meta["log_dir"], f"{base}_{ts}.log")
 def compress_file(path):
     zip_path = path + ".zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:

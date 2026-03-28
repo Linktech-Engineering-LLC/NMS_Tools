@@ -4,22 +4,25 @@ File: check_cert.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-17
-Modified: 2026-03-24
+Modified: 2026-03-28
 Required: Python 3.6+
 Description:
     Certificate checker with SAN, issuer, signature algorithm, wildcard detection,
     perfdata, quiet/verbose modes, and JSON output.
 """
 
+import argparse
+import ipaddress
+import json
+import os
+import platform
+import shutil
+import socket
+import ssl
+import sys
 import urllib.request
 import urllib.error
-import ssl
-import socket
-import ipaddress
-import argparse
-import sys
-import json
-import platform
+import zipfile
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -28,6 +31,7 @@ from cryptography.x509.oid import ExtensionOID, NameOID, AuthorityInformationAcc
 from cryptography.x509.ocsp import load_der_ocsp_response  # optional, see OCSP stub
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448
 from datetime import datetime
+from pathlib import Path
 from typing import Tuple, Optional, List, Union, cast, Dict
 from typing_extensions import TypedDict
 
@@ -39,7 +43,7 @@ WARNING = 1
 CRITICAL = 2
 UNKNOWN = 3
 # Other Constants
-SCRIPT_VERSION = "3.0.2"
+SCRIPT_VERSION = "3.1.0"
 TLS_VERSIONS = ["TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3"]
 TLS_ORDER = {
     "TLSv1": 1,
@@ -131,18 +135,32 @@ def build_parser():
     # -----------------------------
     # Connection Options
     # -----------------------------
-    conn = parser.add_argument_group("Connection Options")
-    conn.add_argument("-H", "--host", required=True,
+    core = parser.add_argument_group("Core Options")
+    core.add_argument("-H", "--host", required=True,
                       help="Target hostname or IP")
-    conn.add_argument("-p", "--port", type=int, default=443,
+    core.add_argument("-p", "--port", type=int, default=443,
                       help="Port to connect to")
-    conn.add_argument("--sni",
+    core.add_argument("--sni",
                       help="Override SNI value (default: host)")
-    conn.add_argument("--timeout", type=int, default=5,
+    core.add_argument("--timeout", type=int, default=5,
                       help="Connection timeout in seconds")
-    conn.add_argument("--insecure", action="store_true",
+    core.add_argument("--insecure", action="store_true",
                       help="Skip certificate validation during handshake")
-
+    core.add_argument(
+        "--log-dir",
+        dest="log_dir",
+        metavar="DIR",
+        default=None,
+        help="Directory to store logs (optional). If omitted, logging is disabled."
+    )
+    core.add_argument(
+        "--log-max-mb",
+        dest="log_max_mb",
+        metavar="MB",
+        type=int,
+        default=50,
+        help="Maximum log size in MB before rotation."
+    )
     # -----------------------------
     # Output Modes
     # -----------------------------
@@ -1006,121 +1024,102 @@ def tls_version_rank(version: str):
 # -----------------------------
 # Populate Warnings/Errors
 # -----------------------------
-def populate_warnings(data: dict) -> list:
+def populate_warnings(meta):
     warnings = []
-    expiration_days = data.get("expiration_days", 0)
-    sigalg = data.get("sigalg")
-    tls_version = data.get("tls_version")
-    if expiration_days < 30:
-        warnings.append(f"certificate_expires_soon: {expiration_days} days")
-    key_type = data.get("key_type")
-    key_bits = data.get("key_bits")
 
-    if key_type == "rsa" and isinstance(key_bits, int) and key_bits < 2048:
-        warnings.append(f"weak_rsa_key: {key_bits} bits")
+    # 1. Expiration approaching
+    if meta["expiration_days"] <= meta["warning_days"]:
+        warnings.append("expiration_warning")
 
-    if sigalg in ("sha1", "md5"):
-        warnings.append(f"deprecated_signature_algorithm: {sigalg}")
-    if tls_version in ("tls1", "tls1.1"):
-        warnings.append(f"weak_tls_version: {tls_version}")
-    if data.get("cipher") is None:
-        warnings.append("no_cipher_negotiated")
-    if data.get("ocsp_status") == "unreachable":
-        warnings.append("ocsp_unreachable")
+    # 2. Weak RSA key
+    if meta["key_type"] == "rsa" and meta["rsa_bits"]:
+        if meta["rsa_bits"] < 2048:
+            warnings.append("weak_rsa_key")
+
+    # 3. Weak signature algorithm
+    if meta["signature_algorithm"] in ("md5", "sha1"):
+        warnings.append("weak_signature_algorithm")
+
     return warnings
-def populate_errors(data: dict) -> list:
+def populate_errors(meta):
     errors = []
-    expiration_days = data.get("expiration_days", 0)
-    if expiration_days < 0:
-        errors.append("certificate_expired")
-    if not data.get("chain_ok"):
-        errors.append("chain_invalid")
-    if data.get('tls_version') is None:
+
+    # 1. TLS handshake failure
+    # If TLS version or cipher is missing, handshake failed.
+    if meta.get("tls_version") is None or meta.get("cipher") is None:
         errors.append("tls_handshake_failed")
-    if data.get("cert") is None:
+
+    # 2. Certificate presence
+    # If subject or issuer is missing, no certificate was parsed.
+    if meta.get("subject_cn") is None or meta.get("issuer_cn") is None:
         errors.append("no_certificate_present")
+
+    # 3. Chain validation
+    # If chain_valid is False, chain is invalid.
+    if meta.get("chain_valid") is False:
+        errors.append("chain_invalid")
+
     return errors
 # -----------------------------
 # Display Options
 # -----------------------------
-def display_verbose(data):
+def display_verbose(meta):
     """Pretty, operator-grade verbose output."""
-
-    host = data.get("host")
-    port = data.get("port")
-    sni = data.get("sni") or host
-    timeout = data.get("timeout")
-    insecure = data.get("insecure")
-
-    tls_version = data.get("tls_version")
-    cipher = data.get("cipher")
-
-    issuer_cn = data.get("issuer_cn")
-    sigalg = data.get("signature_algorithm")
-    wildcard = data.get("wildcard")
-    san_list = data.get("san", [])
-
-    expires = data.get("expires")
-    key_type = data.get("key_type")
-    rsa_bits = data.get("rsa_bits")
-    ecc_curve = data.get("ecc_curve")
-    self_signed = data.get("self_signed")
-
-    chain_present = data.get("chain_present")
-    aia_issuer_urls = data.get("aia_issuer_urls", [])
-    aia_chain = data.get("aia_chain", [])
-
-    ocsp_urls = data.get("ocsp_urls", [])
-
-    chain_reconstructed = data.get("chain_reconstructed")
-    chain_valid = data.get("chain_valid")
-    chain_errors = data.get("chain_errors", [])
 
     # -----------------------------
     # Connection
     # -----------------------------
     print("=== Connection ===")
-    print(f"Host: {host}")
-    print(f"Port: {port}")
-    print(f"SNI: {sni}")
-    print(f"Timeout: {timeout}")
-    print(f"Insecure: {insecure}")
+    print(f"Host: {meta.get('host')}")
+    print(f"Port: {meta.get('port')}")
+    print(f"SNI: {meta.get('sni')}")
+    print(f"Timeout: {meta.get('timeout')}")
+    print(f"Insecure: {meta.get('insecure')}")
     print()
 
     # -----------------------------
     # TLS Session
     # -----------------------------
     print("=== TLS Session ===")
-    print(f"TLS Version: {tls_version}")
-    print(f"Cipher: {cipher}")
+    print(f"TLS Version: {meta.get('tls_version')}")
+    print(f"Cipher: {meta.get('cipher')}")
+    print(f"  AEAD: {meta.get('cipher_is_aead')}")
+    print(f"  CBC: {meta.get('cipher_is_cbc')}")
+    print(f"  RC4: {meta.get('cipher_is_rc4')}")
     print()
 
     # -----------------------------
     # Certificate
     # -----------------------------
     print("=== Certificate ===")
-    print(f"Issuer CN: {issuer_cn}")
-    print(f"Signature Algorithm: {sigalg}")
-    print(f"Wildcard: {wildcard}")
+    print(f"Subject CN: {meta.get('subject_cn')}")
+    print(f"Issuer CN: {meta.get('issuer_cn')}")
+    print(f"Signature Algorithm: {meta.get('signature_algorithm')}")
+    print(f"Wildcard: {meta.get('wildcard')}")
+    print(f"Self-Signed: {meta.get('self_signed')}")
+    print(f"Hostname Matches: {meta.get('hostname_matches')}")
+    print()
 
     print("SAN:")
+    san_list = meta.get("san", [])
     if san_list:
         for entry in san_list:
             print(f"  - {entry}")
     else:
         print("  (none)")
+    print()
 
-    print(f"Expires: {expires}")
+    print(f"Expires: {meta.get('expires')}")
+    print(f"Expiration Days: {meta.get('expiration_days')}")
     print()
 
     # -----------------------------
     # Key Metadata
     # -----------------------------
     print("=== Key Metadata ===")
-    print(f"Key Type: {key_type}")
-    print(f"RSA Bits: {rsa_bits if rsa_bits else '—'}")
-    print(f"ECC Curve: {ecc_curve if ecc_curve else '—'}")
-    print(f"Self-Signed: {self_signed}")
+    print(f"Key Type: {meta.get('key_type')}")
+    print(f"RSA Bits: {meta.get('rsa_bits') or '—'}")
+    print(f"ECC Curve: {meta.get('ecc_curve') or '—'}")
     print()
 
     # -----------------------------
@@ -1128,13 +1127,16 @@ def display_verbose(data):
     # -----------------------------
     print("=== AIA ===")
     print("Issuer URLs:")
-    if aia_issuer_urls:
-        for url in aia_issuer_urls:
+    aia_urls = meta.get("aia_issuer_urls", [])
+    if aia_urls:
+        for url in aia_urls:
             print(f"  - {url}")
     else:
         print("  (none)")
+    print()
 
     print("Chain:")
+    aia_chain = meta.get("aia_chain", [])
     if aia_chain:
         for entry in aia_chain:
             print(f"  - {entry.get('subject_cn')}")
@@ -1150,45 +1152,50 @@ def display_verbose(data):
     # -----------------------------
     print("=== OCSP ===")
     print("Responder URLs:")
+    ocsp_urls = meta.get("ocsp_urls", [])
     if ocsp_urls:
         for url in ocsp_urls:
             print(f"  - {url}")
     else:
         print("  (none)")
+    print(f"Status: {meta.get('ocsp_status')}")
+    print(f"Reachable: {meta.get('ocsp_reachable')}")
     print()
 
     # -----------------------------
     # Chain Validation
     # -----------------------------
     print("=== Chain Validation ===")
+    print(f"Server-Sent Chain: {meta.get('chain_present')}")
+    print(f"Reconstructed: {meta.get('chain_reconstructed')}")
+    print(f"Valid: {meta.get('chain_valid')}")
+    print()
 
-    if chain_reconstructed is None:
-        print("Reconstructed: Not Performed")
-    else:
-        print(f"Reconstructed: {'Yes' if chain_reconstructed else 'No'}")
-
-    if chain_valid is None:
-        print("Valid: Not Performed")
-    else:
-        print(f"Valid: {'Yes' if chain_valid else 'No'}")
-
+    chain_errors = meta.get("chain_errors", [])
     if chain_errors:
         print("Errors:")
         for err in chain_errors:
             print(f"  - {err}")
     else:
         print("Errors: None")
+    print()
 
+    # -----------------------------
+    # General Warnings / Errors
+    # -----------------------------
     print("=== General Warnings ===")
-    if data.get("warnings"):
-        for w in data.get("warnings"):
+    warnings = meta.get("warnings", [])
+    if warnings:
+        for w in warnings:
             print(f"  - {w}")
     else:
         print("  None")
+    print()
 
-    print("\n=== General Errors ===")
-    if data.get("errors"):
-        for e in data.get("errors"):
+    print("=== General Errors ===")
+    errors = meta.get("errors", [])
+    if errors:
+        for e in errors:
             print(f"  - {e}")
     else:
         print("  None")
@@ -1320,51 +1327,99 @@ def nagios_exit(enf, meta):
     sys.exit(OK)
 def output_json(meta, enf):
     """
-    Produce deterministic JSON output for monitoring and automation.
-    Includes certificate metadata, chain info, OCSP, and enforcement results.
+    Produce deterministic, complete JSON output for monitoring and automation.
+    Mirrors the canonical metadata builder and includes all enforcement results.
     """
 
     out = {
-        "subject_cn": meta.get("subject_cn"),
-        "issuer_cn": meta.get("issuer_cn"),
-        "signature_algorithm": meta.get("signature_algorithm"),
-        "key_type": meta.get("key_type"),
-        "rsa_bits": meta.get("rsa_bits"),
-        "ecc_curve": meta.get("ecc_curve"),
-        "wildcard": meta.get("wildcard"),
-        "warnings": meta.get("warnings", []),
-        "errors": meta.get("errors", []),
+        # -----------------------------
+        # Connection
+        # -----------------------------
+        "host": meta.get("host"),
+        "port": meta.get("port"),
+        "sni": meta.get("sni"),
+        "timeout": meta.get("timeout"),
+        "insecure": meta.get("insecure"),
 
-        "san": meta.get("san", []),
+        # -----------------------------
+        # TLS Session
+        # -----------------------------
+        "tls": {
+            "version": meta.get("tls_version"),
+            "cipher": meta.get("cipher"),
+            "cipher_is_aead": meta.get("cipher_is_aead"),
+            "cipher_is_cbc": meta.get("cipher_is_cbc"),
+            "cipher_is_rc4": meta.get("cipher_is_rc4"),
+        },
 
-        "tls_version": meta.get("tls_version"),
-        "cipher": meta.get("cipher"),
+        # -----------------------------
+        # Certificate
+        # -----------------------------
+        "certificate": {
+            "subject_cn": meta.get("subject_cn"),
+            "issuer_cn": meta.get("issuer_cn"),
+            "signature_algorithm": meta.get("signature_algorithm"),
+            "wildcard": meta.get("wildcard"),
+            "self_signed": meta.get("self_signed"),
+            "hostname_matches": meta.get("hostname_matches"),
+            "san": meta.get("san", []),
+            "expires": meta.get("expires"),
+            "expiration_days": meta.get("expiration_days"),
+            "warning_days": meta.get("warning_days"),
+            "critical_days": meta.get("critical_days"),
+        },
 
-        "critical_days": meta.get("critical_days"),
-        "warning_days": meta.get("warning_days"),
-        "expiration_date": meta.get("expires").split(" ")[0],
-        "expiration_days": meta.get("expiration_days"),
+        # -----------------------------
+        # Key Metadata
+        # -----------------------------
+        "key": {
+            "type": meta.get("key_type"),
+            "rsa_bits": meta.get("rsa_bits"),
+            "ecc_curve": meta.get("ecc_curve"),
+        },
 
+        # -----------------------------
+        # AIA
+        # -----------------------------
+        "aia": {
+            "issuer_urls": meta.get("aia_issuer_urls", []),
+            "chain": meta.get("aia_chain", []),
+        },
+
+        # -----------------------------
+        # OCSP
+        # -----------------------------
         "ocsp": {
             "urls": meta.get("ocsp_urls", []),
             "status": meta.get("ocsp_status"),
             "reachable": meta.get("ocsp_reachable"),
         },
 
+        # -----------------------------
+        # Chain Validation
+        # -----------------------------
         "chain": {
             "server_sent": meta.get("chain_present"),
-            "aia_urls": meta.get("aia_issuer_urls", []),
-            "aia_chain": meta.get("aia_chain", []),
             "reconstructed": meta.get("chain_reconstructed"),
             "valid": meta.get("chain_valid"),
             "errors": meta.get("chain_errors", []),
         },
 
+        # -----------------------------
+        # General Warnings / Errors
+        # -----------------------------
+        "warnings": meta.get("warnings", []),
+        "errors": meta.get("errors", []),
+
+        # -----------------------------
+        # Enforcement
+        # -----------------------------
         "enforcement": {
             "applied": enf.get("applied", []),
             "passed": enf.get("passed", []),
             "failed": enf.get("failed", []),
             "errors": enf.get("errors", []),
+            "state": compute_nagios_code(enf),
         }
     }
 
@@ -1378,9 +1433,19 @@ def compute_nagios_code(enf):
     if warnings:
         return WARNING
     return OK
+def early_exit(meta, message, code):
+    # Quiet mode suppresses stdout
+    if meta["mode"] != "quiet":
+        print(message)
+
+    # Logging always happens if log_dir exists
+    if meta.get("log_dir"):
+        write_log(meta, f"[ERROR] {message}")
+
+    sys.exit(code)
 
 # -----------------------------
-# Host Validation
+# Host Validation & Meta Builders
 # -----------------------------
 def validate_host_basic(host: str):
     """
@@ -1456,69 +1521,73 @@ def validate_host_basic(host: str):
             "ip": None,
             "error": f"Hostname resolution failed for '{host}'"
         }
-# -----------------------------
-#  Main Orchestrator
-# -----------------------------
-def main():
-    args = build_parser()
+def build_certificate_meta(cert, chain, args):
+    """
+    Build a complete, deterministic metadata dictionary for check_cert.py.
+    This function absorbs ALL certificate, chain, OCSP, AIA, and expiration
+    processing so that main() becomes clean and minimal.
+    """
+
     # ------------------------------------------------------------
-    # Hostname validation (suite-wide deterministic rule)
+    # 1. Expiration metadata
     # ------------------------------------------------------------
-    rc = validate_host_basic(args.host)
-    if not rc["ok"]:
-        print(f"UNKNOWN - {rc['error']}")
-        sys.exit(UNKNOWN)
+    not_after = cert.not_valid_after
+    expiration_date = not_after.strftime("%Y-%m-%d")
+    expiration_days = (not_after - datetime.utcnow()).days
 
-    # If version was requested, argparse already printed it and exited.
-    # If help was requested, argparse already printed it and exited.
-    # So at this point, args is guaranteed to exist and contain required fields.
+    # ------------------------------------------------------------
+    # 2. Subject / Issuer
+    # ------------------------------------------------------------
+    subject_cn = get_subject_cn(cert)
+    issuer_cn = get_issuer_cn(cert)
 
-    # Now it is safe to reference args.host, args.sni, args.timeout, etc.
-    try:
-        cert, chain, tls_version, cipher = fetch_certificate_and_socket(
-            args.sni if args.sni else args.host,
-            args.port,
-            args.timeout,
-            args.insecure
-        )
-    except Exception as e:
-        print(f"UNKNOWN - failed to retrieve certificate: {e}")
-        sys.exit(UNKNOWN)
+    # ------------------------------------------------------------
+    # 3. SAN + hostname matching
+    # ------------------------------------------------------------
+    san_list = get_san_list(cert)
+    hostname_match = hostname_matches(args.host, subject_cn, san_list)
 
-    ocsp_status = get_ocsp_status(cert)
+    # ------------------------------------------------------------
+    # 4. Key metadata
+    # ------------------------------------------------------------
     key_type, key_bits, curve = get_key_info(cert)
 
-    expiry = get_cert_expiry(cert)
-    san_list = get_san_list(cert)
-    issuer_cn = get_issuer_cn(cert)
+    # ------------------------------------------------------------
+    # 5. Signature algorithm + wildcard
+    # ------------------------------------------------------------
     sigalg = get_signature_algorithm(cert)
     wildcard = is_wildcard_cert(cert)
-    aia_urls = get_aia_issuer_urls(cert)
 
-    # Build data dict for enforcement
-    data = {
-        "cert": cert,                 # <-- REQUIRED
-        "chain": chain,
-        "tls_version": tls_version,
-        "cipher": cipher,
-        "ocsp_status": ocsp_status,
-        "san": san_list,
-        "issuer_cn": issuer_cn,
-        "signature_algorithm": sigalg,
-        "wildcard": wildcard,
-        "key_type": key_type,
-        "rsa_bits": key_bits,
-        "ecc_curve": curve,
-        "aia_urls": aia_urls,
-    }
-    # Fetch intermediates via AIA
+    # ------------------------------------------------------------
+    # 6. TLS session metadata
+    # ------------------------------------------------------------
+    # These are fetched during socket negotiation
+    tls_version, cipher = fetch_tls_session_info(
+        args.sni or args.host,
+        args.port,
+        args.timeout,
+        args.insecure
+    )
+
+    # ------------------------------------------------------------
+    # 7. OCSP metadata
+    # ------------------------------------------------------------
+    ocsp_urls = get_ocsp_urls(cert)
+    ocsp_url = ocsp_urls[0] if ocsp_urls else None
+    ocsp_status = check_ocsp_reachability(ocsp_url)
+    ocsp_reachable = (ocsp_status == "reachable")
+
+    # ------------------------------------------------------------
+    # 8. AIA metadata (fetch + parse)
+    # ------------------------------------------------------------
+    aia_urls = get_aia_issuer_urls(cert)
     aia_chain_raw = []
-    data["aia_chain"] = []
+    aia_chain = []
 
     for url in aia_urls:
         raw = fetch_aia_certificate(url)
 
-        # Parse raw cert object for validation
+        # Parse raw cert for chain validation
         if isinstance(raw, bytes):
             try:
                 cert_obj = x509.load_der_x509_certificate(raw, default_backend())
@@ -1527,29 +1596,41 @@ def main():
                 pass
 
         # Parse JSON-safe entry for output
-        entry = parse_intermediate_cert(url, raw)
-        data["aia_chain"].append(entry)
+        aia_chain.append(parse_intermediate_cert(url, raw))
 
+    # ------------------------------------------------------------
+    # 9. Chain validation
+    # ------------------------------------------------------------
     chain_ok, chain_warnings = validate_chain(cert, aia_chain_raw)
 
-    data["chain_ok"] = chain_ok
-    data["chain_warnings"] = chain_warnings
-    data["oscp_urls"] = get_ocsp_urls(cert)
+    # ------------------------------------------------------------
+    # 10. Warnings / Errors
+    # ------------------------------------------------------------
+    # Add thresholds to meta BEFORE calling populate_warnings/errors
+    warning_days = args.warning
+    critical_days = args.critical    
 
-    not_after = cert.not_valid_after
-    expiration_date = not_after.strftime("%Y-%m-%d")
-    expiration_days = (not_after - datetime.utcnow()).days
-    data["expiration_days"] = expiration_days
+    # Build a temporary meta dict for warnings/errors
+    temp_meta = {
+        "expiration_days": expiration_days,
+        "warning_days": warning_days,
+        "critical_days": critical_days,
+        "key_type": key_type,
+        "rsa_bits": key_bits,
+        "signature_algorithm": sigalg,
+        "tls_version": tls_version,
+        "cipher": cipher,
+        "subject_cn": subject_cn,
+        "issuer_cn": issuer_cn,
+        "chain_valid": chain_ok,
+    }    
+    warnings = populate_warnings(temp_meta)
+    errors = populate_errors(temp_meta)
 
-    ocsp_urls = data.get("ocsp_urls", [])
-
-    # Pick the first OCSP URL (leaf)
-    ocsp_url = ocsp_urls[0] if ocsp_urls else None
-
-    ocsp_status = check_ocsp_reachability(ocsp_url)
-
-    # 1. Extract metadata
-    meta = {
+    # ------------------------------------------------------------
+    # 11. Final deterministic metadata dictionary
+    # ------------------------------------------------------------
+    return {
         # Connection
         "host": args.host,
         "port": args.port,
@@ -1565,70 +1646,347 @@ def main():
         "cipher_is_rc4": is_rc4_cipher(cipher),
 
         # Certificate
-        "subject_cn": get_subject_cn(cert),
+        "subject_cn": subject_cn,
         "issuer_cn": issuer_cn,
         "signature_algorithm": sigalg,
         "wildcard": wildcard,
         "san": san_list,
-        "warning_days": args.warning,
-        "critical_days": args.critical,
-        "expires": expiry.strftime("%Y-%m-%d %H:%M:%S"),
+        "warning_days": warning_days,
+        "critical_days": critical_days,
+        "expires": not_after.strftime("%Y-%m-%d %H:%M:%S"),
         "expiration_date": expiration_date,
-        "expiration_days": expiration_days,  
-        "hostname_matches": hostname_matches(args.host, get_subject_cn(cert), san_list),
-        
+        "expiration_days": expiration_days,
+        "hostname_matches": hostname_match,
+        "self_signed": is_self_signed(cert),
+
         # Key Metadata
         "key_type": key_type,
         "rsa_bits": key_bits,
         "ecc_curve": curve,
-        "self_signed": is_self_signed(cert),
 
         # AIA
         "aia_issuer_urls": aia_urls,
-        "aia_chain": data.get("aia_chain"),
+        "aia_chain": aia_chain,
 
         # OCSP
-        "ocsp_urls": data.get("ocsp_urls", []),
+        "ocsp_urls": ocsp_urls,
         "ocsp_status": ocsp_status,
-        "ocsp_reachable": (ocsp_status == "reachable"),
+        "ocsp_reachable": ocsp_reachable,
 
         # Chain Validation
         "chain_present": len(chain) > 0,
-        "chain_reconstructed": data.get("chain_reconstructed"),
-        "chain_valid": data.get("chain_valid"),
-        "chain_errors": data.get("chain_errors", []),
-        
-        # Warnings/Errors
-        "warnings": populate_warnings(data),
-        "errors": populate_errors(data),
+        "chain_reconstructed": chain_ok,
+        "chain_valid": chain_ok,
+        "chain_errors": chain_warnings,
+
+        # Warnings / Errors
+        "warnings": warnings,
+        "errors": errors,
     }
-    # ------------------------------------------------------------
-    # 2. Run policy + monitoring enforcement
-    # ------------------------------------------------------------
+def fetch_tls_session_info(hostname: str, port: int, timeout: int, insecure: bool):
+    """
+    Perform a minimal TLS handshake to extract:
+      - TLS version (string)
+      - cipher suite (string)
+    Does NOT retrieve certificates (that is handled elsewhere).
+    """
 
-    # Policy engine (TLS, cipher, key size, sigalg, etc.)
+    try:
+        ctx = ssl.create_default_context()
+
+        # Insecure mode disables verification
+        if insecure:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+        # Create TCP socket
+        sock = socket.create_connection((hostname, port), timeout)
+
+        # Wrap with TLS
+        ssock = ctx.wrap_socket(sock, server_hostname=hostname)
+
+        # Extract TLS version
+        tls_version = ssock.version()  # e.g. 'TLSv1.3'
+
+        # Extract cipher suite
+        cipher_info = ssock.cipher()
+        cipher = cipher_info[0] if cipher_info else None
+
+        ssock.close()
+        return tls_version, cipher
+
+    except Exception as e:
+        raise RuntimeError(f"TLS session info retrieval failed: {e}")
+
+# --------------------------------------
+# Logging Functions
+# --------------------------------------
+def ts():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def write_log(meta, message):
+    """
+    Deterministic, operator-grade log writer.
+    - No logging in Nagios mode
+    - Ensures directory exists
+    - Emits a single warning if logging fails
+    - Writes timestamped, single-line entries
+    """
+
+    # Nagios mode never logs
+    if meta.get("mode") == "nagios":
+        return
+
+    log_dir = meta.get("log_dir")
+    if not log_dir:
+        return
+
+    logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
+
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+
+        # Atomic append
+        line = f"{ts()}; {message}".rstrip() + "\n"
+        with open(logfile, "a", encoding="utf-8") as f:
+            f.write(line)
+
+    except Exception as e:
+        # Emit only one warning per run
+        if not meta.get("_log_warn_emitted"):
+            meta["_log_warn_emitted"] = True
+
+            warn = f"[WARN] Unable to write to log directory '{log_dir}': {e}"
+
+            # Only visible in verbose mode
+            if meta.get("mode") == "verbose":
+                print(warn)
+
+            # Also store in metadata for JSON/verbose output
+            meta.setdefault("warnings", []).append(warn)
+def rotate_log_if_needed(meta):
+    """
+    Deterministic log rotation for check_cert.
+    Assumes caller has already checked logging_enabled.
+    Uses meta['log_max_mb'] as the rotation threshold.
+    """
+
+    log_dir = meta["log_dir"]
+    logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
+
+    if not os.path.exists(logfile):
+        return
+
+    # Rotation threshold (default 50 MB)
+    max_mb = meta.get("log_max_mb", 50)
+    max_bytes = max_mb * 1024 * 1024
+
+    try:
+        if os.path.getsize(logfile) < max_bytes:
+            return
+
+        # Build archive path
+        archive_path = build_archive_path(meta)
+
+        # Atomic move
+        shutil.move(logfile, archive_path)
+
+        # Compress archive
+        compress_file(archive_path)
+
+        # Write rotation notice to new log
+        with open(logfile, "w", encoding="utf-8") as f:
+            f.write(f"{ts()}; [INFO] log rotated to {os.path.basename(archive_path)}.zip\n")
+
+    except Exception as e:
+        if not meta.get("_log_warn_emitted"):
+            meta["_log_warn_emitted"] = True
+
+            warn = f"[WARN] Unable to rotate log file '{logfile}': {e}"
+
+            if meta.get("mode") == "verbose":
+                print(warn)
+
+            meta.setdefault("warnings", []).append(warn)
+def build_archive_path(meta):
+    base = meta["script_name"]
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return os.path.join(meta["log_dir"], f"{base}_{ts}.log")
+def compress_file(path):
+    zip_path = path + ".zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.write(path, os.path.basename(path))
+    os.remove(path)
+def start_banner(meta):
+    return (
+        f"[START] {meta['script_name']}"
+        f" host={meta['host']}"
+        f" port={meta['port']}"
+        f" sni={meta['sni']}"
+        f" timeout={meta['timeout']}"
+        f" insecure={meta['insecure']}"
+        f" warn_days={meta['warning_days']}"
+        f" crit_days={meta['critical_days']}"
+        f" mode={meta['mode']}"
+    )
+def log_certificate(meta, enf):
+    """
+    Canonical CERT banner for log files.
+    Matches JSON/verbose naming and excludes enforcement fields.
+    """
+
+    parts = [
+        f"host={meta['host']}",
+        f"port={meta['port']}",
+        f"sni={meta['sni']}",
+
+        # TLS
+        f"tls_version={meta['tls_version']}",
+        f"cipher={meta['cipher']}",
+        f"aead={meta['cipher_is_aead']}",
+        f"cbc={meta['cipher_is_cbc']}",
+        f"rc4={meta['cipher_is_rc4']}",
+
+        # Certificate
+        f"subject_cn={meta['subject_cn']}",
+        f"issuer_cn={meta['issuer_cn']}",
+        f"sigalg={meta['signature_algorithm']}",
+        f"wildcard={meta['wildcard']}",
+        f"self_signed={meta['self_signed']}",
+        f"hostname_matches={meta['hostname_matches']}",
+        f"expires={meta['expires']}",
+        f"expiration_days={meta['expiration_days']}",
+
+        # Key
+        f"key_type={meta['key_type']}",
+        f"rsa_bits={meta['rsa_bits']}",
+        f"ecc_curve={meta['ecc_curve']}",
+
+        # OCSP
+        f"ocsp_status={meta['ocsp_status']}",
+        f"ocsp_reachable={meta['ocsp_reachable']}",
+
+        # Chain
+        f"chain_server_sent={meta['chain_present']}",
+        f"chain_reconstructed={meta['chain_reconstructed']}",
+        f"chain_valid={meta['chain_valid']}",
+        f"chain_errors={len(meta['chain_errors'])}",
+    ]
+
+    return "[CERT] " + " ".join(parts)
+def log_summary(state, failures):
+    return (
+        f"[RESULT] state={state}"
+        f" failed={len(failures)}"
+        f" failures={failures}"
+    )
+def end_banner():
+    return "[END]"
+
+# -----------------------------
+#  Main Orchestrator
+# -----------------------------
+def main():
+    # ------------------------------------------------------------
+    # 1. Parse arguments
+    # ------------------------------------------------------------
+    args = build_parser()
+
+    # Base metadata (script name, mode, log_dir)
+    meta = {
+        "script_name": Path(sys.argv[0]).stem,
+        "host": args.host,
+        "log_dir": str(Path(args.log_dir).expanduser()) if args.log_dir else None,
+        "mode": (
+            "json" if args.json else
+            "verbose" if args.verbose else
+            "quiet" if args.quiet else
+            "nagios"
+        ),
+    }
+
+    # ------------------------------------------------------------
+    # 2. Basic hostname validation (suite-wide deterministic rule)
+    # ------------------------------------------------------------
+    rc = validate_host_basic(args.host)
+    if not rc["ok"]:
+        early_exit(meta, f"UNKNOWN - {rc['error']}", UNKNOWN)
+
+    # ------------------------------------------------------------
+    # 3. Fetch certificate + chain + TLS session
+    # ------------------------------------------------------------
+    try:
+        cert, chain, tls_version, cipher = fetch_certificate_and_socket(
+            args.sni or args.host,
+            args.port,
+            args.timeout,
+            args.insecure
+        )
+    except Exception as e:
+        early_exit(meta, f"UNKNOWN - failed to retrieve certificate: {e}", UNKNOWN)
+
+    # ------------------------------------------------------------
+    # 4. Build full deterministic metadata
+    # ------------------------------------------------------------
+    # NOTE: build_certificate_meta() now performs:
+    # - expiration parsing
+    # - SAN parsing
+    # - hostname matching
+    # - key metadata
+    # - signature algorithm
+    # - wildcard detection
+    # - OCSP URL extraction + reachability
+    # - AIA fetching + parsing
+    # - chain validation
+    # - warnings + errors
+    # - TLS session info (via fetch_tls_session_info)
+    meta.update(build_certificate_meta(cert, chain, args))
+
+    # ------------------------------------------------------------
+    # 5. Determine Nagios mode + logging
+    # ------------------------------------------------------------
+    nagios_mode = not args.json and not args.verbose and not args.quiet
+    logging_enabled = not nagios_mode and meta["log_dir"]
+
+    # ------------------------------------------------------------
+    # 6. Enforcement (policy + monitoring)
+    # ------------------------------------------------------------
     policy = run_enforcement_checks(args, meta)
-
-    # Monitoring engine (expiration, chain, hostname, SAN, self-signed, OCSP)
     monitoring = run_monitoring_checks(args, meta)
-
-    # Merge into unified enforcement block
     enf = merge_enforcement(policy, monitoring)
 
-    # 4. Verbose mode
+    # ------------------------------------------------------------
+    # 7. Logging (if enabled)
+    # ------------------------------------------------------------
+    if logging_enabled:
+        rotate_log_if_needed(meta)
+        write_log(meta, start_banner(meta))
+        write_log(meta, log_certificate(meta, enf))
+        write_log(meta, log_summary(compute_nagios_code(enf), enf["failed"]))
+        write_log(meta, end_banner())
+
+    # ------------------------------------------------------------
+    # 8. Verbose mode
+    # ------------------------------------------------------------
     if args.verbose:
         display_verbose(meta)
         display_chain_summary(meta)
         display_enforcement_summary(enf)
         sys.exit(compute_nagios_code(enf))
- 
-    # 5. JSON mode
-    elif args.json:
+
+    # ------------------------------------------------------------
+    # 9. JSON mode
+    # ------------------------------------------------------------
+    if args.json:
         output_json(meta, enf)
         sys.exit(compute_nagios_code(enf))
 
-    # 6. Nagios mode
-    nagios_exit(enf, meta)
+    # ------------------------------------------------------------
+    # 10. Nagios mode (default)
+    # ------------------------------------------------------------
+    if not args.quiet:
+        nagios_exit(enf, meta)
+    else:
+        sys.exit(compute_nagios_code(enf))
 
 
 if __name__ == "__main__":

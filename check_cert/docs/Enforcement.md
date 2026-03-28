@@ -2,80 +2,91 @@
 
 This document defines the enforcement model used by `check_cert.py`: how rules are evaluated, how failures affect exit codes, and how enforcement results appear in Nagios, verbose, and JSON output modes.
 
-Enforcement is **deterministic**, **unified**, and **policy‑driven**. It combines **monitoring enforcement** (enabled by default) and **policy enforcement** (enabled via CLI flags).
+Enforcement is **deterministic**, **unified**, and **policy‑driven**. It merges:
+
+- **Monitoring enforcement** (enabled by default)
+- **Policy enforcement** (enabled via CLI flags)
+
+Both layers feed a single enforcement engine that produces a unified result used across all output modes.
 
 ---
 
 ## 1. Enforcement Model
 
-`check_cert.py` uses a unified enforcement engine that merges:
+`check_cert.py` evaluates two categories of rules:
 
-- **Monitoring enforcement:**
-  - expiration
-  - hostname
-  - SAN
-  - self‑signed
-  - chain
-  - OCSP
-- **Policy enforcement:**
-  - TLS version
-  - cipher rules
-  - key rules
-  - issuer rules
-  - OCSP rules
+### **1. Monitoring Enforcement (default‑on)**  
+These rules validate core certificate and TLS properties:
 
-Both layers produce an `enforcement` structure that is merged into a single deterministic result used by:
+- expiration  
+- hostname match  
+- SAN presence  
+- self‑signed detection  
+- chain validation  
+- OCSP reachability (opt‑in via `--check-ocsp`)  
 
-- Nagios mode  
-- verbose mode  
-- JSON mode  
+Monitoring rules can be individually disabled using:
 
-This guarantees consistent behavior across all output modes.
+--no-check-expiration
+--no-check-chain
+--no-check-hostname
+--no-check-san
+--no-check-self-signed
+
+Code
+
+OCSP monitoring is **disabled by default** and enabled with:
+
+--check-ocsp
+
+Code
+
+### **2. Policy Enforcement (explicit‑on)**  
+These rules validate certificate, key, TLS, and OCSP properties beyond basic monitoring:
+
+- TLS version  
+- cipher rules  
+- key rules  
+- issuer rules  
+- wildcard rules  
+- OCSP rules (`--require-ocsp`, `--forbid-ocsp`, `--ocsp-status`)  
+
+Policy rules are enabled only when explicitly requested.
 
 ---
 
 ## 2. Enforcement Lifecycle
 
-The enforcement engine follows a fixed lifecycle.
+The enforcement engine follows a deterministic lifecycle.
 
-### 2.1 Determine Active Rules
+### **2.1 Determine Active Rules**
 
-**Monitoring rules** are enabled by default.  
-**Policy rules** are enabled only when explicitly requested via CLI flags.
+- Monitoring rules: enabled unless explicitly disabled  
+- Policy rules: enabled only when flags are provided  
 
-Monitoring rules can be disabled individually:
+### **2.2 Evaluate Rules**
 
-```Code
---no-check-san
---no-check-self-signed
---no-check-chain
---no-check-ocsp
-```
+Each rule is evaluated independently.  
+Enforcement **never short‑circuits** — all rules run even if one fails.
 
+### **2.3 Aggregate Results**
 
-### 2.2 Evaluate Rules
+Each rule contributes to:
 
-Each rule is evaluated independently against the collected metadata.  
-A failure in one rule does not prevent evaluation of others; enforcement never short‑circuits.
+- `applied`  
+- `passed`  
+- `failed`  
+- `errors`  
 
-### 2.3 Aggregate Results
+Monitoring and policy results are merged into a unified enforcement object.
 
-Each layer (monitoring and policy) produces:
+### **2.4 Compute Exit Code**
 
-- `applied`
-- `passed`
-- `failed`
-- `errors`
+- Any failed rule → **CRITICAL**  
+- Any internal error → **CRITICAL**  
+- Otherwise → expiration thresholds determine OK/WARNING/CRITICAL  
 
-These are merged into a unified enforcement result.
-
-### 2.4 Compute Exit Code
-
-- Any failed rule → **CRITICAL**
-- Any internal error → **CRITICAL**
-- Otherwise → expiration thresholds determine OK/WARNING/CRITICAL
-
-### 2.5 Render Output
+### **2.5 Render Output**
 
 - **Nagios:** single line, no diagnostics  
 - **Verbose:** full “Enforcement Summary”  
@@ -92,38 +103,51 @@ All enforcement results follow this canonical structure:
   "applied": ["rule1", "rule2"],
   "passed": ["rule1"],
   "failed": ["rule2"],
-  "errors": []
+  "errors": [],
+  "state": 2
 }
 ```
 
-Field meanings
+**Field meanings**
 
 | Field |	Meaning |
-| :--- | :--- | 
-| applied | Rules that were evaluated |
-| passed | Rules that succeeded |
-| failed | Rules that failed (triggers CRITICAL) |
-| errors | Internal errors during evaluation (also CRITICAL) |
+| :--- | :--- |
+| applied |	Rules that were evaluated |
+| passed |	Rules that succeeded |
+| failed |	Rules that failed (triggers CRITICAL) |
+| errors |	Internal errors during evaluation |
+| state |	Final enforcement state (0=OK, 2=CRITICAL) |
 
-This schema is identical for monitoring, policy, and merged enforcement.
-
-## 4. Monitoring Enforcement Rules (Enabled by Default)
-
-These rules validate core certificate and TLS properties required for safe operation.
+## 4. Monitoring Enforcement Rules (Default‑On)
+These rules validate essential certificate and TLS properties.
 
 ### 4.1 Expiration
 
 Controlled by:
 
-```
+```Code
 -w DAYS
 -c DAYS
 ```
 
+Disable with:
+
+```Code
+--no-check-expiration
+```
+
 ### 4.2 Hostname Match
-Ensures the certificate matches the requested hostname (CN/SAN).
+
+Ensures CN/SAN matches the requested hostname.
+
+Disable with:
+
+```Code
+--no-check-hostname
+```
 
 ### 4.3 SAN Presence
+
 Disable with:
 
 ```Code
@@ -138,7 +162,7 @@ Disable with:
 --no-check-self-signed
 ```
 
-### 4.5 Chain Presence
+### 4.5 Chain Validation
 
 Disable with:
 
@@ -146,82 +170,75 @@ Disable with:
 --no-check-chain
 ```
 
-### 4.6 OCSP Presence
+### 4.6 OCSP Reachability
 
-Disable with:
+Enabled with:
 
 ```Code
---no-check-ocsp
+--check-ocsp
 ```
 
-## 5. Policy Enforcement Rules (Explicitly Enabled)
-These rules validate certificate, key, TLS, and OCSP properties beyond basic monitoring.
+Behavior:
+
+* Extract OCSP URLs
+* Attempt HTTP reachability
+* Fail if unreachable
+
+This is a real network test, not a placeholder.
+
+## 5. Policy Enforcement Rules (Explicit‑On)
+
+These rules validate certificate, key, TLS, and OCSP properties beyond monitoring.
 
 ### 5.1 Certificate Rules
 
---require-wildcard  
-Certificate must contain at least one wildcard SAN entry.
-
---forbid-wildcard  
-Certificate must not contain any wildcard SAN entries.
-
--I, --issuer <ISSUER>  
-Issuer Common Name must match the provided string.
-
--A, --sigalg <ALGORITHM>  
-Signature algorithm must match the provided value.
+```Code
+--require-wildcard
+--forbid-wildcard
+-I ISSUER, --issuer ISSUER
+-A SIGALG, --sigalg SIGALG
+```
 
 ### 5.2 Key Rules
 
---min-rsa <BITS>  
-RSA key must be at least the specified size.
-
---require-curve <CURVE>  
-ECDSA key must use the specified curve.
+```Code
+--min-rsa BITS
+--require-curve CURVE
+```
 
 ### 5.3 TLS Rules
 
---min-tls <VERSION>  
-Negotiated TLS version must be at least the specified version.
-
---require-tls <VERSION>  
-Negotiated TLS version must match exactly.
-
---require-cipher <CIPHER>  
-Cipher suite must match the provided name.
-
---forbid-cipher <CIPHER>  
-Cipher suite must not match the provided name.
-
---require-aead  
-Cipher must be AEAD.
-
---forbid-cbc  
-Cipher must not use CBC mode.
-
---forbid-rc4  
-Cipher must not use RC4.
+```Code
+--min-tls VERSION
+--require-tls VERSION
+--require-cipher CIPHER
+--forbid-cipher CIPHER
+--require-aead
+--forbid-cbc
+--forbid-rc4
+```
 
 ### 5.4 OCSP Rules
 
---require-ocsp  
-Certificate must contain at least one OCSP responder URL.
+```Code
+--require-ocsp
+--forbid-ocsp
+--ocsp-status {good,revoked,unknown,invalid}
+```
 
---forbid-ocsp  
-Certificate must not contain any OCSP responder URLs.
+Behavior:
 
---ocsp-status {good,revoked,unknown,invalid}  
-Checks the reported OCSP status (placeholder behavior).
+* --require-ocsp → certificate must contain OCSP URLs
+* --forbid-ocsp → certificate must NOT contain OCSP URLs
+* --ocsp-status → compare against reported status
 
-**Note:**
+Status values are currently:
 
-Current OCSP support includes:
-
-* extracting OCSP URLs
-* reporting presence/absence
-* reporting placeholder status
-
-Full OCSP reachability and response parsing are planned.
+* good
+* revoked
+* unknown
+* invalid
+* none (no OCSP URLs present)
 
 ## 6. Enforcement in Output Modes
 
@@ -236,127 +253,123 @@ CRITICAL - enforcement failure: <rule_name>;
 Nagios mode:
 
 * emits one line only
-* suppresses chain and diagnostic details
-* does not show enforcement internals
-* uses the merged enforcement result
+* suppresses diagnostics
+* uses merged enforcement result
 
-## 6.2 Verbose Mode (-v)
+### 6.2 Verbose Mode (-v)
 
-Verbose mode includes a full “Enforcement Summary”:
+Example:
 
 ```Code
 === Enforcement Summary ===
 Applied:
   - hostname_match
   - expiration
+  - ocsp
 Passed:
   - hostname_match
   - expiration
 Failed:
-  (none)
+  - ocsp (no OCSP responders reachable)
 Errors:
   (none)
 ```
 
-When rules fail, the failed list includes human‑readable reasons.
+### 6.3 JSON Mode (--json / -j)
 
-## 6.3 JSON Mode (--json / -j)
-JSON mode includes a structured enforcement object:
+Example:
 
 ```json
 "enforcement": {
-  "applied": ["hostname_match", "expiration"],
+  "applied": ["hostname_match", "expiration", "ocsp"],
   "passed": ["hostname_match", "expiration"],
-  "failed": [],
-  "errors": []
+  "failed": ["ocsp"],
+  "errors": [],
+  "state": 2
 }
 ```
 
-This is suitable for:
-
-* log ingestion
-* monitoring pipelines
-* dashboards
-* programmatic policy enforcement
-
 ## 7. Exit Code Behavior
 
-| Condition | Exit Code |	Meaning |
+| Condition |	Exit Code |	Meaning |
 | :--- | :---: | :--- |
-| All rules pass | 0 | OK |
-| Any rule fails | 2 | CRITICAL |
-| Any rule errors | 2 |	CRITICAL |
-| No rules applied | Based on expiration thresholds | OK/WARNING/CRITICAL |
+| All rules pass |	0 |	OK |
+| Any rule fails |	2 |	CRITICAL |
+| Any rule errors |	2 |	CRITICAL |
+| No rules applied |	Based on expiration thresholds |	OK/WARNING/CRITICAL |
 
 Enforcement failures always override expiration thresholds.
 
 ## 8. Examples
-
 ### 8.1 Passing Enforcement
 
-**Command:**
-
-```Code
-check_cert -H example.com --min-tls tls1.2 --require-aead
+```bash
+check_cert.py -H example.com --min-tls TLSv1.2 --require-aead
 ```
 
-**Result:**
-
+* Result:
 * TLS 1.3 negotiated
 * AEAD cipher used
 * All rules pass
 
-**Nagios:**
+Nagios:
 
 ```Code
-OK - certificate valid, expires in 60 days on 2026-05-18;
+OK - certificate valid, expires in 60 days;
 ```
 
-## 8.2 Failing Enforcement
+### 8.2 Failing Enforcement
 
-**Command:**
-
-```Code
-check_cert -H legacy.example.com --min-tls tls1.2
+```bash
+check_cert.py -H legacy.example.com --min-tls TLSv1.2
 ```
 
-**Result:**
+Result:
 
 * TLS 1.1 negotiated
-* min-tls rule fails
+* min-tls fails
 
-**Nagios:**
+Nagios:
 
 ```Code
 CRITICAL - enforcement failure: min-tls;
 ```
 
-**Verbose:**
+Verbose:
 
 ```Code
-Failed: min-tls (negotiated tls1.1 < required tls1.2)
+Failed: min-tls (negotiated TLSv1.1 < required TLSv1.2)
 ```
 
-### 8.3 Mixed Results (All Passing)
+### 8.3 OCSP Failure (Real Example)
 
-**Command:**
+```bash
+check_cert.py -H www.linktechengineering.net --check-ocsp
+```
+
+Result:
+
+* No OCSP URLs present
+* Reachability = false
+* ocsp rule fails
+
+JSON:
+
+* json
+* "failed": ["ocsp"]
+
+Nagios:
 
 ```Code
-check_cert -H example.com --min-tls tls1.2 --forbid-cbc
+CRITICAL - enforcement failure: ocsp;
 ```
-
-**Result:**
-
-* TLS 1.3 negotiated
-* Non‑CBC cipher used
-* All rules pass → OK
 
 ## 9. Future Enhancements
 
 Planned enforcement extensions include:
 
-* full OCSP reachability and response parsing
-* chain reconstruction and path validation rules
-* Certificate Transparency (SCT) rules
+* full OCSP response parsing
+* certificate transparency (SCT) rules
 * key usage and extended key usage rules
+* chain reconstruction policies
 * revocation checking
