@@ -4,7 +4,7 @@ File: check_cert.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-17
-Modified: 2026-03-28
+Modified: 2026-03-29
 Required: Python 3.6+
 Description:
     Certificate checker with SAN, issuer, signature algorithm, wildcard detection,
@@ -117,6 +117,7 @@ class CheckArgumentParser(argparse.ArgumentParser):
         sys.exit(UNKNOWN)
 def build_parser():
     parser = CheckArgumentParser(
+        prog="check_cert.py",
         description=(
             "TLS Certificate Inspection Tool\n\n"
             "Performs a full TLS handshake, retrieves the server certificate and chain,\n"
@@ -130,7 +131,7 @@ def build_parser():
     # -----------------------------
     # Usage line
     # -----------------------------
-    parser.usage = "check_cert.py -H <host> [options]"
+    parser.usage = "%(prog)s -H <host> [options]"
 
     # -----------------------------
     # Connection Options
@@ -291,10 +292,10 @@ def build_parser():
     # -----------------------------
     parser.epilog = (
         "Examples:\n"
-        "  check_cert.py -H example.com -v\n"
-        "  check_cert.py -H example.com --json\n"
-        "  check_cert.py -H example.com --min-tls TLSv1.2\n"
-        "  check_cert.py -H example.com --require-aead --require-curve secp256r1\n"
+        "  %(prog)s -H example.com -v\n"
+        "  %(prog)s -H example.com --json\n"
+        "  %(prog)s -H example.com --min-tls TLSv1.2\n"
+        "  %(prog)s -H example.com --require-aead --require-curve secp256r1\n"
     )
 
     return parser.parse_args()
@@ -1732,18 +1733,12 @@ def write_log(meta, message):
     - Writes timestamped, single-line entries
     """
 
-    # Nagios mode never logs
-    if meta.get("mode") == "nagios":
-        return
-
     log_dir = meta.get("log_dir")
-    if not log_dir:
-        return
 
-    logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
-
+ 
     try:
         os.makedirs(log_dir, exist_ok=True)
+        logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
 
         # Atomic append
         line = f"{ts()}; {message}".rstrip() + "\n"

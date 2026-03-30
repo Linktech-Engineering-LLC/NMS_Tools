@@ -9,46 +9,56 @@ your operational environment.
 ## 1. Requirements
 
 ### Python Version
-`check_cert.py` supports:
 
-- Python **3.6 or newer**
-- Python **3.6–3.7 require** `typing_extensions`
+check_cert.py supports:
+
+* Python 3.6 or newer
+* Python 3.6–3.7 require typing_extensions
 
 ### Python Packages
+
 Required:
 
-- `cryptography`
+* cryptography
+** typing_extensions (only for Python < 3.8)
 
-Install via `pip`:
+Install via pip:
 
 ```bash
 pip install cryptography
 pip install typing_extensions   # only for Python < 3.8
-``` 
-Or install via your distribution’s package manager:
+```
 
-#### openSUSE / SLES
+Or install via your distribution’s package manager:
+**openSUSE / SLES**
 
 ```bash
 sudo zypper install python3-cryptography
 ```
 
-#### RHEL / CentOS / Rocky / Alma
+**RHEL / CentOS / Rocky / Alma**
 
 ```bash
 sudo yum install python3-cryptography
 ```
 
-#### Fedora
+**Fedora**  
 
 ```bash
 sudo dnf install python3-cryptography
 ```
 
-#### Ubuntu / Debian
+**Ubuntu / Debian**
 
 ```bash
 sudo apt install python3-cryptography
+```
+
+**Optional: Install using the provided requirements.txt**
+If you cloned the full NMS_Tools repository, you may install dependencies using the tool‑level requirements file:
+
+```bash
+pip install -r requirements.txt
 ```
 
 ## 2. Logging Requirements (Optional)

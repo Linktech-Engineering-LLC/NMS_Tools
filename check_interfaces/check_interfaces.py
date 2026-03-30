@@ -4,7 +4,7 @@ File: check_interfaces.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-22
-Modified: 2026-03-28
+Modified: 2026-03-29
 Required: Python 3.6+
 Description:
         Interface Checker: If the host is local, local libraries are used, otherwise SNMP v2 is used
@@ -71,6 +71,7 @@ class CheckArgumentParser(argparse.ArgumentParser):
 # -----------------------------
 def build_parser():
     parser = CheckArgumentParser(
+        prog="check_interfaces.py",
         description=(
             "Interface Inspection Tool\n\n"
             "Determines whether the target host is local or remote. "
@@ -82,7 +83,7 @@ def build_parser():
         add_help=True
     )
 
-    parser.usage = "check_interfaces.py -H <host> [options]"
+    parser.usage = "%(prog)s -H <host> [options]"
 
     # ------------------------------------------------------------
     # Core Options
@@ -235,9 +236,9 @@ def build_parser():
     # ------------------------------------------------------------
     parser.epilog = (
         "Examples:\n"
-        "  check_interfaces.py -H localhost -v\n"
-        "  check_interfaces.py -H 192.168.1.1 --community public\n"
-        "  check_interfaces.py -H router --community mystring --json\n"
+        "  %(prog)s -H localhost -v\n"
+        "  %(prog)s -H 192.168.1.1 --community public\n"
+        "  %(prog)s -H router --community mystring --json\n"
     )
 
     return parser.parse_args()

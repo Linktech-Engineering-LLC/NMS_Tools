@@ -4,15 +4,15 @@
 
 **Resolvable hostname** — All NMS_Tools scripts require the -H target to be resolvable via DNS or /etc/hosts.
 
-| Requirement  | Details                                                              |
-|--------------|----------------------------------------------------------------------|
-| Python       | 3.6 or later                                                        |
-| pysnmp       | Required for remote host inspection (`pip install pysnmp`)           |
-| SNMP access  | SNMPv2c community string for each remote target device               |
-| Nagios       | Nagios, Icinga, or compatible monitoring platform (optional)         |
+| Requirement |	Details |
+| :--- | :--- |
+| Python |	3.6 or later |
+| pysnmp |	Required for remote SNMP interface inspection |
+| psutil |	Required for local interface inspection |
+| SNMP access |	SNMPv2c community string for each remote target device |
+| Nagios |	Nagios, Icinga, or compatible monitoring platform (optional) |
 
-> **Note:** Local host inspection does not use SNMP, but pysnmp is still required because it is imported at startup. The tool will not run without it.
-
+**Note:** pysnmp and psutil are both required because the tool imports them at startup. Even if you only use local mode or only use SNMP mode, both packages must be installed.
 ---
 
 ## Download
@@ -34,20 +34,34 @@ If you only need `check_interfaces`, you can download the `check_interfaces/` di
 
 ## Install Dependencies
 
+check_interfaces.py requires two external Python packages:
+
+* pysnmp — for SNMP interface polling
+* psutil — for local host interface inspection
+
+Install both:
+
 ```bash
-pip install pysnmp
+pip install pysnmp psutil
 ```
 
 Or, if your environment requires a user‑level install:
 
 ```bash
-pip install --user pysnmp
+pip install --user pysnmp psutil
 ```
 
-Verify the installation:
+Optional: Install using the provided requirements.txt
+If you cloned the full NMS_Tools repository, you may install dependencies using the tool‑level requirements file:
 
 ```bash
-python3 -c "import pysnmp; print(pysnmp.__version__)"
+pip install -r requirements.txt
+```
+
+Verify installation
+
+```bash
+python3 -c "import pysnmp, psutil; print('pysnmp:', pysnmp.__version__, 'psutil:', psutil.__version__)"
 ```
 
 ---

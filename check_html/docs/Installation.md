@@ -16,32 +16,16 @@ A virtual environment is not required, but may be used if preferred.
 
 ## 2. Install Dependencies
 
-check_html.py uses a single external Python dependency:
+check_html.py uses only Python standard library modules.
 
-```Code 
-requests
-```
+There are no external dependencies and no requirements.txt for this tool.
 
-Install it system‑wide or user‑local:
-
-### System‑wide install
-
-```bash
-sudo pip3 install requests
-```
-
-### User‑local install
-
-```bash
-pip3 install --user requests
-```
-
-No requirements.txt file is needed for this tool.
+Nothing needs to be installed via pip.
 
 ## 3. Clone the Repository
 
 ```bash
-git clone https://github.com/LinktechEngineering/NMS_Tools.git
+git clone https://github.com/Linktech-Engineering-LLC/NMS_Tools.git
 cd NMS_Tools/check_html
 ```
 

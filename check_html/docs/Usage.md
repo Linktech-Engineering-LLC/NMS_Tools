@@ -1,48 +1,39 @@
 # check_html.py — Usage Guide
-
 check_html.py is a deterministic HTTP/HTTPS inspection and content‑validation tool.
 It supports JSON, verbose, and Nagios output modes, and is designed for operators, automation systems, and monitoring platforms.
 
 This guide describes the command‑line interface, output modes, examples, and Nagios integration.
 
 ## 1. Basic Usage
-
-### HTTP check
-
+**HTTP check**
 ```bash
 ./check_html.py -H example.com
 ```
-### HTTPS check
-
+**HTTPS check**
 ```bash
 ./check_html.py -H example.com --https
 ```
-
-### Explicit port
-
+**Explicit port**
 ```bash
 ./check_html.py -H example.com -p 8080
 ```
-
 ## 2. Output Modes
 check_html.py supports three deterministic output modes.
 
-### 2.1 JSON Mode (-j/--json)
+### 2.1 JSON Mode (-j / --json)
 Structured output for automation:
 
 ```bash
 ./check_html.py -H example.com --json
 ```
-
 Produces a canonical JSON object containing:
 
-- capture metadata
-- backend detection
-- enforcement results
-- final status and message
+* capture metadata
+* backend detection
+* enforcement results
+* final status and message
 
-### 2.2 Verbose Mode (-v/--verbose)
-
+### 2.2 Verbose Mode (-v / --verbose)
 Human‑readable, multi‑section output:
 
 ```bash
@@ -51,131 +42,125 @@ Human‑readable, multi‑section output:
 
 Sections include:
 
-- Request summary
-- Capture details
-- Backend detection
-- Status enforcement
-- Content‑type enforcement
-- HTML enforcement
-- Final result
+* Request summary
+* Capture details
+* Backend detection
+* Status enforcement
+* Content‑type enforcement
+* HTML enforcement
+* Final result
 
 ### 2.3 Default Mode (Nagios Single‑Line)
-
 No flags required:
 
 ```bash
 ./check_html.py -H example.com
-```
-
+``` 
 Example OK:
 
 ```Code
 OK - 200 OK (text/html)
 ```
-
 Example failure:
 
 ```Code
 CRITICAL - TLS handshake failed
 ```
-
 This mode is used for Nagios/Icinga integration.
 
 ## 3. Protocol Selection
 
-### Force HTTPS
-
+**Force HTTPS**
 ```bash
 ./check_html.py -H example.com --https
 ```
 
-### Force HTTP
-
+**Force HTTP**
 ```bash
 ./check_html.py -H example.com --http
 ```
-### Auto‑detect (default)
+
+**Auto‑detect (default)**
 
 If neither flag is provided:
 
-- HTTPS is used if port is 443
-- Otherwise HTTP is used
+* HTTPS is used if the port is 443
+* Otherwise HTTP is used
+
+This behavior is deterministic and consistent across all output modes.
 
 ## 4. Enforcement Options
-
-### Expected HTTP status
+**Expected HTTP status**
 
 ```bash
 ./check_html.py -H example.com --expect-status 200
 ```
 
-### Require HTML body
-
+**Require HTML body**
 ```bash
 ./check_html.py -H example.com --require-html
 ```
 
-### Require specific content‑type
-
+**Require specific content‑type**
 ```bash
 ./check_html.py -H example.com --require-type text/html
 ```
 
-### Backend enforcement
-
+**Backend enforcement**
 ```bash
 ./check_html.py -H example.com --require-backend nginx
 ```
+Backend detection is based on server headers and known patterns.
 
 ## 5. Timeout and Redirects
 
-### Set timeout (seconds)
+**Set timeout (seconds)**
+```bash./check_html.py -H example.com -t 10
+```
+Default timeout is 10 seconds.
 
+**Limit redirects**
 ```bash
 ./check_html.py -H example.com -t 5
 ```
 
-### Limit redirects
-
+Limit redirects
 ```bash
 ./check_html.py -H example.com --max-redirects 3
 ```
 
+Redirects are followed deterministically up to the specified limit.
+
 ## 6. Examples
 
-### Check a normal website
-
+**Check a normal website**
 ```bash
 ./check_html.py -H example.com
 ```
 
-### Check an HTTPS site with verbose output
-
+**Check an HTTPS site with verbose output**
 ```bash
 ./check_html.py -H example.com --https -v
 ```
 
-### Enforce HTML and content‑type
-
+**Enforce HTML and content‑type**
 ```bash
 ./check_html.py -H example.com --require-html --require-type text/html
 ```
 
-### Enforce backend fingerprint
-
+**Enforce backend fingerprint**
 ```bash
 ./check_html.py -H example.com --require-backend nginx
 ```
 
-### JSON output for automation
-
+**JSON output for automation**
 ```bash
 ./check_html.py -H api.example.com --json
 ```
 
 ## 7. Nagios Integration
 
-### Command definition
+**Command definition**
 
 ```Code
 define command {
@@ -184,7 +169,7 @@ define command {
 }
 ```
 
-### Service definition
+**Service definition**
 
 ```Code
 define service {
@@ -195,19 +180,18 @@ define service {
 }
 ```
 
-### Example Nagios output
+**Example Nagios output**
 
 ```Code
 OK - 200 OK (text/html)
-```
+``` 
 
 ## 8. Exit Codes
-
 check_html.py uses standard Nagios exit codes:
 
 | Code | Meaning |
-|------|---------|
-| 0	| OK |
+| :---: | :--- |
+| 0 | OK |
 | 1 | WARNING |
 | 2 | CRITICAL |
 | 3 | UNKNOWN |
@@ -217,7 +201,6 @@ Exit codes are determined by the enforcement subsystem using Nagios‑aware seve
 **CRITICAL > WARNING > UNKNOWN > OK**
 
 ## 9. Help Output
-
 View all flags:
 
 ```bash
@@ -228,20 +211,19 @@ The CLI parser is noise‑free, grouped, and deterministic.
 
 ## 10. Hostname Resolution
 
-All NMS_Tools plugins that accept `-H` require the hostname to be resolvable
-via the system resolver (DNS, /etc/hosts, or equivalent).
+All NMS_Tools plugins that accept -H require the hostname to be resolvable via the system resolver (DNS, /etc/hosts, or equivalent).
 
 If the hostname cannot be resolved:
 
-- The tool fails fast with a deterministic error message.
-- No network operations are attempted.
-- In Nagios mode, the tool exits `UNKNOWN` with a single clean line.
+* The tool fails fast with a deterministic error message
+* No network operations are attempted
+* In Nagios mode, the tool exits UNKNOWN with a single clean line
 
-### Deterministic Error Example
+**Deterministic Error Example**
 
-If the hostname is unresolvable:
+```Code
+UNKNOWN - Hostname resolution failed for 'badhost.example'
+```
 
-    UNKNOWN - Hostname resolution failed for 'badhost.example'
+This behavior is consistent across all tools in the suite and is required for operator‑grade determinism and Nagios/Icinga compatibility.
 
-This behavior is consistent across all tools in the suite and is required for
-operator‑grade determinism and Nagios/Icinga compatibility.

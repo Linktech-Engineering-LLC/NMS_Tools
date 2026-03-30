@@ -4,23 +4,28 @@ File: check_html.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-21
-Modified: 2026-03-22
+Modified: 2026-03-30
 Required: Python 3.6+
 Description:
     HTML content checker with status-code enforcement, required-tag checks,
     content-type validation, quiet/verbose modes, and JSON output.
 """
 
-import sys
-import socket
-import ipaddress
 import argparse
-import platform
-import time
-import ssl
-import json
 import http.client
+import ipaddress
+import json
+import platform
+import os
+import shutil
+import ssl
+import socket
+import sys
+import time
+import zipfile
 
+from datetime import datetime
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -30,7 +35,7 @@ WARNING = 1
 CRITICAL = 2
 UNKNOWN = 3
 # Other Global Constants
-SCRIPT_VERSION = "1.0.1"
+SCRIPT_VERSION = "1.1.0"
 BACKEND_SIGNATURES = {
     "tomcat": {
         "headers": [
@@ -113,30 +118,51 @@ class CheckArgumentParser(argparse.ArgumentParser):
 # -----------------------------
 def build_parser():
     parser = CheckArgumentParser(
+        prog="check_html.py",
         description=(
-            "HTTP/HTML Inspection Tool\n\n"
-            "Fetches a webpage, validates status code, content-type, required tags,\n"
-            "backend fingerprinting (Tomcat/Apache/Nginx), redirect behavior, and\n"
-            "optional enforcement rules. Supports verbose, JSON, and Nagios output."
+            "HTML Content Validation Tool\n\n"
+            "Validates HTTP/HTML behavior for a target URL. Performs status checks,\n"
+            "content-type enforcement, required/forbidden tags and text, backend\n"
+            "fingerprinting, redirect analysis, and optional security requirements.\n"
+            "Supports verbose, JSON, quiet, and Nagios output modes."
         ),
         formatter_class=CustomFormatter,
         add_help=True
     )
 
-    parser.usage = "check_http.py -H <host> [options]"
+    parser.usage = "%(prog)s -H <host> [options]"
 
+    # ------------------------------------------------------------
+    # Core Options
+    # ------------------------------------------------------------
+    core = parser.add_argument_group("Core Options")
+    core.add_argument("-H", "--host", required=True,
+                      help="Target hostname or URL")
+    core.add_argument("-p", "--port", type=int, default=80,
+                      help="Port to connect to")
+    core.add_argument("--timeout", type=int, default=5,
+                      help="Connection timeout in seconds")
+    core.add_argument(
+        "--log-dir",
+        dest="log_dir",
+        metavar="DIR",
+        default=None,
+        help="Directory to store logs (optional). If omitted, logging is disabled."
+    )
+    core.add_argument(
+        "--log-max-mb",
+        dest="log_max_mb",
+        metavar="MB",
+        type=int,
+        default=50,
+        help="Maximum log size in MB before rotation."
+    )
     # ------------------------------------------------------------
     # Connection Options
     # ------------------------------------------------------------
     conn = parser.add_argument_group("Connection Options")
-    conn.add_argument("-H", "--host", required=True,
-                      help="Target hostname or URL")
-    conn.add_argument("-p", "--port", type=int, default=80,
-                      help="Port to connect to")
     conn.add_argument("--https", action="store_true",
                       help="Force HTTPS request")
-    conn.add_argument("--timeout", type=int, default=5,
-                      help="Connection timeout in seconds")
     conn.add_argument("--no-redirect", action="store_true",
                       help="Do not follow redirects")
     conn.add_argument("--max-redirects", type=int, default=5,
@@ -270,13 +296,13 @@ def build_parser():
     # Nagios Thresholds
     # ------------------------------------------------------------
     nagios = parser.add_argument_group("Nagios Thresholds")
-    nagios.add_argument("--warning-rt", type=float,
+    nagios.add_argument("--warning-rt", type=float, default=0.5,
                         help="Warning threshold for response time (seconds)")
-    nagios.add_argument("--critical-rt", type=float,
+    nagios.add_argument("--critical-rt", type=float, default=1.0,
                         help="Critical threshold for response time (seconds)")
-    nagios.add_argument("--warning-size", type=int,
+    nagios.add_argument("--warning-size", type=int, default=200 * 1024,
                         help="Warning threshold for page size (bytes)")
-    nagios.add_argument("--critical-size", type=int,
+    nagios.add_argument("--critical-size", type=int, default=500 * 1024,
                         help="Critical threshold for page size (bytes)")
 
     # ------------------------------------------------------------
@@ -284,10 +310,10 @@ def build_parser():
     # ------------------------------------------------------------
     parser.epilog = (
         "Examples:\n"
-        "  check_http.py -H example.com -v\n"
-        "  check_http.py -H example.com --expect-status 200\n"
-        "  check_http.py -H example.com --require-tomcat\n"
-        "  check_http.py -H example.com --json\n"
+        "  %(prog)s -H example.com -v\n"
+        "  %(prog)s -H example.com --expect-status 200\n"
+        "  %(prog)s -H example.com --require-tomcat\n"
+        "  %(prog)s -H example.com --json\n"
     )
 
     return parser.parse_args()
@@ -308,7 +334,6 @@ def normalize_backend_list(values):
 
     # Deduplicate while preserving order
     return list(dict.fromkeys(out))
-
 
 def ok_exit(message):
     print(f"OK - {message}")
@@ -840,6 +865,52 @@ def build_result_object(
             "message": final_message,
         }
     }
+# ============================================================
+#  Metadata Builder for check_html.py
+#  (Aligned with current main() and logging module)
+# ============================================================
+def build_html_meta(args):
+    """
+    Minimal deterministic metadata object for logging and banners.
+    Does NOT duplicate capture/result fields.
+    Mirrors the structure used in check_cert.py but adapted for HTML.
+    """
+
+    return {
+        # Script identity
+        "script_name": Path(sys.argv[0]).stem,
+        "version": SCRIPT_VERSION,
+
+        # Target
+        "host": args.host,
+        "url": args.host,          # normalized later by determine_protocol_and_url
+        "timeout": args.timeout,
+        "https": args.https,
+        "max_redirects": args.max_redirects,
+
+        # Expected behavior (for banners only)
+        "expect_status": args.expect_status,
+        "expect_family": args.expect_family,
+
+        # Output mode
+        "mode": (
+            "json" if args.json else
+            "verbose" if args.verbose else
+            "quiet" if args.quiet else
+            "nagios"
+        ),
+
+        # Logging
+        "log_dir": str(Path(args.log_dir).expanduser()) if args.log_dir else None,
+        "log_max_mb": args.log_max_mb,
+        "_log_warn_emitted": False,
+
+        # Runtime warnings (populated by write_log)
+        "warnings": [],
+    }
+# -------------------------------------
+# Displays
+# ------------------------------------
 def print_verbose(result):
     """
     Render verbose, human-readable output for check_html.
@@ -901,7 +972,7 @@ def nagios_label(code):
         2: "CRITICAL",
         3: "UNKNOWN"
     }.get(code, "UNKNOWN")
-def single_line(result):
+def single_line(result, args):
     code = result["overall"]["status"]
     message = result["overall"]["message"]
 
@@ -929,7 +1000,8 @@ def single_line(result):
         size = len(body.encode("utf-8"))
 
         # Build perfdata deterministically
-        perfdata = f"time={rt:.4f}s;;;0 size={size}B;;;0"
+        # perfdata = f"time={rt:.4f}s;;;0 size={size}B;;;0"
+        perfdata = build_perfdata(args, capture)
 
         # Build human-readable message
         if http_status is not None:
@@ -947,6 +1019,29 @@ def single_line(result):
         return f"{prefix} - {message}"
     else:
         return f"{prefix}"
+def build_perfdata(args, capture):
+    latency = capture["response_time"]
+    size = len(capture["body"]) if capture["body"] else 0
+
+    return (
+        f"time={latency:.4f}s;"
+        f"{args.warning_rt};"
+        f"{args.critical_rt};0; "
+        f"size={size}B;"
+        f"{args.warning_size};"
+        f"{args.critical_size};0;"
+    )
+def early_exit(meta, message, code):
+    # Quiet mode suppresses stdout
+    if meta["mode"] != "quiet":
+        print(message)
+
+    # Logging always happens if log_dir exists
+    if meta.get("log_dir"):
+        write_log(meta, f"[ERROR] {message}")
+
+    sys.exit(code)
+
 # -----------------------------
 # Host Validation
 # -----------------------------
@@ -1024,18 +1119,189 @@ def validate_host_basic(host: str):
             "ip": None,
             "error": f"Hostname resolution failed for '{host}'"
         }
+# --------------------------------------
+# Logging Functions
+# --------------------------------------
+def ts():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def write_log(meta, message):
+    """
+    Deterministic, operator-grade log writer.
+    - No logging in Nagios mode
+    - Ensures directory exists
+    - Emits a single warning if logging fails
+    - Writes timestamped, single-line entries
+    """
+
+    log_dir = meta.get("log_dir")
+
+
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+        logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
+        # Atomic append
+        line = f"{ts()}; {message}".rstrip() + "\n"
+        with open(logfile, "a", encoding="utf-8") as f:
+            f.write(line)
+
+    except Exception as e:
+        # Emit only one warning per run
+        if not meta.get("_log_warn_emitted"):
+            meta["_log_warn_emitted"] = True
+
+            warn = f"[WARN] Unable to write to log directory '{log_dir}': {e}"
+
+            # Only visible in verbose mode
+            if meta.get("mode") == "verbose":
+                print(warn)
+
+            # Also store in metadata for JSON/verbose output
+            meta.setdefault("warnings", []).append(warn)
+def rotate_log_if_needed(meta):
+    """
+    Deterministic log rotation for check_cert.
+    Assumes caller has already checked logging_enabled.
+    Uses meta['log_max_mb'] as the rotation threshold.
+    """
+
+    log_dir = meta["log_dir"]
+    logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
+
+    if not os.path.exists(logfile):
+        return
+
+    # Rotation threshold (default 50 MB)
+    max_mb = meta.get("log_max_mb", 50)
+    max_bytes = max_mb * 1024 * 1024
+
+    try:
+        if os.path.getsize(logfile) < max_bytes:
+            return
+
+        # Build archive path
+        archive_path = build_archive_path(meta)
+
+        # Atomic move
+        shutil.move(logfile, archive_path)
+
+        # Compress archive
+        compress_file(archive_path)
+
+        # Write rotation notice to new log
+        with open(logfile, "w", encoding="utf-8") as f:
+            f.write(f"{ts()}; [INFO] log rotated to {os.path.basename(archive_path)}.zip\n")
+
+    except Exception as e:
+        if not meta.get("_log_warn_emitted"):
+            meta["_log_warn_emitted"] = True
+
+            warn = f"[WARN] Unable to rotate log file '{logfile}': {e}"
+
+            if meta.get("mode") == "verbose":
+                print(warn)
+
+            meta.setdefault("warnings", []).append(warn)
+def build_archive_path(meta):
+    base = meta["script_name"]
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return os.path.join(meta["log_dir"], f"{base}_{ts}.log")
+def compress_file(path):
+    zip_path = path + ".zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.write(path, os.path.basename(path))
+    os.remove(path)
+def start_banner(meta):
+    return (
+        f"[START] {meta['script_name']}"
+        f" url={meta['url']}"
+        f" timeout={meta['timeout']}"
+        f" https={meta['https']}"
+        f" redirects={meta['max_redirects']}"
+        f" expect_status={meta['expect_status']}"
+        f" expect_family={meta['expect_family']}"
+        f" mode={meta['mode']}"
+    )
+def log_html_result(meta, result):
+    cap = result["capture"]
+    backend = result["backend"]
+    ct = result["content_type_check"]
+    html = result["html_check"]
+    status = result["status_check"]
+    perf = meta.get("perfdata", {})
+
+    parts = [
+        f"url={meta['host']}",
+
+        # HTTP status
+        f"status={cap['status']}",
+        f"status_ok={status['status'] == 0}",
+        f"latency_ms={cap['response_time'] * 1000 if cap['response_time'] else None}",
+
+        # Content-Type
+        f"content_type={cap['content_type']}",
+        f"content_type_ok={ct['status'] == 0}",
+
+        # HTML checks
+        f"text_present={html['status'] == 0}",
+        f"regex_match={html['status'] == 0}",
+
+        # Backend
+        f"backend={backend['detected']}",
+        f"backend_ok={backend['status'] == 0}",
+
+        # Size
+        f"size={len(cap['body']) if cap['body'] else None}",
+        f"size_ok={ct['status'] == 0}",
+
+        # Redirects
+        f"redirects={cap['redirects']}",
+        f"redirect_ok={status['status'] == 0}",
+
+        # Security
+        f"https_used={not cap['tls_error']}",
+        f"hsts={'strict-transport-security' in (cap['headers'] or {})}",
+
+        # Errors
+        f"errors={sum(1 for section in ['backend','content_type_check','html_check','status_check'] if result[section]['status'] != 0)}",
+    ]
+
+    # ------------------------------------------------------------
+    # Perfdata (flattened, operator-grade)
+    # ------------------------------------------------------------
+    if perf:
+        parts.extend([
+            f"perf_latency={perf.get('latency')}",
+            f"perf_size={perf.get('size')}",
+            f"perf_warn_rt={perf.get('warning_rt')}",
+            f"perf_crit_rt={perf.get('critical_rt')}",
+            f"perf_warn_size={perf.get('warning_size')}",
+            f"perf_crit_size={perf.get('critical_size')}",
+        ])
+
+    return "[HTML] " + " ".join(parts)
+def log_summary(state, failures):
+    return (
+        f"[RESULT] state={state}"
+        f" failed={len(failures)}"
+        f" failures={failures}"
+    )
+def end_banner():
+    return "[END]"
+
 # -----------------------------
 # Main Function
 # -----------------------------
 def main():
     args = build_parser()
+    # Base metadata (script name, mode, log_dir)
+    meta = build_html_meta(args)
+
     # ------------------------------------------------------------
     # Hostname validation (suite-wide deterministic rule)
     # ------------------------------------------------------------
     rc = validate_host_basic(args.host)
     if not rc["ok"]:
-        print(f"UNKNOWN - {rc['error']}")
-        sys.exit(UNKNOWN)
+        early_exit(meta, f"UNKNOWN - {rc['error']}", UNKNOWN)
 
 
     # Track whether the operator explicitly set -p/--port
@@ -1066,6 +1332,39 @@ def main():
         html_message
     )
 
+    # -------------------------------------------------
+    # Add perfdata to metadata (for logging only)
+    # -------------------------------------------------
+    capture = result.get("capture", {})
+    rt = capture.get("response_time") or 0
+    body = capture.get("body") or ""
+    size = len(body.encode("utf-8"))
+
+    perf = {
+        "latency": rt,
+        "size": size,
+        "warning_rt": args.warning_rt,
+        "critical_rt": args.critical_rt,
+        "warning_size": args.warning_size,
+        "critical_size": args.critical_size,
+        "string": build_perfdata(args, capture)
+    }
+    # Add to result (for JSON)
+    result["perfdata"] = perf
+
+    # Add to meta (for logging)
+    meta["perfdata"] = perf
+
+    # -------------------------------------------------
+    # Logging if not Nagios mode and log-dir specified
+    # -------------------------------------------------
+    if meta.get("mode") != "nagios" and meta.get("log_dir"):
+        rotate_log_if_needed(meta)
+        write_log(meta, start_banner(meta))
+        write_log(meta, log_html_result(meta, result))
+        write_log(meta, log_summary(result["overall"]["status"], []))
+        write_log(meta, end_banner())
+    
     # JSON mode
     if args.json:
         print(json.dumps(result, indent=2))
@@ -1077,7 +1376,8 @@ def main():
         sys.exit(result["overall"]["status"])
 
     # Default: Nagios single-line output
-    print(single_line(result))
+    if not args.quiet:
+        print(single_line(result, args))
     sys.exit(result["overall"]["status"])
 
 if __name__ == "__main__":
