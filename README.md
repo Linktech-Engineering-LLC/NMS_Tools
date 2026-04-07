@@ -49,14 +49,40 @@ A deterministic HTTP/HTTPS inspection and content‑validation tool with:
 
 ---
 
+### `check_interfaces.py`
+
+A deterministic network interface inspection and monitoring tool with:
+
+- JSON, verbose, and Nagios output modes  
+- Interface state, speed, duplex, and attribute inspection  
+- Link‑state and speed validation  
+- Deterministic JSON schema for automation  
+- Clean, noise‑free CLI parser and help output  
+
+---
+
+### `check_weather.py`
+
+A deterministic weather inspection and threshold‑evaluation tool with:
+
+- JSON, verbose, and Nagios output modes  
+- ZIP, city/state, and lat/lon resolver pipeline  
+- Open‑Meteo forecast and geocoding integration  
+- Temperature, wind, gust, precipitation, and cloud‑cover extraction  
+- Threshold‑based severity evaluation  
+- Deterministic JSON schema for automation  
+- Clean, noise‑free CLI parser and help output  
+
+---
+
 ## Project Status Overview
 
 | Project | Language | Status | Description |
 |--------|----------|--------|-------------|
 | **check_cert.py** | Python | 🟢 Stable | TLS certificate inspection, metadata extraction, and policy enforcement |
 | **check_html.py** | Python | 🟢 Stable | HTTP/HTTPS inspection, content validation, and backend fingerprinting |
-| **check_interfaces.py** | Python | 🟡 Under Construction | Network interface state, speed, and attribute monitoring |
-
+| **check_interfaces.py** | Python | 🟢 Stable | Network interface state, speed, duplex, and attribute monitoring |
+| **check_weather.py** | Python | 🟢 Stable | Weather inspection, resolver pipeline, and threshold evaluation |
 
 ## Documentation
 

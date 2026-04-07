@@ -109,7 +109,7 @@ def build_parser() -> argparse.Namespace:
     # Core options
     core = parser.add_argument_group("Core Options")
     core.add_argument(
-        "--location",
+        "-l", "--location",
         required=True,
         help='Location to check. Accepts ZIP code (67576), city name ("St John, KS"), '
              'or latitude,longitude (38.00,-98.76).',
@@ -120,7 +120,7 @@ def build_parser() -> argparse.Namespace:
         help="Country code for location resolution",
     )
     core.add_argument(
-        "--units",
+        "-u", "--units",
         choices=["metric", "imperial"],
         default="metric",
         help="Unit system: metric (°C, kph) or imperial (°F, mph).",
@@ -221,12 +221,12 @@ def build_parser() -> argparse.Namespace:
     weather.add_argument(
         "--warning-cloud",
         type=float,
-        help="Warning threshold for cloud cover (%)",
+        help="Warning threshold for cloud cover (%%)",
     )
     weather.add_argument(
         "--critical-cloud",
         type=float,
-        help="Critical threshold for cloud cover (%)",
+        help="Critical threshold for cloud cover (%%)",
     )
 
     # Provider + debug
