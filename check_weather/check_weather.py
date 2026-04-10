@@ -10,13 +10,18 @@ Description: Deterministic weather checker with ZIP/city/lat-long support.
 """
 
 import argparse
+import hashlib
 import json
+import os
+import pwd
 import requests
 import sys
 import time
-from typing import Any, Dict, Optional, Tuple
 import urllib.parse
 import urllib.request
+from typing import Any, Dict, Optional, Tuple
+from pathlib import Path
+from datetime import datetime, timedelta
 
 # ---------------------------------------------------------------------------
 # Nagios Status Codes
@@ -72,7 +77,68 @@ WEATHER_CODES = {
     96: "Thunderstorm with hail",
     99: "Thunderstorm with heavy hail",
 }
+class Color:
+    RESET = "\x1b[0m"
+    RED = "\x1b[31m"
+    YELLOW = "\x1b[33m"
+    GREEN = "\x1b[32m"
+    BLUE = "\x1b[34m"
+    CYAN = "\x1b[36m"
+    GRAY = "\x1b[90m"
+def colorize(text: str, color: str, enabled: bool) -> str:
+    if not enabled:
+        return text
+    return f"{color}{text}{Color.RESET}"
+def get_cache_dir():
+    # 1. Respect XDG_CACHE_HOME if set
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    if xdg:
+        return Path(xdg) / "nms_tools" / "weather"
 
+    # 2. Detect Nagios user
+    try:
+        user = pwd.getpwuid(os.geteuid()).pw_name
+    except Exception:
+        user = None
+
+    if user in ("nagios", "nrpe"):
+        return Path("/var/tmp/nms_tools/weather")
+
+    # 3. Normal user fallback
+    return Path.home() / ".cache" / "nms_tools" / "weather"
+CACHE_DIR = get_cache_dir()
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+CACHE_TTL = timedelta(minutes=15)
+def cache_path(key: str) -> Path:
+    digest = hashlib.sha256(key.encode()).hexdigest()
+    return CACHE_DIR / f"{digest}.json"
+def load_cache(key: str):
+    path = cache_path(key)
+    if not path.exists():
+        return None, None
+
+    try:
+        with open(path, "r") as f:
+            cached = json.load(f)
+        ts = datetime.strptime(cached["timestamp"], "%Y-%m-%dT%H:%M:%S.%f")
+        # TTL check
+        if datetime.now() - ts > CACHE_TTL:
+            return None, None
+
+        return cached["data"], ts
+
+    except Exception as e:
+        print("CACHE ERROR:", e)
+        return None, None
+def save_cache(key: str, data: dict):
+    path = cache_path(key)
+    payload = {
+        "timestamp": datetime.now().isoformat(),
+        "data": data
+    }
+    with open(path, "w") as f:
+        json.dump(payload, f)
+    return True
 # -----------------------------
 # Custom Formatter
 # -----------------------------
@@ -242,6 +308,14 @@ def build_parser() -> argparse.Namespace:
         action="store_true",
         help="Show resolved location details and provider URL for debugging",
     )
+    debug.add_argument("--show-codes", action="store_true",
+                        help="Show numeric condition codes in verbose mode")
+
+    debug.add_argument("--no-color", action="store_true",
+                        help="Disable ANSI color output in verbose mode")
+
+    debug.add_argument("--force_cache", action="store_true",
+                        help="Force reading from cache even if API is available")
 
     args = parser.parse_args()
     return args
@@ -404,8 +478,13 @@ def fetch_weather_open_meteo(lat: float, lon: float, timeout: int) -> Tuple[Dict
         "current_weather": "true",
         "hourly": ",".join([
             "temperature_2m",
+            "apparent_temperature",
+            "dewpoint_2m",
             "relativehumidity_2m",
+            "pressure_msl",
+            "visibility",
             "precipitation",
+            "precipitation_probability",
             "cloudcover",
             "windspeed_10m",
             "windgusts_10m",
@@ -448,6 +527,12 @@ def fetch_weather_open_meteo(lat: float, lon: float, timeout: int) -> Tuple[Dict
         "precip_mm": h("precipitation"),
         "cloudcover": h("cloudcover"),
         "condition": h("weathercode"),
+        "apparent_temperature_c": h("apparent_temperature"),
+        "dewpoint_c": h("dewpoint_2m"),
+        "r_humidity_2m": h("relativeHumidity_2m"),
+        "visibility_m": h("visibility"),
+        "pressure_msl": h("pressure_msl"),
+        "precipitation_probability": h("precipitation_probability"),
     }
     return result, url
 
@@ -570,6 +655,18 @@ def evaluate_weather(data: Dict[str, Any], args: argparse.Namespace) -> Tuple[in
 # ---------------------------------------------------------------------------
 # Output Helpers
 # ---------------------------------------------------------------------------
+def format_age(seconds: float) -> str:
+    if seconds is None:
+        return "unknown"
+    m, s = divmod(int(seconds), 60)
+    h, m = divmod(m, 60)
+    if h > 0:
+        return f"{h}h {m}m {s}s"
+    elif m > 0:
+        return f"{m}m {s}s"
+    else:
+        return f"{s}s"
+
 def build_normal_message(data: Dict[str, Any], args: argparse.Namespace) -> str:
     if args.units == "imperial":
         t = data.get("temperature_f")
@@ -583,12 +680,12 @@ def output_and_exit(status: int, payload: Dict[str, Any], args: argparse.Namespa
     if args.json:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     elif args.verbose:
-        verbose_output(payload)
+        verbose_output(payload, args)
     elif not args.quiet:
         perf = build_perfdata(payload["data"], args)
         print(f"{payload['status']}: {payload['message']} | {perf}")
     sys.exit(status)
-def verbose_output(payload: Dict[str, Any]) -> None:
+def verbose_output(payload: Dict[str, Any], args: argparse.Namespace) -> None:
     d = payload["data"]
     print(f"Status: {payload['status']}")
     print(f"Message: {payload['message']}")
@@ -633,29 +730,68 @@ def verbose_output(payload: Dict[str, Any]) -> None:
             print(f"Precipitation: {pi:.2f} in")
     if "cloudcover" in d and d["cloudcover"] is not None:
         print(f"Cloud Cover: {d['cloudcover']:.2f}%")
-    print(f"Condition Code: {d.get('condition')}")
+    condition = d.get("condition_text", "Unknown")
+    code = d.get("condition")
+
+    # choose color based on condition
+    if "rain" in condition.lower() or "drizzle" in condition.lower():
+        cond_color = Color.YELLOW
+    elif "storm" in condition.lower():
+        cond_color = Color.RED
+    elif "clear" in condition.lower():
+        cond_color = Color.GREEN
+    elif "cloud" in condition.lower():
+        cond_color = Color.GRAY
+    else:
+        cond_color = Color.CYAN
+
+    cond_display = condition
+    if args.show_codes:
+        cond_display = f"{condition} ({code})"
+
+    print("Condition:",
+        colorize(cond_display, cond_color, not args.no_color))
+    data = payload.get("data", {})
+    source = data.get("source")
+    cache_age = data.get("cache_age")
+    print(f"Source: {source}")
+    if source in [ "cache", "forced cache" ]:
+        print(f"Source: Cache (age: {cache_age})")
     print(f"Runtime: {payload['runtime_ms']} ms")
+
 def convert_units(data: Dict[str, Any], units: str) -> Dict[str, Any]:
     out = dict(data)
 
-    if units == "imperial":
-        # Temperature C → F
-        if out.get("temperature_c") is not None:
-            out["temperature_f"] = round(out["temperature_c"] * 9/5 + 32, 2)
+    # Temperature C → F
+    if out.get("temperature_c") is not None:
+        out["temperature_f"] = round(out["temperature_c"] * 9/5 + 32, 2)
 
-        # Wind kph → mph
-        if out.get("wind_kph") is not None:
-            out["wind_mph"] = round(out["wind_kph"] * 0.621371, 2)
+    if out.get("apparent_temperature_c") is not None:
+        out["apparent_temperature_f"] = round(out["apparent_temperature_c"] * 9/5 + 32, 2)
 
-        # Gust kph → mph
-        if out.get("wind_gust_kph") is not None:
-            out["wind_gust_mph"] = round(out["wind_gust_kph"] * 0.621371, 2)
+    if out.get("dewpoint_c") is not None:
+        out["dewpoint_f"] = round(out["dewpoint_c"] * 9/5 + 32, 2)
 
-        # Precip mm → inches
-        if out.get("precip_mm") is not None:
-            out["precip_in"] = round(out["precip_mm"] / 25.4, 2)
+    # Wind kph → mph
+    if out.get("wind_kph") is not None:
+        out["wind_mph"] = round(out["wind_kph"] * 0.621371, 2)
 
-    # Do NOT overwrite condition here; keep it numeric
+    if out.get("wind_gust_kph") is not None:
+        out["wind_gust_mph"] = round(out["wind_gust_kph"] * 0.621371, 2)
+
+    # Precip mm → inches
+    if out.get("precip_mm") is not None:
+        out["precip_in"] = round(out["precip_mm"] / 25.4, 2)
+
+    # Visibility meters → miles
+    if out.get("visibility_m") is not None:
+        out["visibility_km"] = round(out["visibility_m"] / 1000, 2)
+        out["visibility_mi"] = round(out["visibility_m"] / 1609.344, 2)
+
+    # Pressure hPa → inHg
+    if out.get("pressure_msl") is not None:
+        out["pressure_inhg"] = round(out["pressure_msl"] * 0.0295299830714, 3)
+
     return out
 def format_resolved_name(loc):
     city = loc.get("city")
@@ -727,40 +863,78 @@ def build_perfdata(data: Dict[str, Any], args: argparse.Namespace) -> str:
 # -----------------------------
 def main() -> None:
     args = build_parser()
-
     if args.version:
         print(f"check_weather.py using Python {sys.version.split()[0]}")
         sys.exit(0)
-
     start = time.time()
+    mode = "json" if args.json else "verbose" if args.verbose else "quiet" if args.quiet else "nagios" 
+    loc = resolve_location(args)
+    lat = loc.get("latitude", 0)
+    lon = loc.get("longitude", 0)
+    # Build cache key from location + units + provider
+    cache_id = f"{lat},{lon}:{args.units}:{args.provider}"
+    cache_written = False
+    cached, cached_ts = load_cache(cache_id)
+    if cached is not None:
+        cache_age = (datetime.now() - cached_ts).total_seconds() if cached_ts is not None else 0
+    else:
+        cache_age = None
+    live_data = None
+    source = "live"
+    if args.force_cache:
+        cached_data, cached_ts = load_cache(cache_id)
+        if cached_data is None:
+            raise RuntimeError("Forced cache read but no cache exists")
+        data = cached_data
+        source = "cache-forced"
+    else:
+            # normal API → cache → fallback logic
+        try:
+            live_data, url = fetch_weather(
+                lat, lon,
+                args.timeout,
+                args.provider,
+            )
+        except Exception:
+            live_data = None
 
-    try:
-        loc = resolve_location(args)
-        data_raw, url = fetch_weather(
-            loc.get("latitude",0),
-            loc.get("longitude",0),
-            args.timeout,
-            args.provider,
-        )
-        data = convert_units(data_raw, args.units)
+    if live_data:
+        data = convert_units(live_data, args.units)
+        cache_written = save_cache(cache_id, data)
+    else:
+        if cached:
+            data = convert_units(cached, args.units)
+            source = "forced cache" if args.force_cache else "cache"
+        else:
+            # No API + no cache → fail appropriately
+            if mode == "nagios":
+                output_and_exit(STATUS_CRITICAL, {
+                    "status": "CRITICAL",
+                    "message": "Weather API unreachable and no cached data",
+                    "location": args.location,
+                    "runtime_ms": round((time.time() - start) * 1000, 2)
+                }, args)
+            else:
+                raise RuntimeError("Weather API unreachable and no cached data")
+    data["source"] = "Live API" if source == "live" else source
+    data["cache_written"] = cache_written
+    if cached_ts is not None:
+        cached_age = (datetime.now() - cached_ts).total_seconds()
+        data["cache_age"] = format_age(cached_age)
+        print(cached_ts,data["cache_age"])
+    # Add human-readable condition text
+    code = data.get("condition")
+    if isinstance(code, int):
+        data["condition_text"] = WEATHER_CODES.get(code, "Unknown")
+    else:
+        data["condition_text"] = "Unknown"
 
-        if args.show_location_details and not args.quiet:
-            print(f"Resolved location: {format_resolved_name(loc)}")
-            print(f"Latitude: {loc.get('latitude')}, Longitude: {loc.get('longitude')}")
-            print(f"Provider URL: {url}")
+    if args.show_location_details and not args.quiet:
+        print(f"Resolved location: {format_resolved_name(loc)}")
+        print(f"Latitude: {loc.get('latitude')}, Longitude: {loc.get('longitude')}")
+        print(f"Provider URL: {url}")
 
-        status, message = evaluate_weather(data, args)
-
-    except Exception as e:
-        runtime = round((time.time() - start) * 1000, 2)
-        payload = {
-            "status": "UNKNOWN",
-            "message": str(e),
-            "location": args.location,
-            "data": {},
-            "runtime_ms": runtime,
-        }
-        output_and_exit(STATUS_UNKNOWN, payload, args)
+    status, message = evaluate_weather(data, args)
 
     runtime = round((time.time() - start) * 1000, 2)
     payload = {

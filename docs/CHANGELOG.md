@@ -34,3 +34,24 @@ The format follows semantic versioning:
 - Stable CLI contract  
 - Installation, Operation, and Usage documentation  
 
+## [2.1.0] - 2026-04-10
+### Added
+- Offline cache handling:
+  - Support for `--force_cache` to read cached weather data without API access
+  - Python 3.6–compatible timestamp parsing using `strptime`
+  - Deterministic cache age calculation and reporting across all output modes
+- Additional weather parameters exposed in verbose, JSON, and Nagios output:
+  - Apparent temperature (°C/°F)
+  - Dew point (°C/°F)
+  - Visibility (km/mi)
+  - Pressure (msl / inHg)
+  - Precipitation probability
+  - Condition text mapping
+
+### Improved
+- Unified cache source reporting (`forced cache`, `cache`, `api`) across verbose, JSON, and Nagios modes
+- Ensured JSON output includes `cache_age`, `cache_written`, and `source` fields consistently
+
+### Notes
+- This release prepares the tool for upcoming cache‑control flags (`--ignore-ttl`, `--ignore-cache`, `--cache-info`, etc.) tracked in the NMS_Tools checklist.
+- The `--force_cache` flag allows users to test cache handling and output formatting without needing API access, making it easier to verify caching behavior and debug issues related to cached data.
