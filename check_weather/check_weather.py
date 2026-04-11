@@ -4,7 +4,7 @@ Package: NMS_Tools
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-07
-Last Modified: 2026-04-07
+Last Modified: 2026-04-11
 File: check_weather.py
 Description: Deterministic weather checker with ZIP/city/lat-long support.
 """
@@ -15,13 +15,16 @@ import json
 import os
 import pwd
 import requests
+import shutil
 import sys
 import time
 import urllib.parse
 import urllib.request
+import zipfile
 from typing import Any, Dict, Optional, Tuple
 from pathlib import Path
 from datetime import datetime, timedelta
+from enum import IntEnum, auto
 
 # ---------------------------------------------------------------------------
 # Nagios Status Codes
@@ -32,6 +35,7 @@ STATUS_CRITICAL = 2
 STATUS_UNKNOWN = 3
 # Other Global Constants
 SCRIPT_VERSION = "1.0.0"
+DEFAULT_PROVIDER = "open-meteo"
 US_STATES = {
     "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
     "CA": "California", "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware",
@@ -77,6 +81,101 @@ WEATHER_CODES = {
     96: "Thunderstorm with hail",
     99: "Thunderstorm with heavy hail",
 }
+# Flag Classes
+class FlagNames(IntEnum):
+    VERBOSE = auto()
+    JSON = auto()
+    QUIET = auto()
+    VERSION = auto()
+
+    INCLUDE_GUSTS = auto()
+    INCLUDE_PRECIP = auto()
+    INCLUDE_CLOUDS = auto()
+
+    IGNORE_CACHE = auto()
+    IGNORE_TTL = auto()
+    CACHE_INFO = auto()
+    FORCE_CACHE = auto()
+
+    SHOW_LOCATION_DETAILS = auto()
+    SHOW_CODES = auto()
+    NO_COLOR = auto()
+
+    # Provider override is not a boolean flag, so no bit here.
+class Flags:
+    """
+    Operator-grade flag engine for check_weather.
+    Backed by a deterministic bitmask.
+    """
+
+    def __init__(self):
+        self._mask = 0
+
+    # -----------------------------
+    # Core bit operations
+    # -----------------------------
+    def set(self, flag: FlagNames, value: bool = True):
+        if value:
+            self._mask |= (1 << flag.value)
+        else:
+            self._mask &= ~(1 << flag.value)
+
+    def get(self, flag: FlagNames) -> bool:
+        return bool(self._mask & (1 << flag.value))
+
+    # -----------------------------
+    # Convenience accessors
+    # -----------------------------
+    def __getitem__(self, flag: FlagNames) -> bool:
+        return self.get(flag)
+
+    def __setitem__(self, flag: FlagNames, value: bool):
+        self.set(flag, value)
+
+    # -----------------------------
+    # Introspection
+    # -----------------------------
+    def active_names(self):
+        return [
+            name.name
+            for name in FlagNames
+            if self.get(name)
+        ]
+
+    def to_hex(self):
+        return f"0x{self._mask:08X}"
+
+    # -----------------------------
+    # Build from argparse args
+    # -----------------------------
+    @classmethod
+    def from_args(cls, args):
+        f = cls()
+
+        # Output modes
+        f[FlagNames.VERBOSE] = args.verbose
+        f[FlagNames.JSON] = args.json
+        f[FlagNames.QUIET] = args.quiet
+        f[FlagNames.VERSION] = args.version
+
+        # Inclusion flags
+        f[FlagNames.INCLUDE_GUSTS] = args.include_gusts
+        f[FlagNames.INCLUDE_PRECIP] = args.include_precip
+        f[FlagNames.INCLUDE_CLOUDS] = args.include_clouds
+
+        # Cache flags
+        f[FlagNames.IGNORE_CACHE] = args.ignore_cache
+        f[FlagNames.IGNORE_TTL] = args.ignore_ttl
+        f[FlagNames.CACHE_INFO] = args.cache_info
+        f[FlagNames.FORCE_CACHE] = args.force_cache
+
+        # Debug flags
+        f[FlagNames.SHOW_LOCATION_DETAILS] = args.show_location_details
+        f[FlagNames.SHOW_CODES] = args.show_codes
+        f[FlagNames.NO_COLOR] = args.no_color
+
+        return f
+# Color Class with helper
 class Color:
     RESET = "\x1b[0m"
     RED = "\x1b[31m"
@@ -89,6 +188,7 @@ def colorize(text: str, color: str, enabled: bool) -> str:
     if not enabled:
         return text
     return f"{color}{text}{Color.RESET}"
+# Cache Constants and Functions
 def get_cache_dir():
     # 1. Respect XDG_CACHE_HOME if set
     xdg = os.environ.get("XDG_CACHE_HOME")
@@ -106,9 +206,6 @@ def get_cache_dir():
 
     # 3. Normal user fallback
     return Path.home() / ".cache" / "nms_tools" / "weather"
-CACHE_DIR = get_cache_dir()
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
-CACHE_TTL = timedelta(minutes=15)
 def cache_path(key: str) -> Path:
     digest = hashlib.sha256(key.encode()).hexdigest()
     return CACHE_DIR / f"{digest}.json"
@@ -139,6 +236,9 @@ def save_cache(key: str, data: dict):
     with open(path, "w") as f:
         json.dump(payload, f)
     return True
+CACHE_DIR = get_cache_dir()
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+CACHE_TTL = timedelta(minutes=15)
 # -----------------------------
 # Custom Formatter
 # -----------------------------
@@ -206,6 +306,7 @@ def build_parser() -> argparse.Namespace:
         "--log-max-mb",
         type=int,
         default=50,
+        dest="log_max_mb",
         help="Maximum log size in MB before rotation.",
     )
 
@@ -236,66 +337,98 @@ def build_parser() -> argparse.Namespace:
     weather = parser.add_argument_group("Weather Options")
     weather.add_argument(
         "--warning-temp",
+        dest="warning_temp",
         type=float,
         help="Warning threshold for temperature (°C or °F depending on --units)",
     )
     weather.add_argument(
         "--critical-temp",
+        dest="critical_temp",
         type=float,
         help="Critical threshold for temperature (°C or °F depending on --units)",
     )
     weather.add_argument(
         "--warning-wind",
+        dest="warning_wind",
         type=float,
         help="Warning threshold for wind speed (kph or mph depending on --units)",
     )
     weather.add_argument(
         "--critical-wind",
+        dest="critical_wind",
         type=float,
         help="Critical threshold for wind speed (kph or mph depending on --units)",
     )
     weather.add_argument(
         "--warning-gust",
+        dest="warning_gust",
         type=float,
         help="Warning threshold for wind gust speed (kph or mph depending on --units)",
     )
     weather.add_argument(
         "--critical-gust",
+        dest="critical_gust",
         type=float,
         help="Critical threshold for wind gust speed (kph or mph depending on --units)",
     )
     weather.add_argument(
         "--warning-humidity",
+        dest="warning_humidity",
         type=float,
         help="Warning threshold for humidity (%%)",
     )
     weather.add_argument(
         "--critical-humidity",
+        dest="critical_humidity",
         type=float,
         help="Critical threshold for humidity (%%)",
     )
     weather.add_argument(
         "--warning-precip",
+        dest="warning_precip",
         type=float,
         help="Warning threshold for precipitation (mm or inches depending on --units)",
     )
     weather.add_argument(
         "--critical-precip",
+        dest="critical_precip",
         type=float,
         help="Critical threshold for precipitation (mm or inches depending on --units)",
     )
     weather.add_argument(
         "--warning-cloud",
+        dest="warning_cloud",
         type=float,
         help="Warning threshold for cloud cover (%%)",
     )
     weather.add_argument(
         "--critical-cloud",
+        dest="critical_cloud",
         type=float,
         help="Critical threshold for cloud cover (%%)",
     )
+    # Inclusion Options
+    include = parser.add_argument_group("Inclusion Options")
+    include.add_argument(
+        "--include-gusts",
+        dest="include_gusts",
+        action="store_true",
+        help="Include wind gusts in output and perfdata even if no thresholds are set."
+    )
+    include.add_argument(
+        "--include-precip",
+        dest="include_precip",
+        action="store_true",
+        help="Include precipitation fields in output and perfdata."
+    )
+    include.add_argument(
+        "--include-clouds",
+        dest="include_clouds",
+        action="store_true",
+        help="Include cloud cover fields in output and perfdata."
+    )
 
-    # Provider + debug
+    # Debug
     debug = parser.add_argument_group("Debug Options")
     debug.add_argument(
         "--provider",
@@ -306,16 +439,21 @@ def build_parser() -> argparse.Namespace:
     debug.add_argument(
         "--show-location-details",
         action="store_true",
+        dest="show_location_details",
         help="Show resolved location details and provider URL for debugging",
     )
     debug.add_argument("--show-codes", action="store_true",
                         help="Show numeric condition codes in verbose mode")
-
     debug.add_argument("--no-color", action="store_true",
                         help="Disable ANSI color output in verbose mode")
-
-    debug.add_argument("--force_cache", action="store_true",
+    debug.add_argument("--force-cache", dest="force_cache", action="store_true",
                         help="Force reading from cache even if API is available")
+    debug.add_argument("--ignore-cache", action="store_true", dest="ignore_cache",
+                        help="ignore reading from cache even if API is unavailable")
+    debug.add_argument("--ignore-ttl", action="store_true", dest="ignore_ttl",
+                        help="ignore the TTL reading in the cache even if API is available")
+    debug.add_argument("--cache-info", action="store_true", dest="cache_info",
+                        help="Display the cache info")
 
     args = parser.parse_args()
     return args
@@ -370,7 +508,7 @@ def resolve_location(args):
         if r.status_code == 200:
             z = r.json()
             place = z["places"][0]
-            return make_location(
+            rc = make_location(
                 provider="zippopotam.us",
                 lat=float(place["latitude"]),
                 lon=float(place["longitude"]),
@@ -378,6 +516,8 @@ def resolve_location(args):
                 state=place.get("state"),
                 zip_code=original
             )
+            rc["url"] = zip_url
+            return rc
         # ZIP failed → fall through to city lookup
 
     # ------------------------------------------------------------
@@ -412,7 +552,7 @@ def resolve_location(args):
             ]
             if filtered:
                 entry = filtered[0]
-                return make_location(
+                rc = make_location(
                     provider="open-meteo",
                     lat=entry["latitude"],
                     lon=entry["longitude"],
@@ -420,6 +560,8 @@ def resolve_location(args):
                     state=entry.get("admin1"),
                     zip_code=None
                 )
+                rc["url"] = geo_url
+                return rc
 
     # ------------------------------------------------------------
     # 2. Second try: country-filtered search
@@ -436,7 +578,7 @@ def resolve_location(args):
 
         if results:
             entry = results[0]
-            return make_location(
+            rc = make_location(
                 provider="open-meteo",
                 lat=entry["latitude"],
                 lon=entry["longitude"],
@@ -444,6 +586,8 @@ def resolve_location(args):
                 state=entry.get("admin1"),
                 zip_code=None
             )
+            rc["url"] = geo_url
+            return rc
 
     # ------------------------------------------------------------
     # Final fallback: Zippopotam.us city lookup (global)
@@ -454,7 +598,7 @@ def resolve_location(args):
     if r.status_code == 200:
         z = r.json()
         place = z["places"][0]
-        return make_location(
+        rc = make_location(
             provider="zippopotam.us",
             lat=float(place["latitude"]),
             lon=float(place["longitude"]),
@@ -462,7 +606,7 @@ def resolve_location(args):
             state=place.get("state"),
             zip_code=z.get("post code")
         )
-
+        rc["url"] = city_url
     # ------------------------------------------------------------
     # Nothing worked
     # ------------------------------------------------------------
@@ -535,12 +679,10 @@ def fetch_weather_open_meteo(lat: float, lon: float, timeout: int) -> Tuple[Dict
         "precipitation_probability": h("precipitation_probability"),
     }
     return result, url
-
 def fetch_weather(lat: float, lon: float, timeout: int, provider: str) -> Tuple[Dict[str, Any], str]:
     if provider == "open-meteo":
         return fetch_weather_open_meteo(lat, lon, timeout)
     raise ValueError(f"Unsupported provider: {provider}")
-
 # ---------------------------------------------------------------------------
 # Evaluation Logic
 # ---------------------------------------------------------------------------
@@ -666,7 +808,6 @@ def format_age(seconds: float) -> str:
         return f"{m}m {s}s"
     else:
         return f"{s}s"
-
 def build_normal_message(data: Dict[str, Any], args: argparse.Namespace) -> str:
     if args.units == "imperial":
         t = data.get("temperature_f")
@@ -676,39 +817,74 @@ def build_normal_message(data: Dict[str, Any], args: argparse.Namespace) -> str:
         t = data.get("temperature_c")
         w = data.get("wind_kph")
         return f"Weather normal: {t:.2f}°C, {w:.2f} kph"
-def output_and_exit(status: int, payload: Dict[str, Any], args: argparse.Namespace) -> None:
-    if args.json:
+def output_and_exit(status: int, payload: Dict[str, Any], args: argparse.Namespace, flags: Flags ) -> None:
+    if flags[FlagNames.JSON]:
         print(json.dumps(payload, indent=2, ensure_ascii=False))
-    elif args.verbose:
-        verbose_output(payload, args)
-    elif not args.quiet:
-        perf = build_perfdata(payload["data"], args)
+    elif flags[FlagNames.VERBOSE]:
+        verbose_output(payload, args, flags)
+    elif not flags[FlagNames.QUIET]:
+        perf = build_perfdata(payload["data"], args, flags)
         print(f"{payload['status']}: {payload['message']} | {perf}")
     sys.exit(status)
-def verbose_output(payload: Dict[str, Any], args: argparse.Namespace) -> None:
+def verbose_output(payload: Dict[str, Any], args: argparse.Namespace, flags: Flags) -> None:
     d = payload["data"]
+
+    # ---------------------------------------------------------
+    # LOCATION DETAILS (debug flag)
+    # ---------------------------------------------------------
+    print("Location Resolution Details:")
+    print(f"  Input: {payload['resolved_location']['input']}")
+
+    print(f"  Location Provider: {payload['resolved_location']['location_provider']}")
+    print(f"  Location Provider URL: {payload['resolved_location']['location_provider_url']}")
+
+    print(f"  Weather Provider: {payload['resolved_location']['weather_provider']}")
+    print(f"  Weather Provider URL: {payload['resolved_location']['weather_provider_url']}")
+
+    print(f"  Resolved Name: {payload['resolved_location']['city']}, "
+        f"{payload['resolved_location']['state']}, "
+        f"{payload['resolved_location']['country']}")
+
+    print(f"  Latitude: {payload['resolved_location']['latitude']}")
+    print(f"  Longitude: {payload['resolved_location']['longitude']}")
+
+    print(f"  Weather API URL: {payload['resolved_location']['weather_url']}")
+
+    # ---------------------------------------------------------
+    # CORE STATUS BLOCK
+    # ---------------------------------------------------------
     print(f"Status: {payload['status']}")
     print(f"Message: {payload['message']}")
     print(f"Location: {payload['location']}")
-    if "temperature_f" in d or "temperature_c" in d:
-        tf = d.get("temperature_f")
-        tc = d.get("temperature_c")
-        if tf is not None and tc is not None:
-            print(f"Temperature: {tf:.2f}°F ({tc:.2f}°C)")
-        elif tf is not None:
-            print(f"Temperature: {tf:.2f}°F")
-        elif tc is not None:
-            print(f"Temperature: {tc:.2f}°C")
-    if "wind_mph" in d or "wind_kph" in d:
-        wm = d.get("wind_mph")
-        wk = d.get("wind_kph")
-        if wm is not None and wk is not None:
-            print(f"Wind Speed: {wm:.2f} mph ({wk:.2f} kph)")
-        elif wm is not None:
-            print(f"Wind Speed: {wm:.2f} mph")
-        elif wk is not None:
-            print(f"Wind Speed: {wk:.2f} kph")
-    if "wind_gust_mph" in d or "wind_gust_kph" in d:
+
+    # ---------------------------------------------------------
+    # TEMPERATURE
+    # ---------------------------------------------------------
+    tf = d.get("temperature_f")
+    tc = d.get("temperature_c")
+    if tf is not None and tc is not None:
+        print(f"Temperature: {tf:.2f}°F ({tc:.2f}°C)")
+    elif tf is not None:
+        print(f"Temperature: {tf:.2f}°F")
+    elif tc is not None:
+        print(f"Temperature: {tc:.2f}°C")
+
+    # ---------------------------------------------------------
+    # WIND SPEED
+    # ---------------------------------------------------------
+    wm = d.get("wind_mph")
+    wk = d.get("wind_kph")
+    if wm is not None and wk is not None:
+        print(f"Wind Speed: {wm:.2f} mph ({wk:.2f} kph)")
+    elif wm is not None:
+        print(f"Wind Speed: {wm:.2f} mph")
+    elif wk is not None:
+        print(f"Wind Speed: {wk:.2f} kph")
+
+    # ---------------------------------------------------------
+    # WIND GUSTS (optional)
+    # ---------------------------------------------------------
+    if flags[FlagNames.INCLUDE_GUSTS]:
         gm = d.get("wind_gust_mph")
         gk = d.get("wind_gust_kph")
         if gm is not None and gk is not None:
@@ -717,9 +893,17 @@ def verbose_output(payload: Dict[str, Any], args: argparse.Namespace) -> None:
             print(f"Wind Gust: {gm:.2f} mph")
         elif gk is not None:
             print(f"Wind Gust: {gk:.2f} kph")
-    if "humidity" in d and d["humidity"] is not None:
+
+    # ---------------------------------------------------------
+    # HUMIDITY (always included)
+    # ---------------------------------------------------------
+    if d.get("humidity") is not None:
         print(f"Humidity: {d['humidity']:.2f}%")
-    if "precip_mm" in d or "precip_in" in d:
+
+    # ---------------------------------------------------------
+    # PRECIPITATION (optional)
+    # ---------------------------------------------------------
+    if flags[FlagNames.INCLUDE_PRECIP]:
         pm = d.get("precip_mm")
         pi = d.get("precip_in")
         if pm is not None and pi is not None:
@@ -728,37 +912,55 @@ def verbose_output(payload: Dict[str, Any], args: argparse.Namespace) -> None:
             print(f"Precipitation: {pm:.2f} mm")
         elif pi is not None:
             print(f"Precipitation: {pi:.2f} in")
-    if "cloudcover" in d and d["cloudcover"] is not None:
-        print(f"Cloud Cover: {d['cloudcover']:.2f}%")
+
+    # ---------------------------------------------------------
+    # CLOUD COVER (optional)
+    # ---------------------------------------------------------
+    if flags[FlagNames.INCLUDE_CLOUDS]:
+        cloud = d.get("cloudcover")
+        if cloud is not None:
+            print(f"Cloud Cover: {cloud:.2f}%")
+
+    # ---------------------------------------------------------
+    # CONDITION (with color + optional code)
+    # ---------------------------------------------------------
     condition = d.get("condition_text", "Unknown")
     code = d.get("condition")
 
     # choose color based on condition
-    if "rain" in condition.lower() or "drizzle" in condition.lower():
+    cond_lower = condition.lower()
+    if "rain" in cond_lower or "drizzle" in cond_lower:
         cond_color = Color.YELLOW
-    elif "storm" in condition.lower():
+    elif "storm" in cond_lower:
         cond_color = Color.RED
-    elif "clear" in condition.lower():
+    elif "clear" in cond_lower:
         cond_color = Color.GREEN
-    elif "cloud" in condition.lower():
+    elif "cloud" in cond_lower:
         cond_color = Color.GRAY
     else:
         cond_color = Color.CYAN
 
     cond_display = condition
-    if args.show_codes:
+    if flags[FlagNames.SHOW_CODES]:
         cond_display = f"{condition} ({code})"
 
     print("Condition:",
-        colorize(cond_display, cond_color, not args.no_color))
-    data = payload.get("data", {})
-    source = data.get("source")
-    cache_age = data.get("cache_age")
-    print(f"Source: {source}")
-    if source in [ "cache", "forced cache" ]:
-        print(f"Source: Cache (age: {cache_age})")
-    print(f"Runtime: {payload['runtime_ms']} ms")
+          colorize(cond_display, cond_color, not flags[FlagNames.NO_COLOR]))
 
+    # ---------------------------------------------------------
+    # SOURCE + CACHE INFO
+    # ---------------------------------------------------------
+    source = d.get("source")
+    cache_age = d.get("cache_age")
+
+    print(f"Source: {source}")
+    if source in ["cache", "forced cache"]:
+        print(f"Source: Cache (age: {cache_age})")
+
+    # ---------------------------------------------------------
+    # RUNTIME
+    # ---------------------------------------------------------
+    print(f"Runtime: {payload['runtime_ms']} ms")
 def convert_units(data: Dict[str, Any], units: str) -> Dict[str, Any]:
     out = dict(data)
 
@@ -811,9 +1013,12 @@ def strip_none(d):
 # -----------------------------
 # Perfdata
 # -----------------------------
-def build_perfdata(data: Dict[str, Any], args: argparse.Namespace) -> str:
+def build_perfdata(data: Dict[str, Any], args: argparse.Namespace, flags: Flags) -> str:
     parts = []
 
+    # -----------------------------
+    # Unit selection
+    # -----------------------------
     if args.units == "imperial":
         temp = data.get("temperature_f")
         wind = data.get("wind_mph")
@@ -826,38 +1031,156 @@ def build_perfdata(data: Dict[str, Any], args: argparse.Namespace) -> str:
         precip = data.get("precip_mm")
 
     humidity = data.get("humidity")
+    cloud = data.get("cloudcover")
 
+    # -----------------------------
+    # Temperature (always included)
+    # -----------------------------
     if temp is not None:
-        w = args.warning_temp if args.warning_temp is not None else ""
-        c = args.critical_temp if args.critical_temp is not None else ""
+        w = args.warning_temp or ""
+        c = args.critical_temp or ""
         parts.append(f"temp={temp:.2f};{w};{c}")
 
+    # -----------------------------
+    # Wind (always included)
+    # -----------------------------
     if wind is not None:
-        w = args.warning_wind if args.warning_wind is not None else ""
-        c = args.critical_wind if args.critical_wind is not None else ""
+        w = args.warning_wind or ""
+        c = args.critical_wind or ""
         parts.append(f"wind={wind:.2f};{w};{c}")
 
-    if gust is not None:
-        w = args.warning_gust if args.warning_gust is not None else ""
-        c = args.critical_gust if args.critical_gust is not None else ""
+    # -----------------------------
+    # Gusts (only if operator requested)
+    # -----------------------------
+    if flags[FlagNames.INCLUDE_GUSTS] and gust is not None:
+        w = args.warning_gust or ""
+        c = args.critical_gust or ""
         parts.append(f"gust={gust:.2f};{w};{c}")
 
+    # -----------------------------
+    # Humidity (always included)
+    # -----------------------------
     if humidity is not None:
-        w = args.warning_humidity if args.warning_humidity is not None else ""
-        c = args.critical_humidity if args.critical_humidity is not None else ""
+        w = args.warning_humidity or ""
+        c = args.critical_humidity or ""
         parts.append(f"humidity={humidity:.2f};{w};{c}")
 
-    if precip is not None:
-        w = args.warning_precip if args.warning_precip is not None else ""
-        c = args.critical_precip if args.critical_precip is not None else ""
+    # -----------------------------
+    # Precipitation (only if operator requested)
+    # -----------------------------
+    if flags[FlagNames.INCLUDE_PRECIP] and precip is not None:
+        w = args.warning_precip or ""
+        c = args.critical_precip or ""
         parts.append(f"precip={precip:.2f};{w};{c}")
-    cloud = data.get("cloudcover")
-    if cloud is not None:
-        w = args.warning_cloud if args.warning_cloud is not None else ""
-        c = args.critical_cloud if args.critical_cloud is not None else ""
+
+    # -----------------------------
+    # Cloud cover (only if operator requested)
+    # -----------------------------
+    if flags[FlagNames.INCLUDE_CLOUDS] and cloud is not None:
+        w = args.warning_cloud or ""
+        c = args.critical_cloud or ""
         parts.append(f"cloud={cloud:.2f};{w};{c}")
-    
+
     return " ".join(parts)
+# --------------------------------------
+# Logging Functions
+# --------------------------------------
+def ts():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def write_log(meta, message):
+    log_dir = meta.get("log_dir")
+
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+        logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
+        with open(logfile, "a") as f:
+            f.write(f"{ts()}; {message}\n")
+    except Exception as e:
+        if not meta.get("_log_warn_emitted"):
+            meta["_log_warn_emitted"] = True
+            warning = f"[WARN] Unable to write to log directory: {log_dir} — {e}"
+            if meta["mode"] == "verbose":
+                print(f"[WARN] {warning}")
+            if "warnings" not in meta:
+                meta["warnings"] = []
+            meta["warnings"].append(warning)
+def rotate_log_if_needed(meta):
+    """
+    Deterministic log rotation for check_cert.
+    Assumes caller has already checked logging_enabled.
+    Uses meta['log_max_mb'] as the rotation threshold.
+    """
+
+    log_dir = meta["log_dir"]
+    logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
+
+    if not os.path.exists(logfile):
+        return
+
+    # Rotation threshold (default 50 MB)
+    max_mb = meta.get("log_max_mb", 50)
+    max_bytes = max_mb * 1024 * 1024
+
+    try:
+        if os.path.getsize(logfile) < max_bytes:
+            return
+
+        # Build archive path
+        archive_path = build_archive_path(meta)
+
+        # Atomic move
+        shutil.move(logfile, archive_path)
+
+        # Compress archive
+        compress_file(archive_path)
+
+        # Write rotation notice to new log
+        with open(logfile, "w", encoding="utf-8") as f:
+            f.write(f"{ts()}; [INFO] log rotated to {os.path.basename(archive_path)}.zip\n")
+
+    except Exception as e:
+        if not meta.get("_log_warn_emitted"):
+            meta["_log_warn_emitted"] = True
+
+            warn = f"[WARN] Unable to rotate log file '{logfile}': {e}"
+
+            if meta.get("mode") == "verbose":
+                print(warn)
+
+            meta.setdefault("warnings", []).append(warn)
+def build_archive_path(meta):
+    base = meta["script_name"]
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return os.path.join(meta["log_dir"], f"{base}_{ts}.log")
+def compress_file(path):
+    zip_path = path + ".zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.write(path, os.path.basename(path))
+    os.remove(path)
+def start_banner_weather(meta):
+    return (
+        f"[START] {meta['script_name']}.py"
+        f" location={meta['location_input']}"
+        f" country={meta['country']}"
+        f" provider={meta['provider']}"
+        f" units={meta['units']}"
+        f" ignore_cache={meta['ignore_cache']}"
+        f" ignore_ttl={meta['ignore_ttl']}"
+        f" force_cache={meta['force_cache']}"
+        f" include_gusts={meta['include_gusts']}"
+        f" include_precip={meta['include_precip']}"
+        f" include_clouds={meta['include_clouds']}"
+    )
+def log_weather_data(weather):
+    fields = []
+    for k, v in weather.items():
+        fields.append(f"{k}={v}")
+    return "[WEATHER] " + " ".join(fields)
+def log_summary_weather(state, message):
+    return f"[RESULT] state={state} message=\"{message}\""
+def end_banner():
+    return "[END]"
+
 # -----------------------------
 # Main
 # -----------------------------
@@ -866,11 +1189,33 @@ def main() -> None:
     if args.version:
         print(f"check_weather.py using Python {sys.version.split()[0]}")
         sys.exit(0)
+
+    flags = Flags.from_args(args)
     start = time.time()
-    mode = "json" if args.json else "verbose" if args.verbose else "quiet" if args.quiet else "nagios" 
+    mode = "json" if flags[FlagNames.JSON] else "verbose" if flags[FlagNames.VERBOSE] else "quiet" if flags[FlagNames.QUIET] else "nagios" 
+    meta = {
+        "script_name": Path(sys.argv[0]).stem,
+        "location_input": args.location,
+        "country": args.country,
+        "units": args.units,
+        "provider": args.provider,
+        "ignore_cache": flags[FlagNames.IGNORE_CACHE],
+        "ignore_ttl": flags[FlagNames.IGNORE_TTL],
+        "force_cache": flags[FlagNames.FORCE_CACHE],
+        "include_gusts": flags[FlagNames.INCLUDE_GUSTS],
+        "include_precip": flags[FlagNames.INCLUDE_PRECIP],
+        "include_clouds": flags[FlagNames.INCLUDE_CLOUDS],
+        "log_dir": str(Path(args.log_dir).expanduser()) if args.log_dir else None,
+        "log_max_mb": args.log_max_mb,
+        "mode": mode,
+    }
+    logging_enabled = mode != "nagios" and args.log_dir
     loc = resolve_location(args)
     lat = loc.get("latitude", 0)
     lon = loc.get("longitude", 0)
+    if logging_enabled:
+        write_log(meta, start_banner_weather(meta))
+        write_log(meta, log_weather_data(loc))
     # Build cache key from location + units + provider
     cache_id = f"{lat},{lon}:{args.units}:{args.provider}"
     cache_written = False
@@ -893,7 +1238,7 @@ def main() -> None:
             live_data, url = fetch_weather(
                 lat, lon,
                 args.timeout,
-                args.provider,
+                DEFAULT_PROVIDER,
             )
         except Exception:
             live_data = None
@@ -913,7 +1258,7 @@ def main() -> None:
                     "message": "Weather API unreachable and no cached data",
                     "location": args.location,
                     "runtime_ms": round((time.time() - start) * 1000, 2)
-                }, args)
+                }, args, flags)
             else:
                 raise RuntimeError("Weather API unreachable and no cached data")
     data["source"] = "Live API" if source == "live" else source
@@ -928,14 +1273,9 @@ def main() -> None:
         data["condition_text"] = WEATHER_CODES.get(code, "Unknown")
     else:
         data["condition_text"] = "Unknown"
-
-    if args.show_location_details and not args.quiet:
-        print(f"Resolved location: {format_resolved_name(loc)}")
-        print(f"Latitude: {loc.get('latitude')}, Longitude: {loc.get('longitude')}")
-        print(f"Provider URL: {url}")
-
     status, message = evaluate_weather(data, args)
-
+    if logging_enabled:
+        write_log(meta, log_weather_data(data))
     runtime = round((time.time() - start) * 1000, 2)
     payload = {
         "status": ["OK", "WARNING", "CRITICAL", "UNKNOWN"][status],
@@ -944,7 +1284,34 @@ def main() -> None:
         "data": strip_none(data),
         "runtime_ms": runtime,
     }
-    output_and_exit(status, payload, args)
+    if flags[FlagNames.SHOW_LOCATION_DETAILS]:
+        weather_url=url.split("?")[0]
+        payload["resolved_location"] = {
+            "input": args.location,
+
+            # Weather provider (from --provider)
+            "weather_provider": args.provider,
+            "weather_provider_url": weather_url,
+
+            # Location provider (from geocoding)
+            "location_provider": loc.get("provider"),
+            "location_provider_url": loc.get("url"),
+
+            # Resolved location metadata
+            "city": loc.get("city"),
+            "state": loc.get("state"),
+            "zip": loc.get("zip"),
+            "country": args.country,
+            "latitude": loc.get("latitude"),
+            "longitude": loc.get("longitude"),
+
+            # Final weather API URL
+            "weather_url": url,
+        }
+    if logging_enabled:
+        write_log(meta, log_summary_weather(payload.get("state"), payload.get("message")))
+        write_log(meta,end_banner())
+    output_and_exit(status, payload, args, flags)
 
 if __name__ == "__main__":
     main()

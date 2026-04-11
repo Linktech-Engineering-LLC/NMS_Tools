@@ -1,120 +1,114 @@
 # Metadata Schema
+Deterministic JSON Schema for check_weather.py
 
-This document defines the canonical JSON metadata schema emitted by `check_weather.py` when using `--json` or verbose mode (`-v`). The schema is deterministic, stable, and designed for ingestion by dashboards, log pipelines, and automated diagnostics.
+This document defines the canonical JSON metadata schema emitted by check_weather.py when using --json or verbose mode (-v).
+The schema is deterministic, stable, and designed for ingestion by dashboards, log pipelines, and automated diagnostics.
 
-All fields are guaranteed to exist unless explicitly marked as optional.
-
----
+All fields are guaranteed to exist unless explicitly marked optional.
 
 ## 1. Top‑Level Structure
+The JSON output contains five primary objects:
 
-The JSON output contains four primary objects:
+- status — final Nagios/Icinga state
+- message — human‑readable summary
+- location — resolved human‑readable location string
+- data — normalized weather metrics
+- resolved_location — provider + resolver metadata
+- runtime_ms — execution time
 
-- `status` — final Nagios/Icinga evaluation
-- `location` — resolved location metadata
-- `weather` — normalized weather fields
-- `provider` — provider URLs, timing, and raw fields
-
-Example structure:
+Example:
 
 ```json
 {
-  "status": { ... },
-  "location": { ... },
-  "weather": { ... },
-  "provider": { ... }
+  "status": "OK",
+  "message": "Weather normal: 56.48°F, 20.26 mph",
+  "location": "Saint John, Kansas, US",
+  "data": { ... },
+  "resolved_location": { ... },
+  "runtime_ms": 1169.18
 }
 ```
 
-## 2. status Object
-Represents the final monitoring result.
+## 2. status Field
 
-| Field | Type | Description |
+| Field |	Type |	Description |
 | :--- | :--- | :--- |
-| state | string |	One of: "OK", "WARNING", "CRITICAL", "UNKNOWN" |
-| code | integer | Nagios/Icinga exit code (0–3) |
-| message |	string | Human‑readable summary line | 
-| perfdata | object | Normalized perfdata fields |
+| status |	string |	One of: "OK", "WARNING", "CRITICAL", "UNKNOWN" |
+This is the final Nagios/Icinga evaluation.
 
-### 2.1 Perfdata Schema
+## 3. message Field
+| Field |	Type |	Description |
+| :--- | :--- | :--- |
+| message |	string |	Human‑readable summary identical to Nagios output |
+
+Example:
+
+```"Weather normal: 56.48°F, 20.26 mph"```
+
+## 4. location Field
+| Field |	Type |	Description |
+| :--- | :--- | :--- |
+| location |	string |	Human‑readable resolved location string |
+
+Example:
+
+```"Saint John, Kansas, US"```
+
+## 5. data Object
+
+Normalized weather metrics used for threshold evaluation and perfdata.
+
 | Field | Type | Unit |	Description |
 | :--- | :--- | :--- | :--- |
-| temp | number | °F | Rounded temperature |
-| wind | number | mph | Wind speed |
-| gust | number | mph | Wind gust |
-| precip | number | mm | Precipitation |
-| clouds | number | % | Cloud cover |
+| time |	string | ISO‑8601	| Provider timestamp |
+| temperature_c |	number |	°C |	Temperature |
+| apparent_temperature_c |	number |	°C |	Feels‑like temperature |
+| dewpoint_c |	number |	°C |	Dew point |
+| wind_kph |	number |	kph |	Wind speed |
+| wind_gust_kph |	number |	kph |	Wind gust |
+| humidity |	number |	% |	Relative humidity |
+| precip_mm |	number |	mm |	Precipitation |
+| precipitation_probability |	number |	% |	Precip probability |
+| cloudcover |	number |	% |	Cloud cover |
+| visibility_m |	number |	m	| Visibility |
+| pressure_msl |	number |	hPa |	Pressure |
+| temperature_f |	number |	°F |	Temperature (imperial) |
+| apparent_temperature_f |	number |	°F |	Feels‑like (imperial) |
+| dewpoint_f |	number |	°F |	Dew point (imperial) |
+| wind_mph |	number |	mph |	Wind speed |
+| wind_gust_mph |	number |	mph |	Wind gust |
+| precip_in |	number |	in |	Precipitation |
+| visibility_km |	number |	km |	Visibility |
+| visibility_mi |	number |	mi |	Visibility |
+| pressure_inhg |	number |	inHg |	Pressure |
+| condition |	number |	code |	Open‑Meteo weather code |
+| condition_text |	string |	text |	Human‑readable condition |
+| source |	string |	"Live API" or "Cache" | |
+| cache_written |	boolean |	|	Whether cache was updated |
+| cache_age |	string | |		Age string (e.g., "45s") |
 
-## 3. location Object
-Contains resolver output and normalized geographic metadata.
+All values are normalized and rounded deterministically.
 
-| Field | Type | Description |
+## 6. resolved_location Object
+
+Contains resolver metadata, provider URLs, and normalized geographic fields.
+
+| Field |	Type |	Description |
 | :--- | :--- | :--- |
-| input | string | Original user‑provided location string |
-| type | string | "zip", "city", "latlon" |
-| latitude | number | Decimal latitude |
-| longitude | number | Decimal longitude |
-| city | string | Resolved city name (if available) |
-| state | string | State/region abbreviation (if available) |
-| country | string | ISO country code |
-| resolver | string | "zippopotam", "openmeteo-geocode", "direct" |
+| input |	string |	Original user input |
+| weather_provider |	string |	"open-meteo" |
+| weather_provider_url |	string |	Base forecast URL |
+| location_provider |	string |	"zippopotam.us" or "open-meteo" |
+| location_provider_url |	string |	URL used for geocoding |
+| city |	string or null |	Resolved city |
+| state |	string or null |	Resolved state |
+| zip |	string or null |	ZIP code (if applicable) |
+| country |	string |	ISO country code |
+| latitude |	number |	Decimal latitude |
+| longitude |	number |	Decimal longitude |
+| weather_url |	string |	Full forecast URL used |
 
-## 4. weather Object
-Normalized weather fields used for threshold evaluation and perfdata.
-
-| Field | Type | Unit | Description |
-| :--- | :--- | :--- | :--- |
-| temperature_f | number | °F | Current temperature |
-| wind_mph | number | mph | Wind speed |
-| gust_mph | number | mph | Wind gust |
-| precip_mm | number | mm | Precipitation |
-| cloud_cover | number | % | Cloud cover |
-| timestamp | string | ISO‑8601 | Provider timestamp |
-
-All values are normalized and rounded for deterministic output.
-
-## 5. provider Object
-Contains provider metadata, raw fields, and timing.
-
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| forecast_url | string | Full Open‑Meteo forecast URL used |
-| geocode_url | string or null | Geocoding URL (if used) |
-| zip_url | string or null | Zippopotam.us URL (if used) |
-| response_time_ms | integer | Total provider round‑trip time |
-| raw | object | Raw provider fields before normalization |
-
-### 5.1 raw Sub‑Object
-Raw fields vary by provider but typically include:
-
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| temperature_c | number | Provider temperature in °C |
-| wind_speed_ms | number | Provider wind speed in m/s |
-| wind_gust_ms | number | Provider gust in m/s |
-| precip_mm | number | Provider precipitation |
-| cloud_cover | number | Provider cloud cover |
-| provider_timestamp | string | Provider timestamp |
-
-Raw fields are never modified.
-
-## 6. Threshold Evaluation Metadata
-Verbose/JSON mode includes threshold evaluation details.
-
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| temp_warn | number or null | Warning threshold |
-| temp_crit | number or null | Critical threshold |
-| wind_warn | number or null | Warning threshold |
-| wind_crit | number or null | Critical threshold |
-| gust_warn | number or null | Warning threshold |
-| gust_crit | number or null | Critical threshold |
-| precip_warn | number or null | Warning threshold |
-| precip_crit | number or null | Critical threshold |
-| triggered | string or null | "temp", "wind", "gust", "precip", or null |
-| severity | string | "OK", "WARNING", "CRITICAL" |
-
-This block is deterministic and always present.
+This block is always present.
 
 ## 7. Error Schema (When Status = UNKNOWN)
 
@@ -134,10 +128,12 @@ The error object is omitted when the check succeeds.
 
 check_weather.py guarantees:
 
-* Field names never change without a schema version bump
-* All numeric fields are normalized and rounded deterministically
-* All URLs reflect the exact provider endpoints used
-* All timestamps are ISO‑8601
-* All objects exist even when values are null (except error)
+- Field names never change without a schema version bump
+- All numeric fields are normalized and rounded deterministically
+- All URLs reflect the exact provider endpoints used
+- All timestamps are ISO‑8601
+- resolved_location is always present
+- data always contains the full normalized weather block
+- status, message, and runtime_ms always exist
 
 This ensures compatibility with dashboards, log pipelines, and long‑term monitoring.
