@@ -18,3 +18,4 @@ venv/
 # Workspace Files
 *.code-workspace
 checklist*.md
+CHECKLIST*.md

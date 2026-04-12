@@ -4,22 +4,6 @@ This document tracks planned enhancements and future tools within the NMS_Tools 
 
 ---
 
-## check_cert.py — Completed for v3
-
-The following items are now implemented:
-
-- Deterministic JSON schema  
-- Verbose and Nagios output modes  
-- TLS/cipher extraction  
-- SAN, issuer, signature algorithm, and key metadata  
-- AIA chain reconstruction  
-- OCSP reachability detection  
-- Expiration thresholds  
-- Python‑3.6 compatibility  
-- Stable CLI contract  
-
----
-
 ## check_cert.py — Planned Enhancements
 
 ### Chain & Trust Validation
@@ -57,12 +41,35 @@ The following items are now implemented:
 
 ---
 
+## check_weather.py — Planned for v2.1.0
+
+### Provider Architecture
+- NOAA/NWS as a second weather provider with station-based and coordinate-based lookups
+- Provider registry pattern for uniform declaration, discovery, and dispatch
+- `--provider` override for explicit provider selection
+
+### Debug and Diagnostic Flags
+- `--debug-cache` — cache-hit/miss status, file path, cache age, and TTL comparison
+- `--debug-location` — resolved coordinates, station ID, lookup method, and geocoding source
+
+### Validation and Configuration
+- Strict schema validator against a versioned internal schema
+- `--ttl` override for user-configurable cache TTL
+- `--ignore-ttl` — bypass TTL check and force an API fetch
+- `--ignore-cache` — skip cache entirely
+- `--cache-info` — display cache status and metadata without fetching
+
+### Documentation
+- Full documentation update for v2.1.0 covering all new flags, provider registry usage,
+  NOAA/NWS examples, schema validation flow, and TTL logic
+
+---
+
 ## Future Tools (Concept Stage)
 
 - `check_tls.py` — TLS handshake policy enforcement  
 - `check_ocsp.py` — OCSP responder health checks  
 - `check_dnssec.py` — DNSSEC validation  
-- `check_http.py` — HTTP status/latency/content checks  
 - `check_renewal.py` — Certificate renewal pipeline validation  
 
 ---
@@ -70,4 +77,3 @@ The following items are now implemented:
 ## Notes
 
 Additional items will be added as development continues.
-

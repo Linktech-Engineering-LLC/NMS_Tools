@@ -4,7 +4,7 @@ Package: NMS_Tools
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-07
-Last Modified: 2026-04-11
+Last Modified: 2026-04-12
 File: check_weather.py
 Description: Deterministic weather checker with ZIP/city/lat-long support.
 """
@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import pwd
+import re
 import requests
 import shutil
 import sys
@@ -34,7 +35,7 @@ STATUS_WARNING = 1
 STATUS_CRITICAL = 2
 STATUS_UNKNOWN = 3
 # Other Global Constants
-SCRIPT_VERSION = "1.0.0"
+SCRIPT_VERSION = "2.0.0"
 DEFAULT_PROVIDER = "open-meteo"
 US_STATES = {
     "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
@@ -51,6 +52,7 @@ US_STATES = {
     "VT": "Vermont", "VA": "Virginia", "WA": "Washington", "WV": "West Virginia",
     "WI": "Wisconsin", "WY": "Wyoming"
 }
+STATE_NAME_TO_CODE = {v.lower(): k for k, v in US_STATES.items()}
 WEATHER_CODES = {
     0: "Clear sky",
     1: "Mainly clear",
@@ -188,12 +190,14 @@ def colorize(text: str, color: str, enabled: bool) -> str:
     if not enabled:
         return text
     return f"{color}{text}{Color.RESET}"
-# Cache Constants and Functions
+# ------------------------------------------------------------
+# Cache Directory Resolution
+# ------------------------------------------------------------
 def get_cache_dir():
     # 1. Respect XDG_CACHE_HOME if set
     xdg = os.environ.get("XDG_CACHE_HOME")
     if xdg:
-        return Path(xdg) / "nms_tools" / "weather"
+        return Path(xdg) / "nms_tools"
 
     # 2. Detect Nagios user
     try:
@@ -202,13 +206,26 @@ def get_cache_dir():
         user = None
 
     if user in ("nagios", "nrpe"):
-        return Path("/var/tmp/nms_tools/weather")
+        return Path("/var/tmp/nms_tools")
 
     # 3. Normal user fallback
-    return Path.home() / ".cache" / "nms_tools" / "weather"
+    return Path.home() / ".cache" / "nms_tools"
+# ------------------------------------------------------------
+# Cache Directories + TTLs
+# ------------------------------------------------------------
+CACHE_DIR = get_cache_dir()
+WEATHER_CACHE_DIR = CACHE_DIR / "weather"
+LOCATION_CACHE_DIR = CACHE_DIR / "location"
+WEATHER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+LOCATION_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+CACHE_TTL = timedelta(minutes=15)       # Weather TTL
+LOCATION_TTL = timedelta(hours=24)      # Location TTL
+# ------------------------------------------------------------
+# Weather Cache Functions
+# ------------------------------------------------------------
 def cache_path(key: str) -> Path:
     digest = hashlib.sha256(key.encode()).hexdigest()
-    return CACHE_DIR / f"{digest}.json"
+    return WEATHER_CACHE_DIR / f"{digest}.json"
 def load_cache(key: str):
     path = cache_path(key)
     if not path.exists():
@@ -217,8 +234,9 @@ def load_cache(key: str):
     try:
         with open(path, "r") as f:
             cached = json.load(f)
+
         ts = datetime.strptime(cached["timestamp"], "%Y-%m-%dT%H:%M:%S.%f")
-        # TTL check
+
         if datetime.now() - ts > CACHE_TTL:
             return None, None
 
@@ -236,9 +254,45 @@ def save_cache(key: str, data: dict):
     with open(path, "w") as f:
         json.dump(payload, f)
     return True
-CACHE_DIR = get_cache_dir()
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
-CACHE_TTL = timedelta(minutes=15)
+# ------------------------------------------------------------
+# Location Cache Functions
+# ------------------------------------------------------------
+def location_cache_path(key: str) -> Path:
+    digest = hashlib.sha256(key.encode()).hexdigest()
+    return LOCATION_CACHE_DIR / f"{digest}.json"
+def load_location_from_cache(key: str):
+    path = location_cache_path(key)
+
+    if not path.exists():
+        return None
+
+    try:
+        with open(path, "r") as f:
+            cached = json.load(f)
+
+        ts = datetime.fromisoformat(cached["timestamp"])
+
+        if datetime.now() - ts > LOCATION_TTL:
+            return None
+
+        return cached["data"]
+
+    except Exception:
+        return None
+def save_location_to_cache(key: str, data: dict):
+    path = location_cache_path(key)
+
+    payload = {
+        "timestamp": datetime.now().isoformat(),
+        "data": data
+    }
+
+    try:
+        with open(path, "w") as f:
+            json.dump(payload, f)
+        return True
+    except Exception:
+        return False
 # -----------------------------
 # Custom Formatter
 # -----------------------------
@@ -471,6 +525,18 @@ def resolve_location(args):
     timeout = args.timeout
 
     # ------------------------------------------------------------
+    # NEW: Normalize key for cache
+    # ------------------------------------------------------------
+    cache_key = f"{country}:{original.lower().strip()}"
+
+    # ------------------------------------------------------------
+    # NEW: Check cache before doing anything
+    # ------------------------------------------------------------
+    cached = load_location_from_cache(cache_key)
+    if cached:
+        return cached
+
+    # ------------------------------------------------------------
     # Helper: build final structured location object
     # ------------------------------------------------------------
     def make_location(provider, lat, lon, city=None, state=None, zip_code=None):
@@ -493,13 +559,17 @@ def resolve_location(args):
         try:
             lat = float(parts[0].strip())
             lon = float(parts[1].strip())
-            return make_location("direct", lat, lon)
+            result = make_location("direct", lat, lon)
+
+            # NEW: Write to cache
+            save_location_to_cache(cache_key, result)
+            return result
+
         except ValueError:
             pass  # Not lat/long → fall through
 
     # ------------------------------------------------------------
     # Case 2: Postal code (digits only)
-    # Zippopotam.us supports many countries, not just US
     # ------------------------------------------------------------
     if original.isdigit():
         zip_url = f"https://api.zippopotam.us/{country}/{original}"
@@ -508,7 +578,7 @@ def resolve_location(args):
         if r.status_code == 200:
             z = r.json()
             place = z["places"][0]
-            rc = make_location(
+            result = make_location(
                 provider="zippopotam.us",
                 lat=float(place["latitude"]),
                 lon=float(place["longitude"]),
@@ -516,15 +586,17 @@ def resolve_location(args):
                 state=place.get("state"),
                 zip_code=original
             )
-            rc["url"] = zip_url
-            return rc
-        # ZIP failed → fall through to city lookup
+            result["url"] = zip_url
+
+            # NEW: Write to cache
+            save_location_to_cache(cache_key, result)
+            return result
 
     # ------------------------------------------------------------
     # Case 3: City name (strip state if present)
     # ------------------------------------------------------------
     parts = [p.strip() for p in original.split(",")]
-    city = parts[0]
+    city = normalize_city_name(parts[0])
 
     # Expand US state abbreviations → full names
     state_filter = None
@@ -534,8 +606,7 @@ def resolve_location(args):
         state_filter = US_STATES.get(upper_state, raw_state)
 
     # ------------------------------------------------------------
-    # 1. First try: global search (no country filter)
-    # This is required because Open-Meteo sometimes ignores country=US
+    # 1. First try: global search
     # ------------------------------------------------------------
     geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city}"
     r = requests.get(geo_url, timeout=timeout)
@@ -544,7 +615,6 @@ def resolve_location(args):
         data = r.json()
         results = data.get("results", [])
 
-        # If user provided a state, filter by admin1 FIRST
         if state_filter:
             filtered = [
                 r for r in results
@@ -552,7 +622,7 @@ def resolve_location(args):
             ]
             if filtered:
                 entry = filtered[0]
-                rc = make_location(
+                result = make_location(
                     provider="open-meteo",
                     lat=entry["latitude"],
                     lon=entry["longitude"],
@@ -560,8 +630,11 @@ def resolve_location(args):
                     state=entry.get("admin1"),
                     zip_code=None
                 )
-                rc["url"] = geo_url
-                return rc
+                result["url"] = geo_url
+
+                # NEW: Write to cache
+                save_location_to_cache(cache_key, result)
+                return result
 
     # ------------------------------------------------------------
     # 2. Second try: country-filtered search
@@ -578,7 +651,7 @@ def resolve_location(args):
 
         if results:
             entry = results[0]
-            rc = make_location(
+            result = make_location(
                 provider="open-meteo",
                 lat=entry["latitude"],
                 lon=entry["longitude"],
@@ -586,11 +659,14 @@ def resolve_location(args):
                 state=entry.get("admin1"),
                 zip_code=None
             )
-            rc["url"] = geo_url
-            return rc
+            result["url"] = geo_url
+
+            # NEW: Write to cache
+            save_location_to_cache(cache_key, result)
+            return result
 
     # ------------------------------------------------------------
-    # Final fallback: Zippopotam.us city lookup (global)
+    # Final fallback: Zippopotam.us city lookup
     # ------------------------------------------------------------
     city_url = f"https://api.zippopotam.us/{country}/{city}"
     r = requests.get(city_url, timeout=timeout)
@@ -598,7 +674,7 @@ def resolve_location(args):
     if r.status_code == 200:
         z = r.json()
         place = z["places"][0]
-        rc = make_location(
+        result = make_location(
             provider="zippopotam.us",
             lat=float(place["latitude"]),
             lon=float(place["longitude"]),
@@ -606,11 +682,103 @@ def resolve_location(args):
             state=place.get("state"),
             zip_code=z.get("post code")
         )
-        rc["url"] = city_url
+        result["url"] = city_url
+
+        # NEW: Write to cache
+        save_location_to_cache(cache_key, result)
+        return result
+
     # ------------------------------------------------------------
     # Nothing worked
     # ------------------------------------------------------------
     raise RuntimeError(f"City not found: {original}")
+def validate_location_input(location: str, country: str):
+    """
+    Validates location input in a globally safe, deterministic way.
+
+    Rules:
+      - US ZIP codes must be numeric (5-digit or ZIP+4).
+      - Non-US postal codes may be alphanumeric.
+      - US city lookups require a state (City, ST).
+      - Non-US city lookups may omit region.
+    """
+
+    loc = location.strip()
+    ctry = (country or "").strip().upper()
+
+    # -------------------------
+    # 1. Detect US ZIP codes
+    # -------------------------
+    if ctry == "US":
+        # Valid US ZIP (5-digit) or ZIP+4
+        if re.fullmatch(r"\d{5}(-\d{4})?", loc):
+            return True  # valid US ZIP
+        # Otherwise treat as city/state and validate below
+
+    # -------------------------
+    # 2. Detect non-US postal codes
+    # -------------------------
+    # Postal codes outside the US are usually a single token with no commas.
+    if ctry != "US" and "," not in loc:
+        # Accept any alphanumeric postal code
+        # (e.g., "K1A 0B1", "SW1A 1AA", "1012 WX")
+        return True
+
+    # -------------------------
+    # 3. City/state parsing
+    # -------------------------
+    parts = [p.strip() for p in loc.split(",")]
+
+    # US-specific rule: city-only is invalid
+    if ctry == "US":
+        if len(parts) == 1:
+            raise ValueError(
+                "U.S. city lookups require a state abbreviation "
+                "(e.g., 'Wichita, KS')."
+            )
+
+        if len(parts) == 2:
+            city = parts[0].strip()
+            state = parts[1].strip()
+
+            # Normalize city (St → Saint)
+            city = normalize_city_name(city)
+
+            # Normalize state
+            state_upper = state.upper()
+            state_lower = state.lower()
+
+            # 1. Check if it's a valid 2-letter code (case-insensitive)
+            if state_upper in US_STATES:
+                return True # valid
+
+            # 2. Check if it's a full state name
+            STATE_NAME_TO_CODE = {v.lower(): k for k, v in US_STATES.items()}
+            if state_lower in STATE_NAME_TO_CODE:
+                return True # valid
+
+            raise ValueError(
+                f"Invalid U.S. state '{state}'. Expected a 2-letter code "
+                "or full state name (e.g., 'KS' or 'Kansas')."
+            )
+
+        raise ValueError(
+            "Invalid U.S. location format. Expected 'City, ST' or a ZIP code."
+        )
+
+    # -------------------------
+    # 4. Non-US city lookups
+    # -------------------------
+    # Allow city-only or city+region
+    return True
+def normalize_city_name(city: str) -> str:
+    city = city.strip()
+    # Replace "St" or "St." at the beginning with "Saint"
+    if city.lower().startswith("st "):
+        return "Saint " + city[3:].strip()
+    if city.lower().startswith("st. "):
+        return "Saint " + city[4:].strip()
+    return city
 # -----------------------------
 # Open-Meteo fetch
 # -----------------------------
@@ -637,7 +805,6 @@ def fetch_weather_open_meteo(lat: float, lon: float, timeout: int) -> Tuple[Dict
         "timezone": "auto",
     }
     url = f"{base}?{urllib.parse.urlencode(params)}"
-
     with urllib.request.urlopen(url, timeout=timeout) as resp:
         raw = resp.read()
     data = json.loads(raw)
@@ -664,7 +831,7 @@ def fetch_weather_open_meteo(lat: float, lon: float, timeout: int) -> Tuple[Dict
         return arr[idx]
     result = {
         "time": current_time,
-        "temperature_c": h("temperature_2m"),
+        "temperature_c": current.get("temperature"),
         "wind_kph": h("windspeed_10m"),
         "wind_gust_kph": h("windgusts_10m"),
         "humidity": h("relativehumidity_2m"),
@@ -679,10 +846,48 @@ def fetch_weather_open_meteo(lat: float, lon: float, timeout: int) -> Tuple[Dict
         "precipitation_probability": h("precipitation_probability"),
     }
     return result, url
-def fetch_weather(lat: float, lon: float, timeout: int, provider: str) -> Tuple[Dict[str, Any], str]:
-    if provider == "open-meteo":
-        return fetch_weather_open_meteo(lat, lon, timeout)
-    raise ValueError(f"Unsupported provider: {provider}")
+def fetch_weather(lat: float, lon: float, timeout: int, provider: str,
+                  units: str, force_cache: bool) -> Tuple[Dict[str, Any], Optional[str], str, Optional[float], bool]:
+
+    # Build deterministic cache key
+    cache_id = f"{lat},{lon}:{units}:{provider}"
+
+    # Try cache first
+    cached, cached_ts = load_cache(cache_id)
+    cache_age = None
+    if cached_ts:
+        cache_age = (datetime.now() - cached_ts).total_seconds()
+
+    # Forced cache mode
+    if force_cache:
+        if cached is None:
+            raise RuntimeError("Forced cache read but no cache exists")
+        return cached, None, "cache-forced", cache_age, False
+
+    # Try live provider
+    live = None
+    url = None
+    try:
+        if provider == "open-meteo":
+            live, url = fetch_weather_open_meteo(lat, lon, timeout)
+        else:
+            raise ValueError(f"Unsupported provider: {provider}")
+    except Exception:
+        live = None
+
+    # Live success → convert + save cache
+    if live:
+        data = convert_units(live, units)
+        save_cache(cache_id, data)
+        return data, url, "live", 0, True
+
+    # Live failed → fallback to cache
+    if cached:
+        data = convert_units(cached, units)
+        return data, None, "cache", cache_age, False
+
+    # No live + no cache → fail
+    raise RuntimeError("Weather API unreachable and no cached data")
 # ---------------------------------------------------------------------------
 # Evaluation Logic
 # ---------------------------------------------------------------------------
@@ -832,23 +1037,18 @@ def verbose_output(payload: Dict[str, Any], args: argparse.Namespace, flags: Fla
     # ---------------------------------------------------------
     # LOCATION DETAILS (debug flag)
     # ---------------------------------------------------------
-    print("Location Resolution Details:")
-    print(f"  Input: {payload['resolved_location']['input']}")
-
-    print(f"  Location Provider: {payload['resolved_location']['location_provider']}")
-    print(f"  Location Provider URL: {payload['resolved_location']['location_provider_url']}")
-
-    print(f"  Weather Provider: {payload['resolved_location']['weather_provider']}")
-    print(f"  Weather Provider URL: {payload['resolved_location']['weather_provider_url']}")
-
-    print(f"  Resolved Name: {payload['resolved_location']['city']}, "
-        f"{payload['resolved_location']['state']}, "
-        f"{payload['resolved_location']['country']}")
-
-    print(f"  Latitude: {payload['resolved_location']['latitude']}")
-    print(f"  Longitude: {payload['resolved_location']['longitude']}")
-
-    print(f"  Weather API URL: {payload['resolved_location']['weather_url']}")
+    if flags[FlagNames.SHOW_LOCATION_DETAILS] and "resolved_location" in payload:
+        print("Location Resolution Details:")
+        rl = payload["resolved_location"]
+        print(f"  Input: {rl['input']}")
+        print(f"  Location Provider: {rl['location_provider']}")
+        print(f"  Location Provider URL: {rl['location_provider_url']}")
+        print(f"  Weather Provider: {rl['weather_provider']}")
+        print(f"  Weather Provider URL: {rl['weather_provider_url']}")
+        print(f"  Resolved Name: {rl['city']}, {rl['state']}, {rl['country']}")
+        print(f"  Latitude: {rl['latitude']}")
+        print(f"  Longitude: {rl['longitude']}")
+        print(f"  Weather API URL: {rl['weather_url']}")
 
     # ---------------------------------------------------------
     # CORE STATUS BLOCK
@@ -1189,7 +1389,9 @@ def main() -> None:
     if args.version:
         print(f"check_weather.py using Python {sys.version.split()[0]}")
         sys.exit(0)
-
+    if not validate_location_input(args.location, args.country):
+        raise ValueError(f"Invalid Location Specified: {args.location}")
+    
     flags = Flags.from_args(args)
     start = time.time()
     mode = "json" if flags[FlagNames.JSON] else "verbose" if flags[FlagNames.VERBOSE] else "quiet" if flags[FlagNames.QUIET] else "nagios" 
@@ -1216,57 +1418,18 @@ def main() -> None:
     if logging_enabled:
         write_log(meta, start_banner_weather(meta))
         write_log(meta, log_weather_data(loc))
-    # Build cache key from location + units + provider
-    cache_id = f"{lat},{lon}:{args.units}:{args.provider}"
-    cache_written = False
-    cached, cached_ts = load_cache(cache_id)
-    if cached is not None:
-        cache_age = (datetime.now() - cached_ts).total_seconds() if cached_ts is not None else 0
-    else:
-        cache_age = None
-    live_data = None
-    source = "live"
-    if args.force_cache:
-        cached_data, cached_ts = load_cache(cache_id)
-        if cached_data is None:
-            raise RuntimeError("Forced cache read but no cache exists")
-        data = cached_data
-        source = "cache-forced"
-    else:
-            # normal API → cache → fallback logic
-        try:
-            live_data, url = fetch_weather(
-                lat, lon,
-                args.timeout,
-                DEFAULT_PROVIDER,
-            )
-        except Exception:
-            live_data = None
+    data, url, source, cache_age, cache_written = fetch_weather(
+        lat, lon,
+        args.timeout,
+        args.provider,
+        args.units,
+        args.force_cache
+    )
 
-    if live_data:
-        data = convert_units(live_data, args.units)
-        cache_written = save_cache(cache_id, data)
-    else:
-        if cached:
-            data = convert_units(cached, args.units)
-            source = "forced cache" if args.force_cache else "cache"
-        else:
-            # No API + no cache → fail appropriately
-            if mode == "nagios":
-                output_and_exit(STATUS_CRITICAL, {
-                    "status": "CRITICAL",
-                    "message": "Weather API unreachable and no cached data",
-                    "location": args.location,
-                    "runtime_ms": round((time.time() - start) * 1000, 2)
-                }, args, flags)
-            else:
-                raise RuntimeError("Weather API unreachable and no cached data")
     data["source"] = "Live API" if source == "live" else source
     data["cache_written"] = cache_written
-    if cached_ts is not None:
-        cached_age = (datetime.now() - cached_ts).total_seconds()
-        data["cache_age"] = format_age(cached_age)
-        print(cached_ts,data["cache_age"])
+    if cache_age is not None:
+        data["cache_age"] = format_age(cache_age)
     # Add human-readable condition text
     code = data.get("condition")
     if isinstance(code, int):
@@ -1285,7 +1448,7 @@ def main() -> None:
         "runtime_ms": runtime,
     }
     if flags[FlagNames.SHOW_LOCATION_DETAILS]:
-        weather_url=url.split("?")[0]
+        weather_url=url.split("?")[0] if url is not None else None
         payload["resolved_location"] = {
             "input": args.location,
 
