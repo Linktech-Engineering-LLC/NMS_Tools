@@ -4,7 +4,7 @@ Package: NMS_Tools
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-07
-Last Modified: 2026-04-12
+Last Modified: 2026-04-14
 File: check_weather.py
 Description: Deterministic weather checker with ZIP/city/lat-long support.
 """
@@ -813,14 +813,15 @@ def fetch_weather_open_meteo(lat: float, lon: float, timeout: int) -> Tuple[Dict
     current = data.get("current_weather", {})
     hourly = data.get("hourly", {})
     times = hourly.get("time", [])
-
     current_time = current.get("time")
     idx = None
-    if current_time in times:
-        idx = times.index(current_time)
-    elif times:
-        idx = len(times) - 1  # fallback: last entry
-
+    if current_time and times:
+        ct = parse_iso(current_time)
+        hourly_dt = [parse_iso(t) for t in times]
+        idx = min(range(len(hourly_dt)), key=lambda i: abs(hourly_dt[i] - ct))
+    else:
+        idx = 0
+    
     if idx is None:
         raise ValueError("Unable to align current weather with hourly data")
 
@@ -831,7 +832,7 @@ def fetch_weather_open_meteo(lat: float, lon: float, timeout: int) -> Tuple[Dict
         return arr[idx]
     result = {
         "time": current_time,
-        "temperature_c": current.get("temperature"),
+        "temperature_c": h("temperature_2m"),
         "wind_kph": h("windspeed_10m"),
         "wind_gust_kph": h("windgusts_10m"),
         "humidity": h("relativehumidity_2m"),
@@ -840,7 +841,6 @@ def fetch_weather_open_meteo(lat: float, lon: float, timeout: int) -> Tuple[Dict
         "condition": h("weathercode"),
         "apparent_temperature_c": h("apparent_temperature"),
         "dewpoint_c": h("dewpoint_2m"),
-        "r_humidity_2m": h("relativeHumidity_2m"),
         "visibility_m": h("visibility"),
         "pressure_msl": h("pressure_msl"),
         "precipitation_probability": h("precipitation_probability"),
@@ -888,7 +888,8 @@ def fetch_weather(lat: float, lon: float, timeout: int, provider: str,
 
     # No live + no cache → fail
     raise RuntimeError("Weather API unreachable and no cached data")
-# ---------------------------------------------------------------------------
+def parse_iso(ts: str) -> datetime:
+    return datetime.strptime(ts, "%Y-%m-%dT%H:%M")# ---------------------------------------------------------------------------
 # Evaluation Logic
 # ---------------------------------------------------------------------------
 def evaluate_simple(value: Optional[float],
