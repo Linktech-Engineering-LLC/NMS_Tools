@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Leon McClatchey, Linktech Engineering LLC
 """
 File: check_cert.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-17
-Modified: 2026-03-29
+Modified: 2026-04-20
 Required: Python 3.6+
+Part of: NMS_Tools Monitoring Suite
+License: MIT (see LICENSE for details)
+
 Description:
     Certificate checker with SAN, issuer, signature algorithm, wildcard detection,
     perfdata, quiet/verbose modes, and JSON output.
@@ -43,6 +48,7 @@ WARNING = 1
 CRITICAL = 2
 UNKNOWN = 3
 # Other Constants
+SCRIPT_NAME = Path(sys.argv[0]).stem
 SCRIPT_VERSION = "3.1.0"
 TLS_VERSIONS = ["TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3"]
 TLS_ORDER = {
@@ -1725,53 +1731,27 @@ def fetch_tls_session_info(hostname: str, port: int, timeout: int, insecure: boo
 def ts():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 def write_log(meta, message):
-    """
-    Deterministic, operator-grade log writer.
-    - No logging in Nagios mode
-    - Ensures directory exists
-    - Emits a single warning if logging fails
-    - Writes timestamped, single-line entries
-    """
-
     log_dir = meta.get("log_dir")
 
- 
     try:
         os.makedirs(log_dir, exist_ok=True)
-        logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
-
-        # Atomic append
-        line = f"{ts()}; {message}".rstrip() + "\n"
-        with open(logfile, "a", encoding="utf-8") as f:
-            f.write(line)
-
+        logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
+        with open(logfile, "a") as f:
+            f.write(f"{ts()}; {message}\n")
     except Exception as e:
-        # Emit only one warning per run
         if not meta.get("_log_warn_emitted"):
             meta["_log_warn_emitted"] = True
-
-            warn = f"[WARN] Unable to write to log directory '{log_dir}': {e}"
-
-            # Only visible in verbose mode
-            if meta.get("mode") == "verbose":
-                print(warn)
-
-            # Also store in metadata for JSON/verbose output
-            meta.setdefault("warnings", []).append(warn)
+            warning = f"[WARN] Unable to write to log directory: {log_dir} — {e}"
+            if meta["mode"] == "verbose":
+                print(f"[WARN] {warning}")
+            meta.setdefault("warnings", []).append(warning)
 def rotate_log_if_needed(meta):
-    """
-    Deterministic log rotation for check_cert.
-    Assumes caller has already checked logging_enabled.
-    Uses meta['log_max_mb'] as the rotation threshold.
-    """
-
     log_dir = meta["log_dir"]
-    logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
+    logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
 
     if not os.path.exists(logfile):
         return
 
-    # Rotation threshold (default 50 MB)
     max_mb = meta.get("log_max_mb", 50)
     max_bytes = max_mb * 1024 * 1024
 
@@ -1779,33 +1759,23 @@ def rotate_log_if_needed(meta):
         if os.path.getsize(logfile) < max_bytes:
             return
 
-        # Build archive path
         archive_path = build_archive_path(meta)
-
-        # Atomic move
         shutil.move(logfile, archive_path)
-
-        # Compress archive
         compress_file(archive_path)
 
-        # Write rotation notice to new log
         with open(logfile, "w", encoding="utf-8") as f:
             f.write(f"{ts()}; [INFO] log rotated to {os.path.basename(archive_path)}.zip\n")
 
     except Exception as e:
         if not meta.get("_log_warn_emitted"):
             meta["_log_warn_emitted"] = True
-
             warn = f"[WARN] Unable to rotate log file '{logfile}': {e}"
-
             if meta.get("mode") == "verbose":
                 print(warn)
-
             meta.setdefault("warnings", []).append(warn)
 def build_archive_path(meta):
-    base = meta["script_name"]
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(meta["log_dir"], f"{base}_{ts}.log")
+    return os.path.join(meta["log_dir"], f"{SCRIPT_NAME}_{ts}.log")
 def compress_file(path):
     zip_path = path + ".zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
@@ -1888,7 +1858,6 @@ def main():
 
     # Base metadata (script name, mode, log_dir)
     meta = {
-        "script_name": Path(sys.argv[0]).stem,
         "host": args.host,
         "log_dir": str(Path(args.log_dir).expanduser()) if args.log_dir else None,
         "mode": (

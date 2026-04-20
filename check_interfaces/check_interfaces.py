@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Leon McClatchey, Linktech Engineering LLC
 """
 File: check_interfaces.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-22
-Modified: 2026-03-29
+Modified: 2026-04-20
 Required: Python 3.6+
+Part of: NMS_Tools Monitoring Suite
+License: MIT (see LICENSE for details)
+
 Description:
         Interface Checker: If the host is local, local libraries are used, otherwise SNMP v2 is used
         Obtains a dictionary of interfaces from the system, which includes the operational
@@ -37,6 +42,7 @@ WARNING = 1
 CRITICAL = 2
 UNKNOWN = 3
 # Other Global Constants
+SCRIPT_NAME = Path(sys.argv[0]).stem
 SCRIPT_VERSION = "1.1.0"
 VIRTUAL_PREFIXES = (
     "vnet", "virbr", "docker", "br-", "tap", "tun", "veth"
@@ -71,7 +77,7 @@ class CheckArgumentParser(argparse.ArgumentParser):
 # -----------------------------
 def build_parser():
     parser = CheckArgumentParser(
-        prog="check_interfaces.py",
+        prog=SCRIPT_NAME,
         description=(
             "Interface Inspection Tool\n\n"
             "Determines whether the target host is local or remote. "
@@ -82,27 +88,22 @@ def build_parser():
         formatter_class=CustomFormatter,
         add_help=True
     )
-
     parser.usage = "%(prog)s -H <host> [options]"
-
     # ------------------------------------------------------------
     # Core Options
     # ------------------------------------------------------------
     core = parser.add_argument_group("Core Options")
-
     core.add_argument(
         "-H", "--host",
         required=True,
         help="Target hostname or IP address"
     )
-
     core.add_argument(
         "-t", "--timeout",
         type=int,
         default=5,
         help="Connection timeout in seconds"
     )
-
     core.add_argument(
         "--log-dir",
         dest="log_dir",
@@ -110,7 +111,6 @@ def build_parser():
         default=None,
         help="Directory to store logs (optional). If omitted, logging is disabled."
     )
-    
     core.add_argument(
         "--log-max-mb",
         dest="log_max_mb",
@@ -119,7 +119,6 @@ def build_parser():
         default=50,
         help="Maximum log size in MB before rotation."
     )
-
     # ------------------------------------------------------------
     # SNMP Options
     # ------------------------------------------------------------
@@ -142,25 +141,21 @@ def build_parser():
     # Interface Filtering Options
     # -------------------------------------------------------------
     filtering = parser.add_argument_group("Interface Filtering Options")
-
     filtering.add_argument(
         "--include-aliases",
         action="store_true",
         help="Include alias interfaces (e.g., eth0:1, br0:backup) in discovery and evaluation"
     )
-
     filtering.add_argument(
         "--ignore-virtual",
         action="store_true",
         help="Ignore virtual interfaces (e.g., vnet*, virbr*, docker0) during discovery and evaluation"
     )
-
     filtering.add_argument(
         "--exclude-local",
         action="store_true",
         help="Exclude local-only interfaces such as 'lo' from discovery and evaluation"
     )
-
     filtering.add_argument(
         "--ignore",
         action="append",
@@ -171,7 +166,6 @@ def build_parser():
     # Targeting Options
     # -------------------------------------------------------------
     targeting = parser.add_argument_group("Targeting Options")
-
     targeting.add_argument(
         "--status",
         choices=[
@@ -225,12 +219,9 @@ def build_parser():
         "-q", "--quiet", action="store_true",
         help="Quiet mode: exit code only"
     )
-    out.add_argument(
-        "-V", "--version", action="version",
-        version=f"check_interfaces.py {SCRIPT_VERSION} (Python {platform.python_version()})",
-        help="Show script and Python version"
-    )
-
+    out.add_argument("-V", "--version", action="version",
+                     version=f"check_cert.py {SCRIPT_VERSION} (Python {platform.python_version()})",
+                     help="Show script version and Python interpreter version")
     # ------------------------------------------------------------
     # Examples
     # ------------------------------------------------------------
@@ -240,7 +231,6 @@ def build_parser():
         "  %(prog)s -H 192.168.1.1 --community public\n"
         "  %(prog)s -H router --community mystring --json\n"
     )
-
     return parser.parse_args()
 # -----------------------------
 # Host Validation
@@ -1112,7 +1102,7 @@ def write_log(meta, message):
 
     try:
         os.makedirs(log_dir, exist_ok=True)
-        logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
+        logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
         with open(logfile, "a") as f:
             f.write(f"{ts()}; {message}\n")
     except Exception as e:
@@ -1121,23 +1111,14 @@ def write_log(meta, message):
             warning = f"[WARN] Unable to write to log directory: {log_dir} — {e}"
             if meta["mode"] == "verbose":
                 print(f"[WARN] {warning}")
-            if "warnings" not in meta:
-                meta["warnings"] = []
-            meta["warnings"].append(warning)
+            meta.setdefault("warnings", []).append(warning)
 def rotate_log_if_needed(meta):
-    """
-    Deterministic log rotation for check_cert.
-    Assumes caller has already checked logging_enabled.
-    Uses meta['log_max_mb'] as the rotation threshold.
-    """
-
     log_dir = meta["log_dir"]
-    logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
+    logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
 
     if not os.path.exists(logfile):
         return
 
-    # Rotation threshold (default 50 MB)
     max_mb = meta.get("log_max_mb", 50)
     max_bytes = max_mb * 1024 * 1024
 
@@ -1145,33 +1126,23 @@ def rotate_log_if_needed(meta):
         if os.path.getsize(logfile) < max_bytes:
             return
 
-        # Build archive path
         archive_path = build_archive_path(meta)
-
-        # Atomic move
         shutil.move(logfile, archive_path)
-
-        # Compress archive
         compress_file(archive_path)
 
-        # Write rotation notice to new log
         with open(logfile, "w", encoding="utf-8") as f:
             f.write(f"{ts()}; [INFO] log rotated to {os.path.basename(archive_path)}.zip\n")
 
     except Exception as e:
         if not meta.get("_log_warn_emitted"):
             meta["_log_warn_emitted"] = True
-
             warn = f"[WARN] Unable to rotate log file '{logfile}': {e}"
-
             if meta.get("mode") == "verbose":
                 print(warn)
-
             meta.setdefault("warnings", []).append(warn)
 def build_archive_path(meta):
-    base = meta["script_name"]
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(meta["log_dir"], f"{base}_{ts}.log")
+    return os.path.join(meta["log_dir"], f"{SCRIPT_NAME}_{ts}.log")
 def compress_file(path):
     zip_path = path + ".zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
@@ -1229,7 +1200,6 @@ def main():
     # Build initial metadata BEFORE logging
     # ------------------------------------------------------------
     meta = {
-        "script_name": Path(sys.argv[0]).stem,
         "host": args.host,
         "ip": rc["ip"],
         "mode": "local" if rc["local"] else "snmp",

@@ -1,0 +1,6 @@
+# Executables
+usr/bin/check_ports
+usr/bin/check_weather
+usr/bin/check_cert
+usr/bin/check_html
+usr/bin/check_interfaces

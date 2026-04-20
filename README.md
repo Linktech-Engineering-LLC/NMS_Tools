@@ -1,213 +1,179 @@
-# NMS_Tools
+```markdown
+# NMS_Tools  
+Deterministic, operator‑grade monitoring tools for Linux and Nagios environments.
 
-![Python Version](https://img.shields.io/badge/python-3.6%2B-blue)
-![License](https://img.shields.io/badge/license-Apache%202.0-green)
-![Status](https://img.shields.io/badge/status-active-success)
-![Last Commit](https://img.shields.io/github/last-commit/Linktech-Engineering-LLC/NMS_Tools)
+<p align="center">
 
-A collection of deterministic, audit‑transparent network management and monitoring tools used across Linktech Engineering infrastructure.
+  <img src="https://img.shields.io/badge/status-active-brightgreen?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/python-3.6%2B-blue?style=for-the-badge&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/platform-linux-lightgrey?style=for-the-badge&logo=linux&logoColor=white" />
+  <img src="https://img.shields.io/badge/Linktech_Engineering-Tools_Suite-8A2BE2?style=for-the-badge" />
 
-Each tool is designed with:
+</p>
 
-- Predictable, reproducible behavior  
-- Strict output contracts  
-- Clear operational modes  
-- Minimal external dependencies  
-- Compatibility with Nagios/Icinga and standalone system use  
+NMS_Tools is a suite of deterministic, operator‑grade monitoring tools designed for Nagios, automation pipelines, and Linux‑based operational workflows.  
+Each tool is built with:
 
----
+- deterministic behavior  
+- reproducible output  
+- zero side effects in Nagios mode  
+- operator‑grade logging  
+- consistent architecture and documentation  
 
-## Tools
-
-### `check_cert.py`
-
-A deterministic TLS certificate inspection and policy enforcement tool with:
-
-- JSON, verbose, and Nagios output modes  
-- TLS version and cipher extraction  
-- SAN, issuer, signature algorithm, and key metadata  
-- AIA chain reconstruction  
-- OCSP metadata extraction  
-- Expiration thresholds and policy enforcement  
-- Deterministic JSON schema for automation  
-- Clean, noise‑free CLI parser and help output  
+The suite is intentionally modular — each tool is self‑contained, predictable, and easy to deploy.
 
 ---
 
-### `check_html.py`
+# Available Tools
 
-A deterministic HTTP/HTTPS inspection and content‑validation tool with:
+### ✔ **check_ports**  
+Deterministic multi‑port TCP connectivity checker.  
+→ [`check_ports/README.md`](check_ports/README.md)
 
-- JSON, verbose, and Nagios output modes  
-- TLS‑aware request pipeline with handshake detection  
-- HTTP status, headers, content‑type, and HTML body capture  
-- Backend fingerprinting and backend enforcement  
-- Content‑type and HTML presence rules  
-- Deterministic JSON schema for automation  
-- Clean, noise‑free CLI parser and help output  
-- Nagios‑aware severity merging (CRITICAL > WARNING > UNKNOWN > OK)
+### ✔ **check_weather**  
+Weather condition evaluator with rule‑based enforcement.  
+→ [`check_weather/README.md`](check_weather/README.md)
 
----
+### ✔ **check_cert**  
+Certificate expiration and metadata checker.  
+→ [`check_cert/README.md`](check_cert/README.md)
 
-### `check_interfaces.py`
+### ✔ **check_html**  
+HTML content validator with rule‑based enforcement.  
+→ [`check_html/README.md`](check_html/README.md)
 
-A deterministic network interface inspection and monitoring tool with:
-
-- JSON, verbose, and Nagios output modes  
-- Interface state, speed, duplex, and attribute inspection  
-- Link‑state and speed validation  
-- Deterministic JSON schema for automation  
-- Clean, noise‑free CLI parser and help output  
+### ✔ **check_interfaces**  
+Network interface state and SNMP‑based status checker.  
+→ [`check_interfaces/README.md`](check_interfaces/README.md)
 
 ---
 
-### `check_weather.py`
+# Documentation
 
-A deterministic weather inspection and threshold‑evaluation tool with:
+Full documentation is available in the `docs/` directory:
 
-- JSON, verbose, and Nagios output modes  
-- ZIP, city/state, and lat/lon resolver pipeline  
-- Open‑Meteo forecast and geocoding integration  
-- Temperature, wind, gust, precipitation, and cloud‑cover extraction  
-- Threshold‑based severity evaluation  
-- Deterministic JSON schema for automation  
-- Clean, noise‑free CLI parser and help output  
+- [Documentation Index](docs/index.md)  
+- [Installation](docs/installation.md)  
+- [Usage](docs/usage.md)  
+- [Operation Model](docs/operation.md)  
+- [Enforcement Model](docs/enforcement.md)  
+- [Metadata Schema](docs/metadata_schema.md)  
+- [Roadmap](docs/roadmap.md)  
 
----
+Each tool also includes its own:
 
-## Project Status Overview
-
-| Project | Language | Status | Description |
-|--------|----------|--------|-------------|
-| **check_cert.py** | Python | 🟢 Stable | TLS certificate inspection, metadata extraction, and policy enforcement |
-| **check_html.py** | Python | 🟢 Stable | HTTP/HTTPS inspection, content validation, and backend fingerprinting |
-| **check_interfaces.py** | Python | 🟢 Stable | Network interface state, speed, duplex, and attribute monitoring |
-| **check_weather.py** | Python | 🟢 Stable | Weather inspection, resolver pipeline, and threshold evaluation |
-
-## Documentation
-
-The `docs/` directory contains the full documentation suite for all tools:
-
-- **Installation:** `docs/Installation.md`  
-- **Usage Guide:** `docs/Usage.md`  
-- **Operation Guide:** `docs/Operation.md`  
-- **Enforcement Model:** `docs/Enforcement.md`  
-- **Metadata Schema:** `docs/Metadata_Schema.md`  
-- **Roadmap:** `docs/roadmap.md`  
-
-Each document has a single responsibility:
-
-| Document | Purpose |
-|----------|---------|
-| Installation | How to install and run the tools |
-| Usage | CLI flags, examples, Nagios integration |
-| Operation | Runtime behavior, exit codes, troubleshooting |
-| Enforcement | Policy engine, rule semantics, failure behavior |
-| Metadata Schema | Canonical JSON structure for automation |
-| Roadmap | Planned enhancements and future tools |
+- `README.md` (user‑facing documentation)  
+- `FLAGS.md` (internal bitmask flags, if applicable)  
 
 ---
 
-## Philosophy
+## Project Website
 
-NMS_Tools follows Linktech Engineering’s deterministic engineering principles:
+The official project page for NMS_Tools is available at:
 
-- No hidden state  
-- No ambiguous output  
-- No silent failures  
-- Audit‑transparent behavior  
-- Predictable exit codes  
-- Clean separation between human and machine output modes  
+**https://www.linktechengineering.net/projects/nms-tools/**
 
-Each tool is built to be reliable in both interactive and automated environments.
+This site provides:
 
----
-
-## Global Requirements
-
-NMS_Tools enforces a small set of suite‑wide operational rules to ensure deterministic, operator‑grade behavior:
-
-- All tools accepting -H require the hostname to be resolvable via the system resolver (DNS, /etc/hosts, or equivalent).
-  - Unresolvable hosts must fail fast with a deterministic error message.
-  - In Nagios mode, tools must exit UNKNOWN with a single clean line.
-- No network operations are attempted without a resolvable target.
-- All tools validate input before execution and fail deterministically on invalid parameters.
+- Suite overview  
+- Tool descriptions  
+- Branding and identity  
+- Cross‑project navigation  
+- Public documentation  
+- Related ecosystem projects  
 
 ---
 
-## Status
+# Philosophy
 
-Active development.  
-See `docs/roadmap.md` for planned enhancements and upcoming tools in the suite.
+NMS_Tools is built around a few core principles:
 
-## Quick Start
+- **Determinism** — same input, same output, every time  
+- **Operator‑grade clarity** — readable logs, predictable behavior  
+- **Zero side effects** — Nagios mode never writes logs or files  
+- **Modularity** — each tool is self‑contained  
+- **Reproducibility** — consistent architecture across the suite  
+- **Transparency** — clear documentation and predictable evaluation rules  
 
-Clone the repository:
+---
 
-```bash
-git clone https://github.com/LinktechEngineering/NMS_Tools.git
-cd NMS_Tools
+# Directory Structure
+
 ```
-
-Run a certificate check:
-
-```bash
-./check_cert.py -H example.com
-```
-
-Run an HTML check:
-
-```bash
-./check_html.py -H example.com
+NMS_Tools/
+│
+├── check_ports/
+│   ├── check_ports.py
+│   ├── README.md
+│   └── FLAGS.md
+│
+├── check_weather/
+│   ├── check_weather.py
+│   ├── README.md
+│   └── FLAGS.md
+│
+├── check_cert/
+│   ├── check_cert.py
+│   └── README.md
+│
+├── check_html/
+│   ├── check_html.py
+│   └── README.md
+│
+├── check_interfaces/
+│   ├── check_interfaces.py
+│   └── README.md
+│
+└── docs/
+    ├── index.md
+    ├── installation.md
+    ├── usage.md
+    ├── operation.md
+    ├── enforcement.md
+    ├── metadata_schema.md
+    └── roadmap.md
 ```
 
 ---
 
-## ⭐ Suite Overview
+# Roadmap
 
-NMS_Tools is a collection of deterministic, audit‑transparent monitoring tools used across Linktech Engineering infrastructure.  
-Each tool follows the same engineering principles:
+See the full roadmap here:  
+→ **[docs/roadmap.md](docs/roadmap.md)**
 
-- Predictable, reproducible behavior  
-- Strict output contracts  
-- Noise‑free CLI design  
-- Clear separation between human and machine output modes  
-- Minimal external dependencies  
-- Compatibility with Nagios/Icinga and standalone system use  
+Current roadmap items include:
 
-Current tools in the suite:
+- Named port support in `check_ports` (e.g., `https` → 443 via `/etc/services`)  
+- Flags class rollout to all remaining tools  
+- Unified logging lifecycle across the suite  
+- Additional operator‑grade documentation  
+- Future tool additions (DNS, SSH, HTTP latency, etc.)
 
-- **check_cert.py** — TLS certificate inspection and policy enforcement  
-- **check_html.py** — HTTP/HTTPS inspection and content‑validation  
+---
 
-Additional tools will be added as the suite evolves.  
-See `docs/roadmap.md` for planned enhancements.
+# License
 
-## Contributing
-
-Contributions are welcome.  
-All tools in the suite follow the same design principles:
-
-- Deterministic behavior  
-- Clear, documented output modes  
-- Minimal dependencies  
-- Operator‑grade clarity  
-- Stable JSON schemas  
-
-Before submitting a pull request:
-
-1. Review the existing documentation in `docs/`  
-2. Ensure new code follows the deterministic engineering model  
-3. Include or update documentation for any new flags, behaviors, or metadata  
-4. Keep CLI help output clean, grouped, and noise‑free  
-5. Maintain compatibility with Python 3.6+  
-
-For major changes, open an issue first to discuss the design and approach.
-
+MIT License — see `LICENSE.md` in the repository root.
+```
 ## Related Projects (Outside This Repository)
 
-These tools are part of the broader Linktech Engineering ecosystem but are not included in the NMS_Tools repository:
+These projects are part of the broader Linktech Engineering ecosystem but are **not** included in the NMS_Tools repository:
 
-- **BotScanner** — Network flow and host inspection framework (Python)
-- **licensegen** — Deterministic license generator (Rust)
-- **rust_logger** — Structured logging library for Rust applications
+- **BotScanner**  
+  Deterministic system scanner with reproducible output and operator‑grade logging.  
+  https://github.com/Linktech-Engineering-LLC/BotScanner-Community
+
+- **licensegen**  
+  Rust‑based deterministic license generator with canonical serialization.  
+  https://github.com/Linktech-Engineering-LLC/licensegen
+
+- **rust_logger**  
+  Shared Rust logging crate used across multiple Linktech tools.  
+  https://github.com/Linktech-Engineering-LLC/rust_logger
+
+- **RunUpdates**  
+  Automated source‑file header updater with SPDX and provenance enforcement.  
+  https://github.com/Linktech-Engineering-LLC/RunUpdates
+
+These tools follow the same engineering philosophy as NMS_Tools and are often used together in operational environments.

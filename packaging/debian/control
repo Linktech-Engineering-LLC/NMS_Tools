@@ -1,0 +1,19 @@
+Source: nms-tools
+Section: utils
+Priority: optional
+Maintainer: Leon McClatchey <engineering@linktechengineering.net>
+Build-Depends: debhelper-compat (= 13), python3, python3-requests, python3-yaml
+Standards-Version: 4.6.2
+Homepage: https://www.linktechengineering.net/projects/nms-tools/
+
+Package: nms-tools
+Architecture: all
+Depends: ${misc:Depends}, python3, python3-requests, python3-yaml
+Description: Deterministic network monitoring and inspection tool suite
+ NMS_Tools is a deterministic, audit-transparent suite of monitoring and
+ inspection utilities designed for operator-grade workflows. Tools include:
+  - check_ports: multi-port TCP checker
+  - check_weather: deterministic weather evaluator
+  - check_cert: TLS certificate inspector
+  - check_html: HTTP/HTTPS validator
+  - check_interfaces: SNMP interface state checker

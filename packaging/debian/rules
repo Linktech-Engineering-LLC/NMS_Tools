@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+
+%:
+    dh $@
+
+override_dh_auto_build:
+    # Build man pages using the project's Makefile
+    make man
+
+override_dh_auto_install:
+    # Install executables
+    install -D -m 0755 check_ports/check_ports.py debian/nms-tools/usr/bin/check_ports
+    install -D -m 0755 check_weather/check_weather.py debian/nms-tools/usr/bin/check_weather
+    install -D -m 0755 check_cert/check_cert.py debian/nms-tools/usr/bin/check_cert
+    install -D -m 0755 check_html/check_html.py debian/nms-tools/usr/bin/check_html
+    install -D -m 0755 check_interfaces/check_interfaces.py debian/nms-tools/usr/bin/check_interfaces
+
+    # Install man pages (dh_installman will gzip them)
+    install -D -m 0644 man/*.1 debian/nms-tools/usr/share/man/man1/
+    install -D -m 0644 man/*.7 debian/nms-tools/usr/share/man/man7/

@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Leon McClatchey, Linktech Engineering LLC
 """
-Package: NMS_Tools
+File: check_weather.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-07
-Last Modified: 2026-04-14
-File: check_weather.py
-Description: Deterministic weather checker with ZIP/city/lat-long support.
+Last Modified: 2026-04-20
+Required: Python 3.6+
+Part of: NMS_Tools Monitoring Suite
+License: MIT (see LICENSE for details)
+
+Description: 
+    Deterministic weather checker with ZIP/city/lat-long support.
 """
 
 import argparse
 import hashlib
 import json
 import os
+import platform
 import pwd
 import re
 import requests
@@ -36,6 +43,7 @@ STATUS_CRITICAL = 2
 STATUS_UNKNOWN = 3
 # Other Global Constants
 SCRIPT_VERSION = "2.0.0"
+SCRIPT_NAME = Path(sys.argv[0]).stem
 DEFAULT_PROVIDER = "open-meteo"
 US_STATES = {
     "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
@@ -319,13 +327,13 @@ class CheckArgumentParser(argparse.ArgumentParser):
 # -----------------------------------------------
 def build_parser() -> argparse.Namespace:
     parser = CheckArgumentParser(
+        prog=SCRIPT_NAME,
         description="Weather Checking Tool\n\n"
                     "Fetches weather data from Open-Meteo, applies thresholds, "
                     "and outputs Nagios, JSON, verbose, or quiet mode results.",
         formatter_class=CustomFormatter,
         add_help=True,
     )
-
     # Core options
     core = parser.add_argument_group("Core Options")
     core.add_argument(
@@ -363,7 +371,6 @@ def build_parser() -> argparse.Namespace:
         dest="log_max_mb",
         help="Maximum log size in MB before rotation.",
     )
-
     # Output modes
     out = parser.add_argument_group("Output Options")
     out.add_argument(
@@ -383,10 +390,10 @@ def build_parser() -> argparse.Namespace:
     )
     out.add_argument(
         "-V", "--version",
-        action="store_true",
-        help="Show script and Python version",
+        action="version",
+        version=f"{SCRIPT_NAME} {SCRIPT_VERSION} (Python {platform.python_version()})",
+        help="Show script and Python version"
     )
-
     # Weather thresholds
     weather = parser.add_argument_group("Weather Options")
     weather.add_argument(
@@ -1293,7 +1300,7 @@ def write_log(meta, message):
 
     try:
         os.makedirs(log_dir, exist_ok=True)
-        logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
+        logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
         with open(logfile, "a") as f:
             f.write(f"{ts()}; {message}\n")
     except Exception as e:
@@ -1302,23 +1309,14 @@ def write_log(meta, message):
             warning = f"[WARN] Unable to write to log directory: {log_dir} — {e}"
             if meta["mode"] == "verbose":
                 print(f"[WARN] {warning}")
-            if "warnings" not in meta:
-                meta["warnings"] = []
-            meta["warnings"].append(warning)
+            meta.setdefault("warnings", []).append(warning)
 def rotate_log_if_needed(meta):
-    """
-    Deterministic log rotation for check_cert.
-    Assumes caller has already checked logging_enabled.
-    Uses meta['log_max_mb'] as the rotation threshold.
-    """
-
     log_dir = meta["log_dir"]
-    logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
+    logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
 
     if not os.path.exists(logfile):
         return
 
-    # Rotation threshold (default 50 MB)
     max_mb = meta.get("log_max_mb", 50)
     max_bytes = max_mb * 1024 * 1024
 
@@ -1326,33 +1324,23 @@ def rotate_log_if_needed(meta):
         if os.path.getsize(logfile) < max_bytes:
             return
 
-        # Build archive path
         archive_path = build_archive_path(meta)
-
-        # Atomic move
         shutil.move(logfile, archive_path)
-
-        # Compress archive
         compress_file(archive_path)
 
-        # Write rotation notice to new log
         with open(logfile, "w", encoding="utf-8") as f:
             f.write(f"{ts()}; [INFO] log rotated to {os.path.basename(archive_path)}.zip\n")
 
     except Exception as e:
         if not meta.get("_log_warn_emitted"):
             meta["_log_warn_emitted"] = True
-
             warn = f"[WARN] Unable to rotate log file '{logfile}': {e}"
-
             if meta.get("mode") == "verbose":
                 print(warn)
-
             meta.setdefault("warnings", []).append(warn)
 def build_archive_path(meta):
-    base = meta["script_name"]
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(meta["log_dir"], f"{base}_{ts}.log")
+    return os.path.join(meta["log_dir"], f"{SCRIPT_NAME}_{ts}.log")
 def compress_file(path):
     zip_path = path + ".zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
@@ -1397,7 +1385,6 @@ def main() -> None:
     start = time.time()
     mode = "json" if flags[FlagNames.JSON] else "verbose" if flags[FlagNames.VERBOSE] else "quiet" if flags[FlagNames.QUIET] else "nagios" 
     meta = {
-        "script_name": Path(sys.argv[0]).stem,
         "location_input": args.location,
         "country": args.country,
         "units": args.units,

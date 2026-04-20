@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Leon McClatchey, Linktech Engineering LLC
 """
 File: check_html.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-21
-Modified: 2026-03-30
+Modified: 2026-04-20
 Required: Python 3.6+
+Part of: NMS_Tools Monitoring Suite
+License: MIT (see LICENSE for details)
+
 Description:
     HTML content checker with status-code enforcement, required-tag checks,
     content-type validation, quiet/verbose modes, and JSON output.
@@ -35,6 +40,7 @@ WARNING = 1
 CRITICAL = 2
 UNKNOWN = 3
 # Other Global Constants
+SCRIPT_NAME = Path(sys.argv[0]).stem
 SCRIPT_VERSION = "1.1.0"
 BACKEND_SIGNATURES = {
     "tomcat": {
@@ -118,7 +124,7 @@ class CheckArgumentParser(argparse.ArgumentParser):
 # -----------------------------
 def build_parser():
     parser = CheckArgumentParser(
-        prog="check_html.py",
+        prog=SCRIPT_NAME,
         description=(
             "HTML Content Validation Tool\n\n"
             "Validates HTTP/HTML behavior for a target URL. Performs status checks,\n"
@@ -179,8 +185,8 @@ def build_parser():
     out.add_argument("-q", "--quiet", action="store_true",
                      help="Quiet mode: exit code only")
     out.add_argument("-V", "--version", action="version",
-                     version=f"check_http.py {SCRIPT_VERSION} (Python {platform.python_version()})",
-                     help="Show script and Python version")
+                     version=f"check_cert.py {SCRIPT_VERSION} (Python {platform.python_version()})",
+                     help="Show script version and Python interpreter version")
 
     # ------------------------------------------------------------
     # HTTP Status Requirements
@@ -878,7 +884,6 @@ def build_html_meta(args):
 
     return {
         # Script identity
-        "script_name": Path(sys.argv[0]).stem,
         "version": SCRIPT_VERSION,
 
         # Target
@@ -1125,52 +1130,27 @@ def validate_host_basic(host: str):
 def ts():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 def write_log(meta, message):
-    """
-    Deterministic, operator-grade log writer.
-    - No logging in Nagios mode
-    - Ensures directory exists
-    - Emits a single warning if logging fails
-    - Writes timestamped, single-line entries
-    """
-
     log_dir = meta.get("log_dir")
-
 
     try:
         os.makedirs(log_dir, exist_ok=True)
-        logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
-        # Atomic append
-        line = f"{ts()}; {message}".rstrip() + "\n"
-        with open(logfile, "a", encoding="utf-8") as f:
-            f.write(line)
-
+        logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
+        with open(logfile, "a") as f:
+            f.write(f"{ts()}; {message}\n")
     except Exception as e:
-        # Emit only one warning per run
         if not meta.get("_log_warn_emitted"):
             meta["_log_warn_emitted"] = True
-
-            warn = f"[WARN] Unable to write to log directory '{log_dir}': {e}"
-
-            # Only visible in verbose mode
-            if meta.get("mode") == "verbose":
-                print(warn)
-
-            # Also store in metadata for JSON/verbose output
-            meta.setdefault("warnings", []).append(warn)
+            warning = f"[WARN] Unable to write to log directory: {log_dir} — {e}"
+            if meta["mode"] == "verbose":
+                print(f"[WARN] {warning}")
+            meta.setdefault("warnings", []).append(warning)
 def rotate_log_if_needed(meta):
-    """
-    Deterministic log rotation for check_cert.
-    Assumes caller has already checked logging_enabled.
-    Uses meta['log_max_mb'] as the rotation threshold.
-    """
-
     log_dir = meta["log_dir"]
-    logfile = os.path.join(log_dir, f"{meta['script_name']}.log")
+    logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
 
     if not os.path.exists(logfile):
         return
 
-    # Rotation threshold (default 50 MB)
     max_mb = meta.get("log_max_mb", 50)
     max_bytes = max_mb * 1024 * 1024
 
@@ -1178,33 +1158,23 @@ def rotate_log_if_needed(meta):
         if os.path.getsize(logfile) < max_bytes:
             return
 
-        # Build archive path
         archive_path = build_archive_path(meta)
-
-        # Atomic move
         shutil.move(logfile, archive_path)
-
-        # Compress archive
         compress_file(archive_path)
 
-        # Write rotation notice to new log
         with open(logfile, "w", encoding="utf-8") as f:
             f.write(f"{ts()}; [INFO] log rotated to {os.path.basename(archive_path)}.zip\n")
 
     except Exception as e:
         if not meta.get("_log_warn_emitted"):
             meta["_log_warn_emitted"] = True
-
             warn = f"[WARN] Unable to rotate log file '{logfile}': {e}"
-
             if meta.get("mode") == "verbose":
                 print(warn)
-
             meta.setdefault("warnings", []).append(warn)
 def build_archive_path(meta):
-    base = meta["script_name"]
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(meta["log_dir"], f"{base}_{ts}.log")
+    return os.path.join(meta["log_dir"], f"{SCRIPT_NAME}_{ts}.log")
 def compress_file(path):
     zip_path = path + ".zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
