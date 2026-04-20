@@ -1,16 +1,15 @@
-```markdown
 # NMS_Tools  
 Deterministic, operator‑grade monitoring tools for Linux and Nagios environments.
 
-<p align="center">
+<div align="center">
 
-  <img src="https://img.shields.io/badge/status-active-brightgreen?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/python-3.6%2B-blue?style=for-the-badge&logo=python&logoColor=white" />
-  <img src="https://img.shields.io/badge/platform-linux-lightgrey?style=for-the-badge&logo=linux&logoColor=white" />
-  <img src="https://img.shields.io/badge/Linktech_Engineering-Tools_Suite-8A2BE2?style=for-the-badge" />
+![Status](https://img.shields.io/badge/status-active-brightgreen?style=for-the-badge)
+![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
+![Python](https://img.shields.io/badge/python-3.6%2B-blue?style=for-the-badge&logo=python&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-linux-lightgrey?style=for-the-badge&logo=linux&logoColor=white)
+![Suite](https://img.shields.io/badge/Linktech_Engineering-Tools_Suite-8A2BE2?style=for-the-badge)
 
-</p>
+</div>
 
 NMS_Tools is a suite of deterministic, operator‑grade monitoring tools designed for Nagios, automation pipelines, and Linux‑based operational workflows.  
 Each tool is built with:
@@ -23,29 +22,114 @@ Each tool is built with:
 
 The suite is intentionally modular — each tool is self‑contained, predictable, and easy to deploy.
 
+## 📦 Packaging & Installation
+
+NMS_Tools ships with full Linux-native packaging support, including:
+
+- **DEB packages** (Debian / Ubuntu)
+- **RPM packages** (RHEL / Rocky / Alma / Fedora / openSUSE)
+- **Man pages** for every tool
+- **Build scripts** for local packaging
+
+All packaging assets live under:
+
+```
+packaging/
+    debian/     # DEB metadata
+    rpm/        # RPM spec file
+    build_deb.sh
+    build_rpm.sh
+    build_all.sh
+```
+
+### Install (DEB)
+
+```
+sudo dpkg -i nms-tools_<version>_all.deb
+```
+
+### Install (RPM)
+
+```
+sudo rpm -ivh nms_tools-<version>.noarch.rpm
+```
+
+---
+
+## 📘 Man Pages
+
+NMS_Tools includes full operator-grade man pages for every tool.
+
+After installation:
+
+```
+man check_ports
+man check_weather
+man check_cert
+man check_html
+man check_interfaces
+man nms_tools
+```
+
+Man page sources live in:
+
+```
+man/
+    check_ports.1.md
+    check_weather.1.md
+    check_cert.1.md
+    check_html.1.md
+    check_interfaces.1.md
+    nms_tools.7.md
+```
+
+These are automatically converted to groff during packaging.
+
+---
+
+## 🧰 Build From Source
+
+To build both DEB and RPM packages locally:
+
+```
+./packaging/build_all.sh
+```
+
+Or individually:
+
+```
+./packaging/build_deb.sh
+./packaging/build_rpm.sh
+```
+
+This generates:
+
+- `.deb` packages in the project root  
+- `.rpm` packages under `~/rpmbuild/RPMS/`  
+
 ---
 
 # Available Tools
 
 ### ✔ **check_ports**  
 Deterministic multi‑port TCP connectivity checker.  
-→ [`check_ports/README.md`](check_ports/README.md)
+[check_ports/README.md](check_ports/README.md)
 
 ### ✔ **check_weather**  
 Weather condition evaluator with rule‑based enforcement.  
-→ [`check_weather/README.md`](check_weather/README.md)
+[check_weather/README.md](check_weather/README.md)
 
 ### ✔ **check_cert**  
 Certificate expiration and metadata checker.  
-→ [`check_cert/README.md`](check_cert/README.md)
+[check_cert/README.md](check_cert/README.md)
 
 ### ✔ **check_html**  
 HTML content validator with rule‑based enforcement.  
-→ [`check_html/README.md`](check_html/README.md)
+[check_html/README.md](check_html/README.md)
 
 ### ✔ **check_interfaces**  
 Network interface state and SNMP‑based status checker.  
-→ [`check_interfaces/README.md`](check_interfaces/README.md)
+[check_interfaces/README.md](check_interfaces/README.md)
 
 ---
 
