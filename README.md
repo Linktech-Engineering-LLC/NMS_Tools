@@ -239,7 +239,7 @@ Current roadmap items include:
 # License
 
 MIT License — see `LICENSE.md` in the repository root.
-```
+
 ## Related Projects (Outside This Repository)
 
 These projects are part of the broader Linktech Engineering ecosystem but are **not** included in the NMS_Tools repository:
