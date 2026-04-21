@@ -23,7 +23,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y shellcheck
-          pip install flake8 black isort markdownlint-cli yamllint
+          pip install flake8 black isort yamllint
+      - name: Install markdownlint-cli
+        run: npm install -g markdownlint-cli
 
       # ------------------------------
       # Python linting
