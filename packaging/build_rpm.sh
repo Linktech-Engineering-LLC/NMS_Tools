@@ -83,7 +83,8 @@ for tool in $TOOLS; do
 done
 
 # Copy man pages
-cp -r "$MAN_OUT_DIR" "$TOP"/man
+mkdir -p "$TOP/man/generated"
+cp -r "$MAN_OUT_DIR"/* "$TOP/man/generated/"
 
 # Create tarball with correct top-level directory
 TARBALL="$RPMBUILD/SOURCES/nms_tools-$VERSION.tar.gz"
