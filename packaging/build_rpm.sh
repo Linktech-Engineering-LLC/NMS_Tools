@@ -87,7 +87,6 @@ rm -rf "$STAGING_DIR"
 RPMBUILD_DIR="$HOME/rpmbuild"
 mkdir -p "$RPMBUILD_DIR"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
-cp "$TARBALL" "$RPMBUILD_DIR/SOURCES/"
 cp "$SPEC_FILE" "$RPMBUILD_DIR/SPECS/"
 
 # Inject version into spec file copy
