@@ -73,11 +73,21 @@ sed -i \
 echo "[NMS_Tools] Creating source tarball..."
 
 STAGING_DIR="$(mktemp -d)"
-cp -r $TOOLS "$STAGING_DIR"/
-cp -r "$MAN_OUT_DIR" "$STAGING_DIR"/man
+TOP="$STAGING_DIR/nms_tools-$VERSION"
 
-tar -czf "$RPMBUILD/SOURCES/nms_tools-$VERSION.tar.gz" -C "$STAGING_DIR" .
+mkdir -p "$TOP"
+
+# Copy tools
+for tool in $TOOLS; do
+    cp -r "$tool" "$TOP"/
+done
+
+# Copy man pages
+cp -r "$MAN_OUT_DIR" "$TOP"/man
+
+# Create tarball with correct top-level directory
 TARBALL="$RPMBUILD/SOURCES/nms_tools-$VERSION.tar.gz"
+tar -czf "$TARBALL" -C "$STAGING_DIR" "nms_tools-$VERSION"
 
 rm -rf "$STAGING_DIR"
 
