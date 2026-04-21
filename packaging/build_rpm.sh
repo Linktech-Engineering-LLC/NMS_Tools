@@ -62,23 +62,17 @@ sed -i \
     "$MAN_OUT_DIR/nms_tools.7"
 
 # ------------------------------------------------------------
-# Create source tarball
+# Create source tarball (correct, non-append, RPM-safe)
 # ------------------------------------------------------------
-TARBALL="nms_tools-${VERSION}.tar.gz"
-
 echo "[NMS_Tools] Creating source tarball..."
-git archive --format=tar.gz --output="$TARBALL" HEAD
 
-# Add generated man pages
-tar --append --file="$TARBALL" -C "$MAN_OUT_DIR" .
+STAGING_DIR="$(mktemp -d)"
+cp -r $TOOLS "$STAGING_DIR"/
+cp -r "$MAN_OUT_DIR" "$STAGING_DIR"/man
 
-# Add tool directories
-for tool in $TOOLS; do
-    tar --append --file="$TARBALL" "$tool"
-done
+tar -czf "$RPMBUILD/SOURCES/nms_tools-$VERSION.tar.gz" -C "$STAGING_DIR" .
 
-gzip -f "$TARBALL"
-TARBALL="${TARBALL}.gz"
+rm -rf "$STAGING_DIR"
 
 # ------------------------------------------------------------
 # Prepare rpmbuild tree
