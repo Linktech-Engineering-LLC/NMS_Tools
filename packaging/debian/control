@@ -17,3 +17,4 @@ Description: Deterministic operator-grade monitoring tools for Linux and Nagios
  'check_*' containing a Python script is automatically included in the package.
  .
  Man pages are auto-generated from Markdown sources during packaging.
+ 
