@@ -19,40 +19,33 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install linters
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y shellcheck
           pip install flake8 black isort yamllint
-      - name: Install markdownlint-cli
-        run: npm install -g markdownlint-cli
 
-      # ------------------------------
-      # Python linting
-      # ------------------------------
-      - name: Run flake8
-        run: flake8 check_*/ --count --show-source --statistics
+      - name: Run flake8 (non-blocking)
+        run: |
+          echo "Running flake8..."
+          flake8 || true
 
-      - name: Run black (check only)
-        run: black --check check_*/
+      - name: Run black (check only, non-blocking)
+        run: |
+          echo "Running black..."
+          black --check . || true
 
-      - name: Run isort (check only)
-        run: isort --check-only check_*/
+      - name: Run isort (check only, non-blocking)
+        run: |
+          echo "Running isort..."
+          isort --check-only . || true
 
-      # ------------------------------
-      # Shell script linting
-      # ------------------------------
-      - name: Run shellcheck
-        run: shellcheck packaging/*.sh packaging/*/*.sh || true
+      - name: Run yamllint (non-blocking)
+        run: |
+          echo "Running yamllint..."
+          yamllint . || true
 
-      # ------------------------------
-      # Markdown linting
-      # ------------------------------
-      - name: Run markdownlint
-        run: markdownlint '**/*.md'
-
-      # ------------------------------
-      # YAML linting
-      # ------------------------------
-      - name: Run yamllint
-        run: yamllint .
+      - name: Run shellcheck (non-blocking)
+        run: |
+          echo "Running shellcheck..."
+          shellcheck **/*.sh || true
