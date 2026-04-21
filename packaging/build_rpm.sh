@@ -86,6 +86,10 @@ done
 mkdir -p "$TOP/man/generated"
 cp -r "$MAN_OUT_DIR"/* "$TOP/man/generated/"
 
+# Copy metadata files required by the spec
+cp "$ROOT_DIR/README.md" "$TOP"/
+cp "$ROOT_DIR/LICENSE.md" "$TOP"/
+
 # Create tarball with correct top-level directory
 TARBALL="$RPMBUILD/SOURCES/nms_tools-$VERSION.tar.gz"
 tar -czf "$TARBALL" -C "$STAGING_DIR" "nms_tools-$VERSION"
