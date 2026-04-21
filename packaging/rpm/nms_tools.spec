@@ -37,7 +37,7 @@ gzip -9 %{buildroot}/usr/share/man/man1/*.1
 gzip -9 %{buildroot}/usr/share/man/man7/*.7
 
 %files
-%license LICENSE.md
+%license LICENSE
 %doc README.md
 
 /usr/local/bin/check_*.py
