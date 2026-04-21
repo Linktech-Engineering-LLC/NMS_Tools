@@ -1,0 +1,52 @@
+name: Build NMS_Tools Packages
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-packages:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            pandoc \
+            python3 \
+            python3-distutils \
+            rpm \
+            dpkg-dev
+
+      - name: Build DEB and RPM via Makefile
+        run: |
+          make packages
+
+      - name: Collect DEB artifact
+        if: always()
+        run: |
+          mkdir -p artifacts
+          cp packaging/debian/nms-tools.deb artifacts/ || true
+
+      - name: Collect RPM artifacts
+        if: always()
+        run: |
+          mkdir -p artifacts
+          find "$HOME/rpmbuild/RPMS" -type f -name "nms_tools-*.rpm" -exec cp {} artifacts/ \; || true
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nms-tools-packages
+          path: artifacts

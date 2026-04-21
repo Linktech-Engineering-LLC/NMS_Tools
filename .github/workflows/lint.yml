@@ -1,0 +1,56 @@
+name: Lint and Static Checks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install linters
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          pip install flake8 black isort markdownlint-cli yamllint
+
+      # ------------------------------
+      # Python linting
+      # ------------------------------
+      - name: Run flake8
+        run: flake8 check_*/ --count --show-source --statistics
+
+      - name: Run black (check only)
+        run: black --check check_*/
+
+      - name: Run isort (check only)
+        run: isort --check-only check_*/
+
+      # ------------------------------
+      # Shell script linting
+      # ------------------------------
+      - name: Run shellcheck
+        run: shellcheck packaging/*.sh packaging/*/*.sh || true
+
+      # ------------------------------
+      # Markdown linting
+      # ------------------------------
+      - name: Run markdownlint
+        run: markdownlint '**/*.md'
+
+      # ------------------------------
+      # YAML linting
+      # ------------------------------
+      - name: Run yamllint
+        run: yamllint .

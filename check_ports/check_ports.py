@@ -6,7 +6,7 @@ File: check_ports.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-20
-Modified: 2026-04-20
+Modified: 2026-04-21
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
 
@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import platform
+import shlex
 import shutil
 import socket
 import sys
@@ -146,17 +147,16 @@ def build_parser():
     parser = CheckArgumentParser(
         prog=SCRIPT_NAME,
         description=(
-            "Deterministic, multi-port TCP availability checker with Nagios-compatible"
-            "output and optional JSON diagnostics."
+            "Deterministic, multi-port TCP availability checker with "
+            "Nagios-compatible output and optional JSON diagnostics. "
             "Supports verbose, JSON, and Nagios output."
         ),
         formatter_class=CustomFormatter,
         add_help=True
     )
-    # -----------------------------
-    # Usage line
-    # -----------------------------
-    parser.usage = "%(prog)s -H <host> -p <ports> [options]"
+
+    parser.usage = "%(prog)s -H <host> (--ports <ports> | --service <name>) [options]"
+
     # ------------------------------------------------------------
     # Core Options
     # ------------------------------------------------------------
@@ -172,23 +172,40 @@ def build_parser():
         default=5,
         help="Connection timeout in seconds"
     )
-    core.add_argument(
+
+    # ------------------------------------------------------------
+    # Port / Service Selection
+    # ------------------------------------------------------------
+    sel = parser.add_argument_group("Port / Service Selection")
+    sel.add_argument(
         "-p", "--ports",
-        required=True,
         help=(
-            "Comma-delimited list of ports or port ranges."
-            "Examples: '22,80,443', '1-1024', or '22,80,1000-1010'."
+            "Comma-delimited list of ports or port ranges. "
+            "Examples: '22,80,443', '1-1024', or '22,80,1000-1010'. "
             "Hostnames in --ports are not allowed; use -H/--host to specify the target host."
         )
     )
-    core.add_argument(
+    sel.add_argument(
+        "-s", "--service",
+        help=(
+            "Comma-delimited list of service names to resolve. "
+            "Examples: 'http', 'https,ssh', or 'smtp,pop3,imap'. "
+            "Each service is resolved using /etc/services and socket.getservbyname()."
+        )
+    )
+
+    # ------------------------------------------------------------
+    # Logging
+    # ------------------------------------------------------------
+    log = parser.add_argument_group("Logging")
+    log.add_argument(
         "--log-dir",
         dest="log_dir",
         metavar="DIR",
         default=None,
         help="Directory to store logs (optional). If omitted, logging is disabled."
     )
-    core.add_argument(
+    log.add_argument(
         "--log-max-mb",
         dest="log_max_mb",
         metavar="MB",
@@ -196,121 +213,161 @@ def build_parser():
         default=50,
         help="Maximum log size in MB before rotation."
     )
+
     # ------------------------------------------------------------
     # Nagios Behavior Filters
     # ------------------------------------------------------------
     filt = parser.add_argument_group("Nagios Behavior Filters")
-    filt.add_argument(
-        "--require-all",
-        action="store_true",
-        help="Require all ports to be open; if any fail, return CRITICAL."
-    )
-    filt.add_argument(
-        "--require-any",
-        action="store_true",
-        help="Require at least one port to be open; if all fail, return CRITICAL."
-    )
-    filt.add_argument(
-        "--fail-only",
-        action="store_true",
-        help="Only report failed ports in verbose or JSON output."
-    )
+    filt.add_argument("--require-all", action="store_true",
+                      help="Require all ports to be open; if any fail, return CRITICAL.")
+    filt.add_argument("--require-any", action="store_true",
+                      help="Require at least one port to be open; if all fail, return CRITICAL.")
+    filt.add_argument("--fail-only", action="store_true",
+                      help="Only report failed ports in verbose or JSON output.")
+
     # ------------------------------------------------------------
     # Output Modes
     # ------------------------------------------------------------
     out = parser.add_argument_group("Output Modes")
-    out.add_argument("-v", "--verbose", action="store_true",
-                     help="Detailed output")
-    out.add_argument("-j", "--json", action="store_true",
-                     help="JSON output for automation")
-    out.add_argument("-q", "--quiet", action="store_true",
-                     help="Quiet mode: exit code only")
+    out.add_argument("-v", "--verbose", action="store_true", help="Detailed output")
+    out.add_argument("-j", "--json", action="store_true", help="JSON output for automation")
+    out.add_argument("-q", "--quiet", action="store_true", help="Quiet mode: exit code only")
     out.add_argument(
         "-V", "--version",
         action="version",
         version=f"{SCRIPT_NAME} {SCRIPT_VERSION} (Python {platform.python_version()})",
-        help="Show script and Python version")
+        help="Show script and Python version"
+    )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # Require at least one of --ports or --service
+    if not args.ports and not args.service:
+        raise CheckArgError("Either --ports or --service must be specified.")
+
+    return args
 # -----------------------------
 # Port Scanning 
 # -----------------------------
 def parse_ports(port_string):
     """
-    Parse a comma-delimited list of ports and ranges into a sorted list of ints.
-
-    Allowed:
-        "22"
-        "22,80,443"
-        "1-1024"
-        "22,80,1000-1010"
-
-    Disallowed:
-        "host:22"
-        "192.168.1.1:22"
-        "example.com:443"
-        "22,tcp"
-
-    Returns:
-        List[int] - sorted, deduplicated list of ports
-
-    Raises:
-        ValueError - if any token is invalid
+    Parse a comma-delimited list of ports or port ranges.
+    Rejects host:port, host:service, and service names.
+    Returns a sorted, deduped list of integer ports.
     """
+    if not port_string:
+        return []
 
-    ports = set()
-
-    # Split on commas
     tokens = [t.strip() for t in port_string.split(",") if t.strip()]
-
-    if not tokens:
-        raise ValueError("No ports specified.")
+    ports = []
 
     for token in tokens:
-
-        # ------------------------------------------------------------
-        # 1. Reject host:port patterns (out of scope for this tool)
-        # ------------------------------------------------------------
+        # Reject host:port or host:service
         if ":" in token:
-            raise ValueError(
-                f"Invalid port token '{token}': hostnames are not allowed in --ports. "
-                "Use -H/--host to specify the target host."
+            raise CheckArgError(
+                f"Invalid port token '{token}'. Hostnames or service names are not "
+                "allowed in --ports; use -H/--host for hosts and -s/--service for services."
             )
 
-        # ------------------------------------------------------------
-        # 2. Range: "start-end"
-        # ------------------------------------------------------------
+        # Reject service names (alphabetic tokens)
+        if token.isalpha():
+            raise CheckArgError(
+                f"Invalid port token '{token}'. Service names belong in --service, not --ports."
+            )
+
+        # Handle ranges
         if "-" in token:
             try:
-                start_str, end_str = token.split("-", 1)
-                start = int(start_str)
-                end = int(end_str)
+                start, end = token.split("-", 1)
+                start = int(start)
+                end = int(end)
             except ValueError:
-                raise ValueError(f"Invalid port range '{token}'.")
+                raise CheckArgError(f"Invalid port range '{token}'.")
 
-            if start < 1 or end > 65535 or start > end:
-                raise ValueError(f"Invalid port range '{token}' (must be 1–65535 and start <= end).")
+            if start < 1 or end < 1 or start > 65535 or end > 65535:
+                raise CheckArgError(f"Port range '{token}' is out of valid TCP range.")
 
-            for p in range(start, end + 1):
-                ports.add(p)
+            if start > end:
+                raise CheckArgError(f"Invalid port range '{token}': start > end.")
 
+            ports.extend(range(start, end + 1))
             continue
 
-        # ------------------------------------------------------------
-        # 3. Single integer port
-        # ------------------------------------------------------------
+        # Handle single numeric ports
         try:
-            p = int(token)
+            port = int(token)
         except ValueError:
-            raise ValueError(f"Invalid port '{token}' (must be an integer).")
+            raise CheckArgError(f"Invalid port token '{token}'.")
 
-        if p < 1 or p > 65535:
-            raise ValueError(f"Invalid port '{token}' (must be between 1 and 65535).")
+        if port < 1 or port > 65535:
+            raise CheckArgError(f"Port '{port}' is out of valid TCP range.")
 
-        ports.add(p)
+        ports.append(port)
 
-    # Return sorted list
-    return sorted(ports)
+    return sorted(set(ports))
+def resolve_services(service_string):
+    """
+    Resolve one or more service names into a list of TCP ports.
+    Supports comma-delimited service names.
+    Rejects numeric ports in --service.
+    """
+    if not service_string:
+        return []
+
+    services = [s.strip() for s in service_string.split(",") if s.strip()]
+    resolved_ports = []
+
+    for svc in services:
+        # Reject numeric ports in --service
+        if svc.isdigit():
+            raise CheckArgError(
+                f"Invalid service '{svc}'. Numeric ports belong in --ports, not --service."
+            )
+
+        ports_for_service = []
+
+        # Primary resolution: socket.getservbyname()
+        try:
+            port = socket.getservbyname(svc, "tcp")
+            ports_for_service.append(port)
+        except OSError:
+            # Fallback: manual scan of /etc/services
+            try:
+                with open("/etc/services", "r") as f:
+                    for line in f:
+                        if line.startswith("#") or not line.strip():
+                            continue
+                        parts = line.split()
+                        if len(parts) >= 2 and parts[0] == svc:
+                            port_proto = parts[1]
+                            if "/tcp" in port_proto:
+                                port_num = int(port_proto.split("/")[0])
+                                ports_for_service.append(port_num)
+            except FileNotFoundError:
+                pass
+
+        if not ports_for_service:
+            raise CheckArgError(f"Service '{svc}' not found in /etc/services")
+
+        if len(ports_for_service) > 1:
+            print(f"WARNING: Service '{svc}' has multiple TCP entries; using all.")
+
+        resolved_ports.extend(ports_for_service)
+
+    return sorted(set(resolved_ports))
+def build_port_list(args):
+    """
+    Combine ports from --ports and --service into a single deduped list.
+    """
+    explicit_ports = parse_ports(args.ports) if args.ports else []
+    service_ports = resolve_services(args.service) if args.service else []
+
+    all_ports = sorted(set(explicit_ports + service_ports))
+
+    if not all_ports:
+        raise CheckArgError("No ports resolved from --ports or --service.")
+
+    return all_ports
 def check_port(host, port, timeout):
     """
     Attempt a single TCP connection to host:port with a strict timeout.
@@ -412,9 +469,12 @@ def compress_file(path):
     os.remove(path)
 def start_banner_ports(meta):
     return (
-        f"[START] {SCRIPT_NAME}.py"
+        f"[START]"
+        f" cmd=\"{meta['command']}\""
         f" host={meta['host']}"
-        f" ports={meta['ports_input']}"
+        f" ports_explicit={meta['explicit_ports']}"
+        f" ports_service={meta['service_ports']}"
+        f" ports_all={meta['all_ports']}"
         f" timeout={meta['timeout']}"
         f" require_all={meta['require_all']}"
         f" require_any={meta['require_any']}"
@@ -439,9 +499,66 @@ def nagios_state_string(code):
 def build_nagios_message(enf, code):
     """
     Build the single-line Nagios output message.
-    Deterministic, operator-grade, and consistent with NMS_Tools.
+    Adds service-name awareness for single-service checks
+    and port-aware messages for single explicit-port checks.
     """
 
+    services = enf.get("services_requested", [])
+    service_ports = enf.get("service_ports", [])
+    explicit_ports = enf.get("explicit_ports", [])
+    all_ports = enf.get("all_ports", [])
+
+    # ------------------------------------------------------------
+    # Case 1: Single-service, single-port check
+    # ------------------------------------------------------------
+    single_service = (
+        len(services) == 1
+        and len(service_ports) == 1
+        and len(explicit_ports) == 0
+        and len(all_ports) == 1
+    )
+
+    if single_service:
+        svc = services[0]
+        port = all_ports[0]
+
+        if port in enf["open_ports"]:
+            return f"OK - {svc} ({port}) is open"
+        if port in enf["closed_ports"]:
+            return f"WARNING - {svc} ({port}) is closed"
+        if port in enf["timeout_ports"]:
+            return f"CRITICAL - {svc} ({port}) timed out"
+        if port in enf["unreachable_ports"]:
+            return f"CRITICAL - {svc} ({port}) is unreachable"
+
+        return f"UNKNOWN - {svc} ({port}) unexpected state"
+
+    # ------------------------------------------------------------
+    # Case 2: Single explicit port (no services)
+    # ------------------------------------------------------------
+    single_explicit = (
+        len(explicit_ports) == 1
+        and len(services) == 0
+        and len(all_ports) == 1
+    )
+
+    if single_explicit:
+        port = explicit_ports[0]
+
+        if port in enf["open_ports"]:
+            return f"OK - Port {port} is open"
+        if port in enf["closed_ports"]:
+            return f"WARNING - Port {port} is closed"
+        if port in enf["timeout_ports"]:
+            return f"CRITICAL - Port {port} timed out"
+        if port in enf["unreachable_ports"]:
+            return f"CRITICAL - Port {port} is unreachable"
+
+        return f"UNKNOWN - Port {port} unexpected state"
+
+    # ------------------------------------------------------------
+    # Case 3: Fallback to original multi-port behavior
+    # ------------------------------------------------------------
     if code == OK:
         return (
             "OK - All ports open: "
@@ -475,7 +592,7 @@ def build_nagios_message(enf, code):
 
 def main():
     args = build_parser()
-
+    command_string = " ".join(shlex.quote(arg) for arg in sys.argv)
     # ------------------------------------------------------------
     # Build metadata for logging
     # ------------------------------------------------------------
@@ -484,10 +601,10 @@ def main():
         "log_max_mb": args.log_max_mb,
         "mode": "verbose" if args.verbose else "normal",
         "_log_warn_emitted": False,
-
+        "command": command_string,
+        
         # tool-specific fields
         "host": args.host,
-        "ports_input": args.ports,
         "timeout": args.timeout,
         "require_all": args.require_all,
         "require_any": args.require_any,
@@ -498,20 +615,36 @@ def main():
     logging_enabled = (mode != "nagios") and bool(args.log_dir)
 
     # ------------------------------------------------------------
-    # Rotate log and write start banner
-    # ------------------------------------------------------------
-    if logging_enabled:
-        rotate_log_if_needed(meta)
-        write_log(meta, start_banner_ports(meta))
-
-    # ------------------------------------------------------------
-    # Parse ports
+    # Resolve and combine ports
     # ------------------------------------------------------------
     try:
-        ports = parse_ports(args.ports)
-    except ValueError as e:
+        explicit_ports = parse_ports(args.ports) if args.ports else []
+        service_ports  = resolve_services(args.service) if args.service else []
+        ports = sorted(set(explicit_ports + service_ports))
+
+        if not ports:
+            raise CheckArgError("No ports resolved from --ports or --service.")
+
+        # ------------------------------------------------------------
+        # Update metadata with dynamic fields
+        # ------------------------------------------------------------
+        meta["explicit_ports"] = explicit_ports
+        meta["service_ports"]  = service_ports
+        meta["all_ports"]      = ports
+
+        # ------------------------------------------------------------
+        # Rotate log and write start banner (NOW SAFE)
+        # ------------------------------------------------------------
+        if logging_enabled:
+            rotate_log_if_needed(meta)
+            write_log(meta, start_banner_ports(meta))
+
+    except CheckArgError as e:
         msg = f"UNKNOWN - {e}"
         if logging_enabled:
+            # No START banner was written → write a minimal START
+            rotate_log_if_needed(meta)
+            write_log(meta, f"[START] {SCRIPT_NAME}.py host={meta['host']} cmd=\"{meta['command']}\"")
             write_log(meta, log_summary_ports("UNKNOWN", msg))
             write_log(meta, end_banner())
         print(msg)
@@ -533,7 +666,17 @@ def main():
     # ------------------------------------------------------------
     enf = {
         "host": args.host,
+        "services_requested": args.service.split(",") if args.service else [],
+        "service_ports": service_ports,          # ports resolved from services
+        "explicit_ports": explicit_ports,        # ports from --ports
+        "all_ports": ports,                      # final combined list
+        "service_map": dict(zip(
+            "services_requested",
+            "service_ports"
+        )),
+
         "results": results,
+
         "open_ports":        [r["port"] for r in results if r["status"] == "open"],
         "closed_ports":      [r["port"] for r in results if r["status"] == "closed"],
         "timeout_ports":     [r["port"] for r in results if r["status"] == "timeout"],
@@ -556,8 +699,16 @@ def main():
         sys.exit(code)
 
     if args.verbose:
+        print(f"Host: {args.host}")
+        print(f"Services requested: {', '.join(args.service.split(',')) if args.service else 'None'}")
+        print(f"Service ports:      {', '.join(str(p) for p in service_ports) if service_ports else 'None'}")
+        print(f"Explicit ports:     {', '.join(str(p) for p in explicit_ports) if explicit_ports else 'None'}")
+        print(f"All ports:          {', '.join(str(p) for p in ports)}")
+        print()
+
         for r in results:
             print(f"{args.host}:{r['port']} = {r['status']}")
+
         if logging_enabled:
             write_log(meta, log_summary_ports(nagios_state_string(code), "verbose output"))
             write_log(meta, end_banner())

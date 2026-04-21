@@ -4,6 +4,16 @@
 
 # NAME
 **nms_tools** — deterministic network monitoring and inspection tool suite
+# VERSION
+This build of **NMS_Tools** was generated with the following metadata:
+
+- **Version:** {{VERSION}}
+- **Build Type:** {{BUILD_TYPE}}
+- **Build Date:** {{BUILD_DATE}}
+- **Commit:** {{GIT_HASH}}
+
+These fields are automatically injected during packaging and reflect the
+exact state of the repository at build time.
 
 # DESCRIPTION
 **NMS_Tools** is a unified collection of deterministic, audit‑transparent
@@ -22,20 +32,107 @@ operational semantics across all included tools.
 
 # INCLUDED TOOLS
 
-## check_ports(1)
-Deterministic multi-port TCP availability checker.
+## check_ports.py — Deterministic Multi‑Port TCP Checker
 
-## check_weather(1)
-Weather condition evaluator with deterministic rule engine and provider registry.
+`check_ports.py` performs deterministic TCP availability checks against one or more
+ports on a target host. It supports explicit ports (`-p`) and service names (`-s`),
+resolving services through the system’s service database (e.g., `/etc/services`).
 
-## check_cert(1)
-TLS certificate inspection and policy enforcement tool.
+The tool provides:
+- Deterministic open / closed / timeout / unreachable evaluation
+- Single‑service and single‑port Nagios‑grade output
+- Multi‑port Nagios output for monitoring systems
+- Verbose mode with full resolution context
+- JSON mode for automation pipelines
+- Optional operator‑grade logging with START / PORT / RESULT / END banners
 
-## check_html(1)
-HTTP/HTTPS inspection and content validation tool.
+Typical usage:
+```check_ports.py -H host -s ssh```
+```check_ports.py -H host -p 443```
+```check_ports.py -H host -s https,ssh -p 2222```
 
-## check_interfaces(1)
-Network interface state and SNMP-based operational status checker.
+See **check_ports(1)** for full documentation.
+
+## check_weather.py — Deterministic Weather Condition Evaluator
+check_weather.py evaluates current weather conditions using a deterministic rule
+engine and a provider registry. It is designed for automation workflows that
+depend on environmental state (e.g., wind thresholds, precipitation detection).
+
+The tool provides:
+
+- Deterministic evaluation of temperature, wind, precipitation, and visibility
+- Provider registry with pluggable backends (Open‑Meteo, NOAA, etc.)
+- JSON and verbose output modes
+- Rule‑based condition evaluation (e.g., “unsafe”, “advisory”, “clear”)
+- Optional operator‑grade logging
+
+Typical usage:
+
+```check_weather.py --location "St John, KS"```
+```check_weather.py --location 67576 --json```
+
+See **check_weather(1)** for full documentation.
+
+## check_cert.py — TLS Certificate Inspection and Policy Enforcement
+check_cert.py performs deterministic TLS certificate inspection and policy
+evaluation. It extracts certificate metadata, validates chains, and enforces
+expiration and signature policies.
+
+The tool provides:
+
+- Deterministic JSON metadata extraction
+- Expiration, SAN, issuer, and signature algorithm evaluation
+- AIA chain reconstruction
+- OCSP metadata extraction
+- Policy enforcement with Nagios‑grade exit codes
+- Clean separation between human and machine output modes
+
+Typical usage:
+
+```check_cert.py -H example.com```
+```check_cert.py -H api.example.com --json```
+
+See **check_cert(1)** for full documentation.
+
+## check_html.py — HTTP/HTTPS Inspection and Content Validation
+check_html.py performs deterministic HTTP/HTTPS inspection with content‑type,
+status‑code, and backend validation. It is designed for monitoring web services
+and enforcing expected response characteristics.
+
+The tool provides:
+
+- TLS‑aware request pipeline with handshake detection
+- Status, headers, content‑type, and HTML body capture
+- Backend fingerprinting and backend enforcement
+- Deterministic JSON schema for automation
+- Nagios‑aware severity merging (CRITICAL > WARNING > UNKNOWN > OK)
+
+Typical usage:
+
+```check_html.py -H example.com```
+```check_html.py -H example.com --expect-backend nginx```
+
+See **check_html(1)** for full documentation.
+
+## check_interfaces.py — Network Interface and SNMP Operational State Checker
+check_interfaces.py evaluates network interface state using SNMP and local
+system inspection. It is designed for deterministic monitoring of link status,
+administrative state, and operational counters.
+
+The tool provides:
+
+- SNMP‑based interface enumeration and state evaluation
+- Deterministic admin/oper status mapping
+- Optional local interface inspection (Linux)
+- JSON and verbose output modes
+- Operator‑grade logging with START/RESULT/END lifecycle
+
+Typical usage:
+
+```check_interfaces.py -H switch01```
+```check_interfaces.py -H router01 --json```
+
+See **check_interfaces(1)** for full documentation.
 
 # DIRECTORY STRUCTURE
 A typical installation includes:
