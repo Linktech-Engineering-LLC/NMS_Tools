@@ -7,7 +7,7 @@ Deterministic, operator‑grade monitoring tools for Linux and Nagios environmen
 ![Python](https://img.shields.io/badge/python-3.6%2B-blue?style=for-the-badge&logo=python&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-linux-lightgrey?style=for-the-badge&logo=linux&logoColor=white)
 ![Suite](https://img.shields.io/badge/Linktech_Engineering-Tools_Suite-8A2BE2?style=for-the-badge)
-![Nightly Build](https://github.com/<Linktech-Engineering-LLC>/<NMS_Tools>/actions/workflows/nightly.yml/badge.svg)
+![Nightly Build](https://github.com/Linktech-Engineering-LLC/NMS_Tools/actions/workflows/nightly.yml/badge.svg)
 ![Build Packages](https://github.com/Linktech-Engineering-LLC/NMS_Tools/actions/workflows/build-packages.yml/badge.svg)
 
 </div>
