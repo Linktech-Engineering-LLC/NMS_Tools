@@ -1,7 +1,6 @@
 # NMS_Tools  
 Deterministic, operator‑grade monitoring tools for Linux and Nagios environments.
 
-<div align="center">
 ![Status](https://img.shields.io/badge/status-active-brightgreen?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 ![Python](https://img.shields.io/badge/python-3.6%2B-blue?style=for-the-badge&logo=python&logoColor=white)
@@ -10,7 +9,6 @@ Deterministic, operator‑grade monitoring tools for Linux and Nagios environmen
 ![Nightly Build](https://github.com/Linktech-Engineering-LLC/NMS_Tools/actions/workflows/nightly.yml/badge.svg)
 ![Build Packages](https://github.com/Linktech-Engineering-LLC/NMS_Tools/actions/workflows/build-packages.yml/badge.svg)
 
-</div>
 
 NMS_Tools is a suite of deterministic, operator‑grade monitoring tools designed for Nagios, automation pipelines, and Linux‑based operational workflows.  
 Each tool is built with:
