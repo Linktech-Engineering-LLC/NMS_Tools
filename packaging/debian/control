@@ -8,7 +8,7 @@ Standards-Version: 4.5.0
 Homepage: https://www.linktechengineering.net/projects/nms-tools/
 Package: nms-tools
 Architecture: all
-Depends: ${misc:Depends}, python3
+Depends: python3
 Description: Deterministic operator-grade monitoring tools for Linux and Nagios
  NMS_Tools is a suite of deterministic, operator-grade monitoring and inspection
  utilities designed for automation pipelines and Nagios environments.
