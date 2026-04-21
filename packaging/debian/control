@@ -6,7 +6,6 @@ Maintainer: Linktech Engineering <ldmcclatchey@linktechengineering.net>
 Build-Depends: debhelper (>= 12), python3, pandoc
 Standards-Version: 4.5.0
 Homepage: https://www.linktechengineering.net/projects/nms-tools/
-
 Package: nms-tools
 Architecture: all
 Depends: ${misc:Depends}, python3
