@@ -52,3 +52,14 @@ jobs:
         with:
           name: nms-tools-packages
           path: artifacts
+      - name: Upload DEB package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nms-tools-deb
+          path: nms-tools_*.deb
+
+      - name: Upload RPM package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nms-tools-rpm
+          path: /home/runner/rpmbuild/RPMS/x86_64/*.rpm
