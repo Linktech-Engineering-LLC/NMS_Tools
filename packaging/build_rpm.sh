@@ -7,6 +7,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SPEC_FILE="$ROOT_DIR/packaging/rpm/nms_tools.spec"
 
 cd "$ROOT_DIR"
+# ------------------------------------------------------------
+# Set up rpmbuild directory structure
+# ------------------------------------------------------------
+RPMBUILD="$HOME/rpmbuild"
+
+mkdir -p "$RPMBUILD"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
 # ------------------------------------------------------------
 # Generate man pages (Markdown → groff)
@@ -71,6 +77,7 @@ cp -r $TOOLS "$STAGING_DIR"/
 cp -r "$MAN_OUT_DIR" "$STAGING_DIR"/man
 
 tar -czf "$RPMBUILD/SOURCES/nms_tools-$VERSION.tar.gz" -C "$STAGING_DIR" .
+TARBALL="$RPMBUILD/SOURCES/nms_tools-$VERSION.tar.gz"
 
 rm -rf "$STAGING_DIR"
 
