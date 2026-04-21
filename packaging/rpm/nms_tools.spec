@@ -8,8 +8,6 @@ URL:            https://www.linktechengineering.net/projects/nms-tools/
 Source0:        %{name}-%{version}.tar.gz
 
 BuildArch:      noarch
-BuildRequires:  python3
-BuildRequires:  pandoc
 
 %description
 NMS_Tools is a suite of deterministic, operator-grade monitoring tools for
