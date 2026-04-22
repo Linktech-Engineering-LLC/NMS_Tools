@@ -46,6 +46,11 @@ jobs:
           mkdir -p artifacts
           find "$HOME/rpmbuild/RPMS" -type f -name "*.rpm" -exec cp {} artifacts/ \; || true
 
+      - name: Upload nightly artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-nms-tools
+          path: artifacts
 
   publish-dashboard:
     runs-on: ubuntu-latest
