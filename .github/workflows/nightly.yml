@@ -27,7 +27,6 @@ jobs:
           sudo apt-get install -y \
             pandoc \
             python3 \
-            python3-distutils \
             rpm \
             dpkg-dev
 
@@ -47,23 +46,6 @@ jobs:
           mkdir -p artifacts
           find "$HOME/rpmbuild/RPMS" -type f -name "*.rpm" -exec cp {} artifacts/ \; || true
 
-      - name: Upload nightly artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: nightly-nms-tools
-          path: artifacts
-
-      - name: Upload DEB package
-        uses: actions/upload-artifact@v4
-        with:
-          name: nms-tools-deb
-          path: packaging/nms-tools_*.deb
-
-      - name: Upload RPM package
-        uses: actions/upload-artifact@v4
-        with:
-          name: nms-tools-rpm
-          path: /home/runner/rpmbuild/RPMS/noarch/*.rpm
 
   publish-dashboard:
     runs-on: ubuntu-latest
