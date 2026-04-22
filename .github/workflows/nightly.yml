@@ -34,11 +34,16 @@ jobs:
         run: |
           make packages
 
+      - name: Debug DEB output
+        run: |
+          echo "Searching for DEB files..."
+          find packaging -type f -name "*.deb" -print
+
       - name: Collect DEB artifact
         if: always()
         run: |
           mkdir -p artifacts
-          cp packaging/debian/*.deb artifacts/ || true
+          cp packaging/nms-tools_*.deb artifacts/ || true
 
       - name: Collect RPM artifacts
         if: always()
