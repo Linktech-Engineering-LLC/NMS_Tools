@@ -3,14 +3,15 @@ name: Nightly Build
 on:
   schedule:
     - cron: "0 6 * * *"   # 06:00 UTC nightly
-  workflow_dispatch:       # allow manual runs
+  workflow_dispatch:
 
 jobs:
+
   nightly-build:
     runs-on: ubuntu-latest
 
     env:
-      NIGHTLY: "1"   # <<< ENABLE NIGHTLY VERSION STAMPING
+      NIGHTLY: "1"
 
     steps:
       - name: Checkout repository
@@ -31,8 +32,7 @@ jobs:
             dpkg-dev
 
       - name: Build DEB and RPM via Makefile
-        run: |
-          make packages
+        run: make packages
 
       - name: Debug DEB output
         run: |
@@ -56,6 +56,14 @@ jobs:
         with:
           name: nightly-nms-tools
           path: artifacts
+
+      - name: Update nightly tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f nightly
+          git push -f origin nightly
+
 
   publish-dashboard:
     runs-on: ubuntu-latest
@@ -104,8 +112,8 @@ jobs:
           </html>
           EOF
 
-          cp artifacts/*.deb dashboard/
-          cp artifacts/*.rpm dashboard/
+          cp artifacts/*.deb dashboard/ || true
+          cp artifacts/*.rpm dashboard/ || true
 
       - name: Publish to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
