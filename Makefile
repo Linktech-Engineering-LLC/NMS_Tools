@@ -21,7 +21,7 @@ MAN_OUT := $(patsubst man/%.md,$(MAN_OUT_DIR)/%,$(MAN_SRC))
 # Generate groff man pages from Markdown
 # ------------------------------------------------------------
 man:
-    @echo "Generating man pages..."
+	@echo "Generating man pages..."
     @rm -rf $(MAN_OUT_DIR)
     @mkdir -p $(MAN_OUT_DIR)
     @for src in $(MAN_SRC); do \
