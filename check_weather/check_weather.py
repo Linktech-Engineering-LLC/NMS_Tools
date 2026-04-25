@@ -6,14 +6,18 @@ File: check_weather.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-07
-Last Modified: 2026-04-20
-Required: Python 3.6+
+Last Modified: 2026-04-24
+Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
 
 Description: 
     Deterministic weather checker with ZIP/city/lat-long support.
 """
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "libs"))
 
 import argparse
 import hashlib
@@ -24,16 +28,32 @@ import pwd
 import re
 import requests
 import shutil
-import sys
 import time
 import urllib.parse
 import urllib.request
 import zipfile
 from typing import Any, Dict, Optional, Tuple
-from pathlib import Path
 from datetime import datetime, timedelta
 from enum import IntEnum, auto
 
+# Root of the suite (two levels up from the tool script)
+SUITE_ROOT = Path(__file__).resolve().parent.parent
+
+def load_version() -> str:
+    """
+    Load the suite VERSION file if present.
+    If missing, return a fallback string indicating external execution.
+    """
+    version_file = SUITE_ROOT / "VERSION"
+
+    try:
+        return version_file.read_text(encoding="utf-8").strip()
+    except Exception:
+        return "External to NMS_TOOLS Suite"
+
+VERSION = load_version()
+MIN_MAJOR = 3
+MIN_MINOR = 8
 # ---------------------------------------------------------------------------
 # Nagios Status Codes
 # ---------------------------------------------------------------------------
@@ -42,8 +62,9 @@ STATUS_WARNING = 1
 STATUS_CRITICAL = 2
 STATUS_UNKNOWN = 3
 # Other Global Constants
-SCRIPT_VERSION = "2.0.0"
+SCRIPT_VERSION = "2.1.0"
 SCRIPT_NAME = Path(sys.argv[0]).stem
+# Weather Constants
 DEFAULT_PROVIDER = "open-meteo"
 US_STATES = {
     "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
@@ -96,11 +117,12 @@ class FlagNames(IntEnum):
     VERBOSE = auto()
     JSON = auto()
     QUIET = auto()
-    VERSION = auto()
 
     INCLUDE_GUSTS = auto()
     INCLUDE_PRECIP = auto()
     INCLUDE_CLOUDS = auto()
+    WEEKLY = auto()
+    HOURLY = auto()
 
     IGNORE_CACHE = auto()
     IGNORE_TTL = auto()
@@ -166,13 +188,14 @@ class Flags:
         f[FlagNames.VERBOSE] = args.verbose
         f[FlagNames.JSON] = args.json
         f[FlagNames.QUIET] = args.quiet
-        f[FlagNames.VERSION] = args.version
 
-        # Inclusion flags
+        # Weather flags
         f[FlagNames.INCLUDE_GUSTS] = args.include_gusts
         f[FlagNames.INCLUDE_PRECIP] = args.include_precip
         f[FlagNames.INCLUDE_CLOUDS] = args.include_clouds
-
+        f[FlagNames.WEEKLY] = args.weekly
+        f[FlagNames.HOURLY] = args.hourly
+        
         # Cache flags
         f[FlagNames.IGNORE_CACHE] = args.ignore_cache
         f[FlagNames.IGNORE_TTL] = args.ignore_ttl
@@ -359,12 +382,28 @@ def build_parser() -> argparse.Namespace:
         default=5,
         help="Connection timeout in seconds",
     )
-    core.add_argument(
+    # Weather Modes
+    modes = core.add_mutually_exclusive_group()
+
+    modes.add_argument(
+        "--hourly", "-H",
+        action="store_true",
+        help="Show 24‑hour hourly forecast"
+    )
+
+    modes.add_argument(
+        "--weekly", "-W",
+        action="store_true",
+        help="Show 7‑day weekly forecast"
+    )
+    # Logging options
+    log = parser.add_argument_group("Logging Options")
+    log.add_argument(
         "--log-dir",
         dest="log_dir",
         help="Directory to store logs (optional). If omitted, logging is disabled.",
     )
-    core.add_argument(
+    log.add_argument(
         "--log-max-mb",
         type=int,
         default=50,
@@ -391,7 +430,11 @@ def build_parser() -> argparse.Namespace:
     out.add_argument(
         "-V", "--version",
         action="version",
-        version=f"{SCRIPT_NAME} {SCRIPT_VERSION} (Python {platform.python_version()})",
+        version=(
+            f"NMS_TOOLS Suite Version: {VERSION}\n"
+            f"{SCRIPT_NAME}: {SCRIPT_VERSION}\n"
+            f"Python: {platform.python_version()}"
+        ),
         help="Show script and Python version"
     )
     # Weather thresholds
@@ -789,7 +832,7 @@ def normalize_city_name(city: str) -> str:
 # -----------------------------
 # Open-Meteo fetch
 # -----------------------------
-def fetch_weather_open_meteo(lat: float, lon: float, timeout: int) -> Tuple[Dict[str, Any], str]:
+def fetch_current_open_meteo(lat: float, lon: float, timeout: int):
     base = "https://api.open-meteo.com/v1/forecast"
     params = {
         "latitude": lat,
@@ -811,53 +854,164 @@ def fetch_weather_open_meteo(lat: float, lon: float, timeout: int) -> Tuple[Dict
         ]),
         "timezone": "auto",
     }
+
     url = f"{base}?{urllib.parse.urlencode(params)}"
     with urllib.request.urlopen(url, timeout=timeout) as resp:
         raw = resp.read()
     data = json.loads(raw)
 
-    # Align current_weather time to hourly index
     current = data.get("current_weather", {})
     hourly = data.get("hourly", {})
     times = hourly.get("time", [])
     current_time = current.get("time")
-    idx = None
+
+    # Align current time to hourly index (fallback)
+    idx = 0
     if current_time and times:
         ct = parse_iso(current_time)
         hourly_dt = [parse_iso(t) for t in times]
         idx = min(range(len(hourly_dt)), key=lambda i: abs(hourly_dt[i] - ct))
-    else:
-        idx = 0
-    
-    if idx is None:
-        raise ValueError("Unable to align current weather with hourly data")
 
-    def h(field: str, default=None):
+    def h(field, default=None):
         arr = hourly.get(field)
         if not arr or idx >= len(arr):
             return default
         return arr[idx]
+
+    # Prefer current_weather fields when available
     result = {
         "time": current_time,
-        "temperature_c": h("temperature_2m"),
-        "wind_kph": h("windspeed_10m"),
+        "temperature_c": current.get("temperature", h("temperature_2m")),
+        "wind_kph": current.get("windspeed", h("windspeed_10m")),
         "wind_gust_kph": h("windgusts_10m"),
         "humidity": h("relativehumidity_2m"),
         "precip_mm": h("precipitation"),
         "cloudcover": h("cloudcover"),
-        "condition": h("weathercode"),
+        "condition": current.get("weathercode", h("weathercode")),
         "apparent_temperature_c": h("apparent_temperature"),
         "dewpoint_c": h("dewpoint_2m"),
         "visibility_m": h("visibility"),
         "pressure_msl": h("pressure_msl"),
         "precipitation_probability": h("precipitation_probability"),
     }
+
+    return result, url
+def fetch_hourly_open_meteo(lat: float, lon: float, timeout: int):
+    base = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "hourly": ",".join([
+            "temperature_2m",
+            "apparent_temperature",
+            "dewpoint_2m",
+            "relativehumidity_2m",
+            "pressure_msl",
+            "visibility",
+            "precipitation",
+            "precipitation_probability",
+            "cloudcover",
+            "windspeed_10m",
+            "windgusts_10m",
+            "weathercode",
+        ]),
+        "timezone": "auto",
+    }
+
+    url = f"{base}?{urllib.parse.urlencode(params)}"
+    with urllib.request.urlopen(url, timeout=timeout) as resp:
+        raw = resp.read()
+    data = json.loads(raw)
+
+    hourly = data.get("hourly", {})
+    times = hourly.get("time", [])
+
+    hours = []
+    for i, t in enumerate(times[:24]):  # next 24 hours
+
+        def h(field: str, default=None):
+            arr = hourly.get(field)
+            if not arr or i >= len(arr):
+                return default
+            return arr[i]
+
+        hours.append({
+            "time": t,
+            "temperature_c": h("temperature_2m"),
+            "apparent_temperature_c": h("apparent_temperature"),
+            "dewpoint_c": h("dewpoint_2m"),
+            "humidity": h("relativehumidity_2m"),
+            "wind_kph": h("windspeed_10m"),
+            "wind_gust_kph": h("windgusts_10m"),
+            "precip_mm": h("precipitation"),
+            "precipitation_probability": h("precipitation_probability"),
+            "cloudcover": h("cloudcover"),
+            "visibility_m": h("visibility"),
+            "pressure_msl": h("pressure_msl"),
+            "condition": h("weathercode"),
+        })
+
+    result = {
+        "mode": "hourly",
+        "hours": hours,
+    }
+
+    return result, url
+def fetch_weekly_open_meteo(lat: float, lon: float, timeout: int):
+    base = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "daily": ",".join([
+            "weathercode",
+            "temperature_2m_max",
+            "temperature_2m_min",
+            "precipitation_sum",
+            "precipitation_probability_max",
+            "windspeed_10m_max",
+        ]),
+        "timezone": "auto",
+    }
+
+    url = f"{base}?{urllib.parse.urlencode(params)}"
+    with urllib.request.urlopen(url, timeout=timeout) as resp:
+        raw = resp.read()
+    data = json.loads(raw)
+
+    daily = data.get("daily", {})
+    dates = daily.get("time", [])
+
+    days = []
+    for i, d in enumerate(dates[:7]):  # next 7 days
+
+        def h(field: str, default=None):
+            arr = daily.get(field)
+            if not arr or i >= len(arr):
+                return default
+            return arr[i]
+
+        days.append({
+            "date": d,
+            "condition": h("weathercode"),
+            "temp_max_c": h("temperature_2m_max"),
+            "temp_min_c": h("temperature_2m_min"),
+            "precip_mm": h("precipitation_sum"),
+            "precipitation_probability_max": h("precipitation_probability_max"),
+            "wind_kph_max": h("windspeed_10m_max"),
+        })
+
+    result = {
+        "mode": "weekly",
+        "days": days,
+    }
+
     return result, url
 def fetch_weather(lat: float, lon: float, timeout: int, provider: str,
-                  units: str, force_cache: bool) -> Tuple[Dict[str, Any], Optional[str], str, Optional[float], bool]:
+                  units: str, force_cache: bool, mode: str
+                  ) -> Tuple[Dict[str, Any], Optional[str], str, Optional[float], bool]:
 
-    # Build deterministic cache key
-    cache_id = f"{lat},{lon}:{units}:{provider}"
+    # Cache key must include mode
+    cache_id = f"{lat},{lon}:{units}:{provider}:{mode}"
 
     # Try cache first
     cached, cached_ts = load_cache(cache_id)
@@ -876,7 +1030,14 @@ def fetch_weather(lat: float, lon: float, timeout: int, provider: str,
     url = None
     try:
         if provider == "open-meteo":
-            live, url = fetch_weather_open_meteo(lat, lon, timeout)
+            if mode == "current":
+                live, url = fetch_current_open_meteo(lat, lon, timeout)
+            elif mode == "hourly":
+                live, url = fetch_hourly_open_meteo(lat, lon, timeout)
+            elif mode == "weekly":
+                live, url = fetch_weekly_open_meteo(lat, lon, timeout)
+            else:
+                raise ValueError(f"Unsupported mode: {mode}")
         else:
             raise ValueError(f"Unsupported provider: {provider}")
     except Exception:
@@ -884,13 +1045,13 @@ def fetch_weather(lat: float, lon: float, timeout: int, provider: str,
 
     # Live success → convert + save cache
     if live:
-        data = convert_units(live, units)
+        data = convert_units_mode_aware(live, units, mode)
         save_cache(cache_id, data)
         return data, url, "live", 0, True
 
     # Live failed → fallback to cache
     if cached:
-        data = convert_units(cached, units)
+        data = convert_units_mode_aware(cached, units, mode)
         return data, None, "cache", cache_age, False
 
     # No live + no cache → fail
@@ -1030,175 +1191,187 @@ def build_normal_message(data: Dict[str, Any], args: argparse.Namespace) -> str:
         t = data.get("temperature_c")
         w = data.get("wind_kph")
         return f"Weather normal: {t:.2f}°C, {w:.2f} kph"
-def output_and_exit(status: int, payload: Dict[str, Any], args: argparse.Namespace, flags: Flags ) -> None:
+def output_and_exit(status: int, payload: Dict[str, Any], args, flags, weather_mode: str):
+    """
+    Unified output dispatcher for all display modes and all weather modes.
+    weather_mode is passed explicitly from main() to avoid guessing.
+    """
+
+    # -----------------------------
+    # JSON MODE (unchanged)
+    # -----------------------------
     if flags[FlagNames.JSON]:
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
-    elif flags[FlagNames.VERBOSE]:
-        verbose_output(payload, args, flags)
-    elif not flags[FlagNames.QUIET]:
-        perf = build_perfdata(payload["data"], args, flags)
-        print(f"{payload['status']}: {payload['message']} | {perf}")
+        print(json.dumps(payload, indent=2))
+        sys.exit(status)
+
+    # -----------------------------
+    # VERBOSE MODE
+    # -----------------------------
+    if flags[FlagNames.VERBOSE]:
+        if weather_mode == "current":
+            verbose_current(payload)
+        elif weather_mode == "hourly":
+            verbose_hourly(payload)
+        elif weather_mode == "weekly":
+            verbose_weekly(payload)
+        else:
+            print(f"Unknown weather mode: {weather_mode}")
+        sys.exit(status)
+
+    # -----------------------------
+    # QUIET MODE
+    # -----------------------------
+    if flags[FlagNames.QUIET]:
+        if weather_mode == "current":
+            quiet_current(payload)
+        else:
+            quiet_forecast(payload, weather_mode)
+        sys.exit(status)
+
+    # -----------------------------
+    # NAGIOS MODE (current only)
+    # -----------------------------
+    # main() already enforces that nagios cannot be used with hourly/weekly
+    nagios_output(payload)
     sys.exit(status)
-def verbose_output(payload: Dict[str, Any], args: argparse.Namespace, flags: Flags) -> None:
-    d = payload["data"]
+def verbose_current(payload):
+    data = payload["data"]
+    units = data.get("units", "metric")
 
-    # ---------------------------------------------------------
-    # LOCATION DETAILS (debug flag)
-    # ---------------------------------------------------------
-    if flags[FlagNames.SHOW_LOCATION_DETAILS] and "resolved_location" in payload:
-        print("Location Resolution Details:")
-        rl = payload["resolved_location"]
-        print(f"  Input: {rl['input']}")
-        print(f"  Location Provider: {rl['location_provider']}")
-        print(f"  Location Provider URL: {rl['location_provider_url']}")
-        print(f"  Weather Provider: {rl['weather_provider']}")
-        print(f"  Weather Provider URL: {rl['weather_provider_url']}")
-        print(f"  Resolved Name: {rl['city']}, {rl['state']}, {rl['country']}")
-        print(f"  Latitude: {rl['latitude']}")
-        print(f"  Longitude: {rl['longitude']}")
-        print(f"  Weather API URL: {rl['weather_url']}")
-
-    # ---------------------------------------------------------
-    # CORE STATUS BLOCK
-    # ---------------------------------------------------------
-    print(f"Status: {payload['status']}")
-    print(f"Message: {payload['message']}")
+    print("Current Weather")
+    print("----------------")
     print(f"Location: {payload['location']}")
+    print(f"Time:     {data.get('time')}")
+    print(f"Temp:     {fmt_temp(data, 'temperature', units)}")
+    print(f"Feels:    {fmt_temp(data, 'apparent_temperature', units)}")
+    print(f"Dewpoint: {fmt_temp(data, 'dewpoint', units)}")
+    print(f"Humidity: {fmt_clouds(data.get('humidity'))}")
+    print(f"Wind:     {fmt_wind(data, 'wind', units)}")
+    print(f"Gusts:    {fmt_wind(data, 'wind_gust', units)}")
+    print(f"Clouds:   {fmt_clouds(data.get('cloudcover'))}")
+    print(f"Precip:   {fmt_precip(data, 'precip', units)}")
+    print(f"Pressure: {data.get('pressure_msl')} hPa")
+    print(f"Visibility: {data.get('visibility_m')} m")
+    print(f"Condition: {data.get('condition_text', 'Unknown')}")
+    print(f"Source:   {data.get('source')}")
+def verbose_hourly(payload):
+    data = payload["data"]
+    units = data.get("units", "metric")
+    hours = data.get("hours", [])
 
-    # ---------------------------------------------------------
-    # TEMPERATURE
-    # ---------------------------------------------------------
-    tf = d.get("temperature_f")
-    tc = d.get("temperature_c")
-    if tf is not None and tc is not None:
-        print(f"Temperature: {tf:.2f}°F ({tc:.2f}°C)")
-    elif tf is not None:
-        print(f"Temperature: {tf:.2f}°F")
-    elif tc is not None:
-        print(f"Temperature: {tc:.2f}°C")
+    print("Hourly Forecast (Next 24 Hours)")
+    print("--------------------------------")
 
-    # ---------------------------------------------------------
-    # WIND SPEED
-    # ---------------------------------------------------------
-    wm = d.get("wind_mph")
-    wk = d.get("wind_kph")
-    if wm is not None and wk is not None:
-        print(f"Wind Speed: {wm:.2f} mph ({wk:.2f} kph)")
-    elif wm is not None:
-        print(f"Wind Speed: {wm:.2f} mph")
-    elif wk is not None:
-        print(f"Wind Speed: {wk:.2f} kph")
+    for h in hours:
+        t = h.get("time")
+        temp = fmt_temp(h, "temperature", units)
+        wind = fmt_wind(h, "wind", units)
+        clouds = fmt_clouds(h.get("cloudcover"))
+        precip = fmt_precip(h, "precip", units)
+        cond = WEATHER_CODES.get(h.get("condition"), "Unknown")
 
-    # ---------------------------------------------------------
-    # WIND GUSTS (optional)
-    # ---------------------------------------------------------
-    if flags[FlagNames.INCLUDE_GUSTS]:
-        gm = d.get("wind_gust_mph")
-        gk = d.get("wind_gust_kph")
-        if gm is not None and gk is not None:
-            print(f"Wind Gust: {gm:.2f} mph ({gk:.2f} kph)")
-        elif gm is not None:
-            print(f"Wind Gust: {gm:.2f} mph")
-        elif gk is not None:
-            print(f"Wind Gust: {gk:.2f} kph")
+        print(f"{t}  {temp}  Wind {wind}  Clouds {clouds}  Precip {precip}  {cond}")
+def verbose_weekly(payload):
+    data = payload["data"]
+    units = data.get("units", "metric")
+    days = data.get("days", [])
 
-    # ---------------------------------------------------------
-    # HUMIDITY (always included)
-    # ---------------------------------------------------------
-    if d.get("humidity") is not None:
-        print(f"Humidity: {d['humidity']:.2f}%")
+    print("Weekly Forecast (7 Days)")
+    print("------------------------")
 
-    # ---------------------------------------------------------
-    # PRECIPITATION (optional)
-    # ---------------------------------------------------------
-    if flags[FlagNames.INCLUDE_PRECIP]:
-        pm = d.get("precip_mm")
-        pi = d.get("precip_in")
-        if pm is not None and pi is not None:
-            print(f"Precipitation: {pm:.2f} mm ({pi:.2f} in)")
-        elif pm is not None:
-            print(f"Precipitation: {pm:.2f} mm")
-        elif pi is not None:
-            print(f"Precipitation: {pi:.2f} in")
+    for d in days:
+        date = d.get("date")
+        tmax = fmt_temp(d, "temp_max", units)
+        tmin = fmt_temp(d, "temp_min", units)
+        precip = fmt_precip(d, "precip", units)
+        prob = d.get("precipitation_probability_max")
+        wind = fmt_wind(d, "wind_kph_max", units)
+        cond = WEATHER_CODES.get(d.get("condition"), "Unknown")
 
-    # ---------------------------------------------------------
-    # CLOUD COVER (optional)
-    # ---------------------------------------------------------
-    if flags[FlagNames.INCLUDE_CLOUDS]:
-        cloud = d.get("cloudcover")
-        if cloud is not None:
-            print(f"Cloud Cover: {cloud:.2f}%")
+        print(f"{date}  High {tmax}  Low {tmin}  Rain {precip} ({prob}%)  Wind {wind}  {cond}")
+def quiet_current(payload):
+    print(payload["message"])
+def quiet_forecast(payload, weather_mode):
+    print(f"{weather_mode.capitalize()} forecast retrieved")
+def nagios_output(payload):
+    status = payload["status"]
+    message = payload["message"]
+    print(f"{status}: {message}")
+def fmt_temp(data, key, units):
+    if units == "imperial":
+        return f"{data.get(key + '_f')}°F"
+    return f"{data.get(key + '_c')}°C"
 
-    # ---------------------------------------------------------
-    # CONDITION (with color + optional code)
-    # ---------------------------------------------------------
-    condition = d.get("condition_text", "Unknown")
-    code = d.get("condition")
+def fmt_wind(data, key, units):
+    if units == "imperial":
+        return f"{data.get(key + '_mph')} mph"
+    return f"{data.get(key + '_kph')} kph"
 
-    # choose color based on condition
-    cond_lower = condition.lower()
-    if "rain" in cond_lower or "drizzle" in cond_lower:
-        cond_color = Color.YELLOW
-    elif "storm" in cond_lower:
-        cond_color = Color.RED
-    elif "clear" in cond_lower:
-        cond_color = Color.GREEN
-    elif "cloud" in cond_lower:
-        cond_color = Color.GRAY
-    else:
-        cond_color = Color.CYAN
+def fmt_precip(data, key, units):
+    if units == "imperial":
+        return f"{data.get(key + '_in')} in"
+    return f"{data.get(key + '_mm')} mm"
 
-    cond_display = condition
-    if flags[FlagNames.SHOW_CODES]:
-        cond_display = f"{condition} ({code})"
+def fmt_clouds(v):
+    return f"{v}%" if v is not None else "—"
+def convert_units_mode_aware(data: Dict[str, Any], units: str, mode: str) -> Dict[str, Any]:
+    if mode == "current":
+        out = convert_units_any(data, units)
+        out["units"] = units
+        return out
 
-    print("Condition:",
-          colorize(cond_display, cond_color, not flags[FlagNames.NO_COLOR]))
+    elif mode == "hourly":
+        out = dict(data)
+        out["hours"] = [convert_units_any(h, units) for h in data.get("hours", [])]
+        out["units"] = units
+        return out
 
-    # ---------------------------------------------------------
-    # SOURCE + CACHE INFO
-    # ---------------------------------------------------------
-    source = d.get("source")
-    cache_age = d.get("cache_age")
+    elif mode == "weekly":
+        out = dict(data)
+        out["days"] = [convert_units_any(d, units) for d in data.get("days", [])]
+        out["units"] = units
+        return out
 
-    print(f"Source: {source}")
-    if source in ["cache", "forced cache"]:
-        print(f"Source: Cache (age: {cache_age})")
+    return data
 
-    # ---------------------------------------------------------
-    # RUNTIME
-    # ---------------------------------------------------------
-    print(f"Runtime: {payload['runtime_ms']} ms")
-def convert_units(data: Dict[str, Any], units: str) -> Dict[str, Any]:
+def convert_units_any(data: Dict[str, Any], units: str) -> Dict[str, Any]:
+    """
+    Convert any weather dictionary (current, hourly, weekly) to include
+    both metric and imperial fields.
+    """
     out = dict(data)
 
-    # Temperature C → F
-    if out.get("temperature_c") is not None:
-        out["temperature_f"] = round(out["temperature_c"] * 9/5 + 32, 2)
+    # Temperature fields
+    for key in ["temperature", "apparent_temperature", "dewpoint",
+                "temp_max", "temp_min"]:
+        c = out.get(f"{key}_c")
+        if c is not None:
+            out[f"{key}_f"] = round(c * 9/5 + 32, 2)
 
-    if out.get("apparent_temperature_c") is not None:
-        out["apparent_temperature_f"] = round(out["apparent_temperature_c"] * 9/5 + 32, 2)
+    # Wind fields
+    wind_fields = [
+        ("wind_kph", "wind_mph"),
+        ("wind_gust_kph", "wind_gust_mph"),
+        ("wind_kph_max", "wind_mph_max"),
+    ]
 
-    if out.get("dewpoint_c") is not None:
-        out["dewpoint_f"] = round(out["dewpoint_c"] * 9/5 + 32, 2)
+    for kph_key, mph_key in wind_fields:
+        kph = out.get(kph_key)
+        if kph is not None:
+            out[mph_key] = round(kph * 0.621371, 2)
 
-    # Wind kph → mph
-    if out.get("wind_kph") is not None:
-        out["wind_mph"] = round(out["wind_kph"] * 0.621371, 2)
+    # Precip fields
+    for key in ["precip"]:
+        mm = out.get(f"{key}_mm")
+        if mm is not None:
+            out[f"{key}_in"] = round(mm / 25.4, 2)
 
-    if out.get("wind_gust_kph") is not None:
-        out["wind_gust_mph"] = round(out["wind_gust_kph"] * 0.621371, 2)
-
-    # Precip mm → inches
-    if out.get("precip_mm") is not None:
-        out["precip_in"] = round(out["precip_mm"] / 25.4, 2)
-
-    # Visibility meters → miles
+    # Visibility
     if out.get("visibility_m") is not None:
         out["visibility_km"] = round(out["visibility_m"] / 1000, 2)
         out["visibility_mi"] = round(out["visibility_m"] / 1609.344, 2)
 
-    # Pressure hPa → inHg
+    # Pressure
     if out.get("pressure_msl") is not None:
         out["pressure_inhg"] = round(out["pressure_msl"] * 0.0295299830714, 3)
 
@@ -1348,7 +1521,7 @@ def compress_file(path):
     os.remove(path)
 def start_banner_weather(meta):
     return (
-        f"[START] {meta['script_name']}.py"
+        f"[START] {SCRIPT_NAME}.py"
         f" location={meta['location_input']}"
         f" country={meta['country']}"
         f" provider={meta['provider']}"
@@ -1360,11 +1533,48 @@ def start_banner_weather(meta):
         f" include_precip={meta['include_precip']}"
         f" include_clouds={meta['include_clouds']}"
     )
+def log_weather_data_mode_aware(weather_mode: str, data: Dict[str, Any]) -> str:
+    if weather_mode == "current":
+        return log_weather_current_flat(data)
+    elif weather_mode == "hourly":
+        return log_weather_hourly_flat(data)
+    elif weather_mode == "weekly":
+        return log_weather_weekly_flat(data)
+    else:
+        return f"[WEATHER] error=unknown_mode mode={weather_mode}"
 def log_weather_data(weather):
     fields = []
     for k, v in weather.items():
         fields.append(f"{k}={v}")
     return "[WEATHER] " + " ".join(fields)
+def log_weather_current_flat(data: Dict[str, Any]) -> str:
+    fields = []
+    for k, v in data.items():
+        fields.append(f"{k}={v}")
+    return "[WEATHER] " + " ".join(fields)
+def log_weather_hourly_flat(data: Dict[str, Any]) -> str:
+    hours = data.get("hours", [])
+    lines = []
+
+    for i, h in enumerate(hours):
+        fields = []
+        for k, v in h.items():
+            fields.append(f"hour[{i}].{k}={v}")
+        lines.append("[WEATHER] " + " ".join(fields))
+
+    return "\n".join(lines)
+def log_weather_weekly_flat(data: Dict[str, Any]) -> str:
+    days = data.get("days", [])
+    lines = []
+
+    for i, d in enumerate(days):
+        fields = []
+        for k, v in d.items():
+            fields.append(f"day[{i}].{k}={v}")
+        lines.append("[WEATHER] " + " ".join(fields))
+
+    return "\n".join(lines)
+
 def log_summary_weather(state, message):
     return f"[RESULT] state={state} message=\"{message}\""
 def end_banner():
@@ -1375,15 +1585,36 @@ def end_banner():
 # -----------------------------
 def main() -> None:
     args = build_parser()
-    if args.version:
-        print(f"check_weather.py using Python {sys.version.split()[0]}")
-        sys.exit(0)
+
     if not validate_location_input(args.location, args.country):
         raise ValueError(f"Invalid Location Specified: {args.location}")
-    
+
     flags = Flags.from_args(args)
     start = time.time()
-    mode = "json" if flags[FlagNames.JSON] else "verbose" if flags[FlagNames.VERBOSE] else "quiet" if flags[FlagNames.QUIET] else "nagios" 
+
+    # -----------------------------
+    # DISPLAY MODE (unchanged)
+    # -----------------------------
+    mode = (
+        "json" if flags[FlagNames.JSON] else
+        "verbose" if flags[FlagNames.VERBOSE] else
+        "quiet" if flags[FlagNames.QUIET] else
+        "nagios"
+    )
+
+    # -----------------------------
+    # WEATHER MODE (new)
+    # -----------------------------
+    weather_mode = (
+        "weekly" if flags[FlagNames.WEEKLY] else
+        "hourly" if flags[FlagNames.HOURLY] else
+        "current"
+    )
+
+    # Nagios only works with current mode
+    if mode == "nagios" and weather_mode != "current":
+        raise RuntimeError("Nagios mode only supports current weather.")
+
     meta = {
         "location_input": args.location,
         "country": args.country,
@@ -1398,71 +1629,94 @@ def main() -> None:
         "log_dir": str(Path(args.log_dir).expanduser()) if args.log_dir else None,
         "log_max_mb": args.log_max_mb,
         "mode": mode,
+        "weather_mode": weather_mode,   # NEW
     }
+
     logging_enabled = mode != "nagios" and args.log_dir
+
     loc = resolve_location(args)
     lat = loc.get("latitude", 0)
     lon = loc.get("longitude", 0)
+
     if logging_enabled:
         write_log(meta, start_banner_weather(meta))
         write_log(meta, log_weather_data(loc))
+
+    # -----------------------------
+    # FETCH WEATHER (now mode-aware)
+    # -----------------------------
     data, url, source, cache_age, cache_written = fetch_weather(
-        lat, lon,
-        args.timeout,
-        args.provider,
-        args.units,
-        args.force_cache
+        lat, lon, args.timeout,
+        args.provider, args.units,
+        args.force_cache,
+        weather_mode,      # NEW
     )
+    data = convert_units_mode_aware(data, args.units, weather_mode)
 
     data["source"] = "Live API" if source == "live" else source
     data["cache_written"] = cache_written
     if cache_age is not None:
         data["cache_age"] = format_age(cache_age)
-    # Add human-readable condition text
-    code = data.get("condition")
-    if isinstance(code, int):
-        data["condition_text"] = WEATHER_CODES.get(code, "Unknown")
+
+    # -----------------------------
+    # CONDITION TEXT (current only)
+    # -----------------------------
+    if weather_mode == "current":
+        code = data.get("condition")
+        if isinstance(code, int):
+            data["condition_text"] = WEATHER_CODES.get(code, "Unknown")
+        else:
+            data["condition_text"] = "Unknown"
+
+    # -----------------------------
+    # STATUS EVALUATION (current only)
+    # -----------------------------
+    if weather_mode == "current":
+        status, message = evaluate_weather(data, args)
     else:
-        data["condition_text"] = "Unknown"
-    status, message = evaluate_weather(data, args)
+        # Hourly/weekly do not produce Nagios-style status
+        status, message = 0, f"{weather_mode.capitalize()} forecast retrieved"
+
     if logging_enabled:
-        write_log(meta, log_weather_data(data))
+        write_log(meta, log_weather_data_mode_aware(weather_mode, data))
+
     runtime = round((time.time() - start) * 1000, 2)
+
     payload = {
         "status": ["OK", "WARNING", "CRITICAL", "UNKNOWN"][status],
         "message": message,
         "location": format_resolved_name(loc),
         "data": strip_none(data),
         "runtime_ms": runtime,
+        "weather_mode": weather_mode,
     }
+
     if flags[FlagNames.SHOW_LOCATION_DETAILS]:
-        weather_url=url.split("?")[0] if url is not None else None
+        weather_url = url.split("?")[0] if url is not None else None
         payload["resolved_location"] = {
             "input": args.location,
-
-            # Weather provider (from --provider)
             "weather_provider": args.provider,
             "weather_provider_url": weather_url,
-
-            # Location provider (from geocoding)
             "location_provider": loc.get("provider"),
             "location_provider_url": loc.get("url"),
-
-            # Resolved location metadata
             "city": loc.get("city"),
             "state": loc.get("state"),
             "zip": loc.get("zip"),
             "country": args.country,
             "latitude": loc.get("latitude"),
             "longitude": loc.get("longitude"),
-
-            # Final weather API URL
             "weather_url": url,
         }
+
     if logging_enabled:
-        write_log(meta, log_summary_weather(payload.get("state"), payload.get("message")))
-        write_log(meta,end_banner())
-    output_and_exit(status, payload, args, flags)
+        write_log(meta, log_summary_weather(payload.get("status"), payload.get("message")))
+        write_log(meta, end_banner())
+
+    output_and_exit(status, payload, args, flags, weather_mode)
 
 if __name__ == "__main__":
+    if sys.version_info < (MIN_MAJOR, MIN_MINOR):
+        print(f"CRITICAL: Python {MIN_MAJOR}.{MIN_MINOR}+ required, "
+            f"but running on {sys.version_info.major}.{sys.version_info.minor}")
+        sys.exit(2)
     main()

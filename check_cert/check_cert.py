@@ -7,7 +7,7 @@ Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-17
 Modified: 2026-04-20
-Required: Python 3.6+
+Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
 
@@ -15,6 +15,9 @@ Description:
     Certificate checker with SAN, issuer, signature algorithm, wildcard detection,
     perfdata, quiet/verbose modes, and JSON output.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "libs"))
 
 import argparse
 import ipaddress
@@ -24,7 +27,6 @@ import platform
 import shutil
 import socket
 import ssl
-import sys
 import urllib.request
 import urllib.error
 import zipfile
@@ -35,11 +37,28 @@ from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448
 from cryptography.x509.oid import ExtensionOID, NameOID, AuthorityInformationAccessOID
 from cryptography.x509.ocsp import load_der_ocsp_response  # optional, see OCSP stub
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448
-from datetime import datetime
-from pathlib import Path
+from datetime import datetime, timezone
 from typing import Tuple, Optional, List, Union, cast, Dict
 from typing_extensions import TypedDict
 
+# Root of the suite (two levels up from the tool script)
+SUITE_ROOT = Path(__file__).resolve().parent.parent
+
+def load_version() -> str:
+    """
+    Load the suite VERSION file if present.
+    If missing, return a fallback string indicating external execution.
+    """
+    version_file = SUITE_ROOT / "VERSION"
+
+    try:
+        return version_file.read_text(encoding="utf-8").strip()
+    except Exception:
+        return "External to NMS_TOOLS Suite"
+
+VERSION = load_version()
+MIN_MAJOR = 3
+MIN_MINOR = 8
 # -----------------------------
 #  Nagios Exit Codes
 # -----------------------------
@@ -178,9 +197,16 @@ def build_parser():
                      help="JSON output for automation")
     out.add_argument("-q", "--quiet", action="store_true",
                      help="Quiet mode: exit code only")
-    out.add_argument("-V", "--version", action="version",
-                     version=f"check_cert.py {SCRIPT_VERSION} (Python {platform.python_version()})",
-                     help="Show script version and Python interpreter version")
+    out.add_argument(
+        "-V", "--version",
+        action="version",
+        version=(
+            f"NMS_TOOLS Suite Version: {VERSION}\n"
+            f"{SCRIPT_NAME}: {SCRIPT_VERSION}\n"
+            f"Python: {platform.python_version()}"
+        ),
+        help="Show script and Python version"
+    )
     # -----------------------------
     # TLS Requirements
     # -----------------------------
@@ -1539,8 +1565,11 @@ def build_certificate_meta(cert, chain, args):
     # 1. Expiration metadata
     # ------------------------------------------------------------
     not_after = cert.not_valid_after
+    # Ensure not_after is timezone-aware
+    if not_after.tzinfo is None:
+        not_after = not_after.replace(tzinfo=timezone.utc)
+    expiration_days = (not_after - datetime.now(timezone.utc)).days    
     expiration_date = not_after.strftime("%Y-%m-%d")
-    expiration_days = (not_after - datetime.utcnow()).days
 
     # ------------------------------------------------------------
     # 2. Subject / Issuer
@@ -1783,7 +1812,7 @@ def compress_file(path):
     os.remove(path)
 def start_banner(meta):
     return (
-        f"[START] {meta['script_name']}"
+        f"[START] {SCRIPT_NAME}"
         f" host={meta['host']}"
         f" port={meta['port']}"
         f" sni={meta['sni']}"
@@ -1954,4 +1983,8 @@ def main():
 
 
 if __name__ == "__main__":
+    if sys.version_info < (MIN_MAJOR, MIN_MINOR):
+        print(f"CRITICAL: Python {MIN_MAJOR}.{MIN_MINOR}+ required, "
+            f"but running on {sys.version_info.major}.{sys.version_info.minor}")
+        sys.exit(2)
     main()

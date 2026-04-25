@@ -6,6 +6,7 @@ __pycache__/
 venv/
 .env/
 .vscode/
+.venv/
 
 # Logs
 *.log
@@ -19,3 +20,9 @@ venv/
 *.code-workspace
 checklist*.md
 CHECKLIST*.md
+
+# Packaging Files
+libs/
+dist/
+build/
+*.tar.gz

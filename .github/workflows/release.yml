@@ -1,0 +1,56 @@
+name: NMS_Tools Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # required for tags
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc shellcheck
+          pip install flake8 black isort yamllint
+
+      - name: Run lint checks (non-blocking)
+        run: |
+          flake8 || true
+          black --check . || true
+          isort --check-only . || true
+          yamllint . || true
+          shellcheck **/*.sh || true
+
+      - name: Validate environment
+        run: |
+          python3 tools/validate_env.py
+
+      - name: Build suite (vendor + tarball + man pages)
+        run: |
+          make all
+
+      - name: Upload suite artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nms_tools_suite
+          path: dist/*.tar.gz
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

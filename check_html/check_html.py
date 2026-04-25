@@ -7,7 +7,7 @@ Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-21
 Modified: 2026-04-20
-Required: Python 3.6+
+Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
 
@@ -15,6 +15,10 @@ Description:
     HTML content checker with status-code enforcement, required-tag checks,
     content-type validation, quiet/verbose modes, and JSON output.
 """
+
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "libs"))
 
 import argparse
 import http.client
@@ -25,15 +29,31 @@ import os
 import shutil
 import ssl
 import socket
-import sys
 import time
 import zipfile
 
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
+# Root of the suite (two levels up from the tool script)
+SUITE_ROOT = Path(__file__).resolve().parent.parent
+
+def load_version() -> str:
+    """
+    Load the suite VERSION file if present.
+    If missing, return a fallback string indicating external execution.
+    """
+    version_file = SUITE_ROOT / "VERSION"
+
+    try:
+        return version_file.read_text(encoding="utf-8").strip()
+    except Exception:
+        return "External to NMS_TOOLS Suite"
+
+VERSION = load_version()
+MIN_MAJOR = 3
+MIN_MINOR = 8
 # Nagios Exit Codes
 OK = 0
 WARNING = 1
@@ -184,9 +204,16 @@ def build_parser():
                      help="JSON output for automation")
     out.add_argument("-q", "--quiet", action="store_true",
                      help="Quiet mode: exit code only")
-    out.add_argument("-V", "--version", action="version",
-                     version=f"check_cert.py {SCRIPT_VERSION} (Python {platform.python_version()})",
-                     help="Show script version and Python interpreter version")
+    out.add_argument(
+        "-V", "--version",
+        action="version",
+        version=(
+            f"NMS_TOOLS Suite Version: {VERSION}\n"
+            f"{SCRIPT_NAME}: {SCRIPT_VERSION}\n"
+            f"Python: {platform.python_version()}"
+        ),
+        help="Show script and Python version"
+    )
 
     # ------------------------------------------------------------
     # HTTP Status Requirements
@@ -1182,7 +1209,7 @@ def compress_file(path):
     os.remove(path)
 def start_banner(meta):
     return (
-        f"[START] {meta['script_name']}"
+        f"[START] {SCRIPT_NAME}"
         f" url={meta['url']}"
         f" timeout={meta['timeout']}"
         f" https={meta['https']}"
@@ -1351,4 +1378,8 @@ def main():
     sys.exit(result["overall"]["status"])
 
 if __name__ == "__main__":
+    if sys.version_info < (MIN_MAJOR, MIN_MINOR):
+        print(f"CRITICAL: Python {MIN_MAJOR}.{MIN_MINOR}+ required, "
+            f"but running on {sys.version_info.major}.{sys.version_info.minor}")
+        sys.exit(2)
     main()

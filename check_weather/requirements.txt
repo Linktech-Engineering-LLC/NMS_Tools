@@ -1,6 +1,0 @@
- Core runtime dependencies
-requests==2.31.0
-
-# Needed for Python 3.6 timestamp parsing
-# (datetime.fromisoformat is unavailable)
-python-dateutil==2.9.0

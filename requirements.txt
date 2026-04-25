@@ -1,0 +1,11 @@
+cryptography
+easysnmp
+psutil
+python-dateutil
+requests
+six
+typing_extensions
+urllib3
+idna
+charset-normalizer
+certifi

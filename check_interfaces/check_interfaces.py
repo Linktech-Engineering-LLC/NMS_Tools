@@ -7,7 +7,7 @@ Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-22
 Modified: 2026-04-20
-Required: Python 3.6+
+Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
 
@@ -16,10 +16,12 @@ Description:
         Obtains a dictionary of interfaces from the system, which includes the operational
         and configuration information about each interface.
 """
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "libs"))
 
 import argparse
 import platform
-import sys
 import os
 import socket
 import ipaddress
@@ -30,11 +32,26 @@ import shutil
 import zipfile
 
 from datetime import datetime
-from pathlib import Path
-from pysnmp.hlapi import (
-    SnmpEngine, CommunityData, UdpTransportTarget,
-    ContextData, ObjectType, ObjectIdentity, nextCmd
-)
+from easysnmp import Session
+
+# Root of the suite (two levels up from the tool script)
+SUITE_ROOT = Path(__file__).resolve().parent.parent
+
+def load_version() -> str:
+    """
+    Load the suite VERSION file if present.
+    If missing, return a fallback string indicating external execution.
+    """
+    version_file = SUITE_ROOT / "VERSION"
+
+    try:
+        return version_file.read_text(encoding="utf-8").strip()
+    except Exception:
+        return "External to NMS_TOOLS Suite"
+
+VERSION = load_version()
+MIN_MAJOR = 3
+MIN_MINOR = 8
 
 # Nagios Exit Codes
 OK = 0
@@ -219,9 +236,16 @@ def build_parser():
         "-q", "--quiet", action="store_true",
         help="Quiet mode: exit code only"
     )
-    out.add_argument("-V", "--version", action="version",
-                     version=f"check_cert.py {SCRIPT_VERSION} (Python {platform.python_version()})",
-                     help="Show script version and Python interpreter version")
+    out.add_argument(
+        "-V", "--version",
+        action="version",
+        version=(
+            f"NMS_TOOLS Suite Version: {VERSION}\n"
+            f"{SCRIPT_NAME}: {SCRIPT_VERSION}\n"
+            f"Python: {platform.python_version()}"
+        ),
+        help="Show script and Python version"
+    )
     # ------------------------------------------------------------
     # Examples
     # ------------------------------------------------------------
@@ -452,95 +476,24 @@ def gather_local_interfaces(timeout=None):
 # -----------------------------
 # SNMP Interface Information
 # -----------------------------
-def snmp_walk(ip, community, oid, port=161, timeout=3, index_components=1):
-    """
-    Deterministic SNMP walk helper.
-    Returns a dict {index: value}.
-    index_components: number of trailing OID components to use as the key.
-        1 (default) = single integer index (IF-MIB)
-        4 = dotted-quad IP index (ipAddrTable)
-    """
-    results = {}
 
-    for (errorIndication,
-         errorStatus,
-         errorIndex,
-         varBinds) in nextCmd(
-            SnmpEngine(),
-            CommunityData(community, mpModel=1),
-            UdpTransportTarget((ip, port), timeout=timeout, retries=1),
-            ContextData(),
-            ObjectType(ObjectIdentity(oid)),
-            lexicographicMode=False
-    ):
-        if errorIndication:
-            raise Exception(f"SNMP error: {errorIndication}")
-        if errorStatus:
-            raise Exception(
-                f"SNMP error: {errorStatus.prettyPrint()} at {errorIndex}"
-            )
+def snmp_walk(host, community, oid, port=161, timeout=3):
+    session = Session(
+        hostname=host,
+        community=community,
+        version=2,
+        remote_port=port,
+        timeout=timeout
+    )
 
-        for oid_obj, value in varBinds:
-            parts = oid_obj.prettyPrint().split('.')
-            if index_components == 1:
-                idx = int(parts[-1])
-            else:
-                idx = '.'.join(parts[-index_components:])
-            results[idx] = value.prettyPrint()
+    results = session.walk(oid)
 
-    return results
+    out = {}
+    for item in results:
+        idx = int(item.oid_index)
+        out[idx] = item.value
+    return out
 def gather_snmp_interfaces(ip, community, port=161, timeout=3):
-    """
-    Collect interface information from a remote host using SNMPv2c.
-    Returns a structure identical to gather_local_interfaces().
-    """
-    # -----------------------------
-    # IP-MIB walks (IPv4)
-    # -----------------------------
-    ipAdEntIfIndex = snmp_walk(ip, community, "1.3.6.1.2.1.4.20.1.2", port, timeout, index_components=4)
-    ipAdEntNetMask = snmp_walk(ip, community, "1.3.6.1.2.1.4.20.1.3", port, timeout, index_components=4)
-    # -----------------------------
-    # Counters
-    # -----------------------------
-    ifInOctets       = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.10", port, timeout)
-    ifOutOctets      = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.16", port, timeout)
-    ifInUcast        = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.11", port, timeout)
-    ifOutUcast       = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.17", port, timeout)
-    ifInMulticast    = snmp_walk(ip, community, "1.3.6.1.2.1.31.1.1.1.2", port, timeout)
-    ifOutMulticast   = snmp_walk(ip, community, "1.3.6.1.2.1.31.1.1.1.4", port, timeout)
-    ifInBroadcast    = snmp_walk(ip, community, "1.3.6.1.2.1.31.1.1.1.3", port, timeout)
-    ifOutBroadcast   = snmp_walk(ip, community, "1.3.6.1.2.1.31.1.1.1.5", port, timeout)
-    ifInDiscards     = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.13", port, timeout)
-    ifOutDiscards    = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.19", port, timeout)
-    ifInErrors       = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.14", port, timeout)
-    ifOutErrors      = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.20", port, timeout)
-
-    # Build reverse map: ifIndex → list of {address, netmask, broadcast}
-    ip_by_ifindex = {}
-    for addr, ifidx in ipAdEntIfIndex.items():
-        ifidx = int(ifidx)
-        netmask = ipAdEntNetMask.get(addr, "255.255.255.255")
-
-        # Calculate broadcast from address + netmask
-        import struct, socket
-        ip_int = struct.unpack("!I", socket.inet_aton(addr))[0]
-        mask_int = struct.unpack("!I", socket.inet_aton(netmask))[0]
-        bcast_int = (ip_int & mask_int) | (~mask_int & 0xFFFFFFFF)
-        broadcast = socket.inet_ntoa(struct.pack("!I", bcast_int))
-
-        # Loopback has no broadcast
-        if netmask == "255.0.0.0":
-            broadcast = None
-
-        ip_by_ifindex.setdefault(ifidx, []).append({
-            "address": addr,
-            "netmask": netmask,
-            "broadcast": broadcast
-        })
-
-    # -----------------------------
-    # IF-MIB walks
-    # -----------------------------
     ifDescr       = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.2", port, timeout)
     ifType        = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.3", port, timeout)
     ifMtu         = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.4", port, timeout)
@@ -548,18 +501,8 @@ def gather_snmp_interfaces(ip, community, port=161, timeout=3):
     ifPhysAddress = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.6", port, timeout)
     ifAdminStatus = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.7", port, timeout)
     ifOperStatus  = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.8", port, timeout)
+    dot3Duplex    = snmp_walk(ip, community, "1.3.6.1.2.1.10.7.2.1.19", port, timeout)
 
-    # -----------------------------
-    # EtherLike-MIB (optional)
-    # -----------------------------
-    try:
-        dot3Duplex = snmp_walk(ip, community, "1.3.6.1.2.1.10.7.2.1.19", port, timeout)
-    except Exception:
-        dot3Duplex = {}
-
-    # -----------------------------
-    # Build deterministic structure
-    # -----------------------------
     interfaces = {}
 
     for idx in sorted(ifDescr.keys()):
@@ -568,32 +511,15 @@ def gather_snmp_interfaces(ip, community, port=161, timeout=3):
         iface = {
             "name": name,
             "mac": ifPhysAddress.get(idx),
-            "ipv4": ip_by_ifindex.get(int(idx), []),
-            "ipv6": [],
             "mtu": int(ifMtu.get(idx, 0)),
             "speed": int(ifSpeed.get(idx, 0)),
             "duplex": dot3Duplex.get(idx),
-            "admin_up": (int(ifAdminStatus.get(idx, 0)) == 1),
-            "oper_up": (int(ifOperStatus.get(idx, 0)) == 1),
-            "counters": {
-                "in_octets": int(ifInOctets.get(idx, 0)),
-                "out_octets": int(ifOutOctets.get(idx, 0)),
-                "in_ucast": int(ifInUcast.get(idx, 0)),
-                "out_ucast": int(ifOutUcast.get(idx, 0)),
-                "in_multicast": int(ifInMulticast.get(idx, 0)),
-                "out_multicast": int(ifOutMulticast.get(idx, 0)),
-                "in_broadcast": int(ifInBroadcast.get(idx, 0)),
-                "out_broadcast": int(ifOutBroadcast.get(idx, 0)),
-                "in_discards": int(ifInDiscards.get(idx, 0)),
-                "out_discards": int(ifOutDiscards.get(idx, 0)),
-                "in_errors": int(ifInErrors.get(idx, 0)),
-                "out_errors": int(ifOutErrors.get(idx, 0))
-            },
-            "flags": [],
-            "ifType": int(ifType.get(idx, 0))   # <-- ADD THIS
+            "up": (str(ifOperStatus.get(idx)) == "1"),
+            "running": (str(ifOperStatus.get(idx)) == "1"),
+            "flags": []
         }
-        # Flags
-        if iface["oper_up"]:
+
+        if iface["up"]:
             iface["flags"].append("UP")
         if iface["speed"] > 0:
             iface["flags"].append("RUNNING")
@@ -1314,4 +1240,8 @@ def main():
     sys.exit(code)
 
 if __name__ == "__main__":
+    if sys.version_info < (MIN_MAJOR, MIN_MINOR):
+        print(f"CRITICAL: Python {MIN_MAJOR}.{MIN_MINOR}+ required, "
+            f"but running on {sys.version_info.major}.{sys.version_info.minor}")
+        sys.exit(2)
     main()
