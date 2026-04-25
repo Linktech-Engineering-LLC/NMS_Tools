@@ -142,7 +142,7 @@ release:
     @echo "[release] Building suite package..."
     $(PYTHON) $(TOOLS)/build_suite.py
 
-    @echo "[release] Committing version bump..."
+	@echo "[release] Committing version bump..."
     git add VERSION
     git commit -m "Release v$$(cat VERSION)"
 
