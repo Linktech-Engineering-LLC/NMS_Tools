@@ -232,3 +232,141 @@ check_weather.py guarantees:
 - Day/night icon selection is deterministic based on sunrise/sunset timestamps
 
 This ensures compatibility with dashboards, log pipelines, and long‑term monitoring.
+
+## 9. JSON Examples (v2.2.0)
+
+### 9.1 Current Mode Example
+
+```json
+{
+  "status": "OK",
+  "message": "Weather normal: 56.48°F, 20.26 mph",
+  "location": "Saint John, Kansas 67576, US",
+  "data": {
+    "mode": "current",
+    "time": "2026-04-27T11:00",
+    "temperature_f": 56.48,
+    "temperature_c": 13.6,
+    "wind_mph": 20.26,
+    "wind_kph": 32.6,
+    "humidity": 31,
+    "cloudcover": 54,
+    "precip_in": 0.0,
+    "precip_mm": 0.0,
+    "condition": 2,
+    "context": "Partly cloudy",
+    "icon": "wi-day-cloudy.svg",
+    "source": "Live API",
+    "cache_written": true,
+    "cache_age": "0s"
+  },
+  "resolved_location": {
+    "input": "67576",
+    "weather_provider": "open-meteo",
+    "weather_provider_url": "https://api.open-meteo.com/v1/forecast",
+    "location_provider": "zippopotam.us",
+    "location_provider_url": "https://api.zippopotam.us/US/67576",
+    "city": "Saint John",
+    "state": "Kansas",
+    "country": "US",
+    "latitude": 38.0309,
+    "longitude": -98.7647,
+    "weather_url": "https://api.open-meteo.com/v1/forecast?latitude=..."
+  },
+  "runtime_ms": 763.0
+}
+```
+
+### 9.2 Hourly Mode Example (Rolling 24 Hours)
+
+```json
+{
+  "status": "OK",
+  "message": "Hourly forecast retrieved",
+  "location": "Saint John, Kansas 67576, US",
+  "data": {
+    "mode": "hourly",
+    "hours": [
+      {
+        "time": "2026-04-27T11:00",
+        "temperature_f": 54.68,
+        "wind_mph": 14.42,
+        "humidity": 84,
+        "cloudcover": 100,
+        "precip_in": 0.0,
+        "condition": 3,
+        "context": "Overcast",
+        "icon": "wi-cloudy.svg",
+        "sunrise": "2026-04-27T06:43",
+        "sunset": "2026-04-27T20:22"
+      },
+      {
+        "time": "2026-04-27T12:00",
+        "temperature_f": 55.94,
+        "wind_mph": 14.79,
+        "humidity": 79,
+        "cloudcover": 87,
+        "precip_in": 0.0,
+        "condition": 3,
+        "context": "Overcast",
+        "icon": "wi-cloudy.svg",
+        "sunrise": "2026-04-27T06:43",
+        "sunset": "2026-04-27T20:22"
+      }
+      // ... 22 more entries (always 24 total)
+    ],
+    "units": "imperial",
+    "source": "Live API",
+    "cache_written": true,
+    "cache_age": "0s"
+  },
+  "runtime_ms": 645.06
+}
+```
+
+### 9.3 Weekly Mode Example (7 Days Starting Today)
+
+```json
+{
+  "status": "OK",
+  "message": "Weekly forecast retrieved",
+  "location": "Saint John, Kansas 67576, US",
+  "data": {
+    "mode": "weekly",
+    "days": [
+      {
+        "date": "2026-04-27",
+        "temp_max_f": 66.02,
+        "temp_min_f": 53.06,
+        "wind_mph_max": 17.15,
+        "precip_in": 0.0,
+        "precipitation_probability_max": 26,
+        "condition": 45,
+        "context": "Fog",
+        "icon": "wi-night-fog.svg",
+        "sunrise": "2026-04-27T06:43",
+        "sunset": "2026-04-27T20:22"
+      },
+      {
+        "date": "2026-04-28",
+        "temp_max_f": 63.5,
+        "temp_min_f": 42.98,
+        "wind_mph_max": 14.6,
+        "precip_in": 0.0,
+        "precipitation_probability_max": 3,
+        "condition": 3,
+        "context": "Overcast",
+        "icon": "wi-night-cloudy.svg",
+        "sunrise": "2026-04-28T06:41",
+        "sunset": "2026-04-28T20:23"
+      }
+      // ... 5 more entries (always 7 total)
+    ],
+    "units": "imperial",
+    "source": "Live API",
+    "cache_written": true,
+    "cache_age": "0s"
+  },
+  "runtime_ms": 527.41
+}
+```
