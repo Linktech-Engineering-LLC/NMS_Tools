@@ -26,3 +26,6 @@ libs/
 dist/
 build/
 *.tar.gz
+
+# External Graphic files
+svg/

@@ -89,6 +89,96 @@ Normalized weather metrics used for threshold evaluation and perfdata.
 
 All values are normalized and rounded deterministically.
 
+### New Fields in v2.2.0
+
+| Field | Type | Description |
+|-------|------|-------------|
+| mode | string | One of: `"current"`, `"hourly"`, `"weekly"` |
+| context | string | Normalized human‑readable condition text (backend‑derived) |
+| icon | string | Deterministic icon filename selected by backend |
+| wind_mph_max | number | Max wind speed for weekly mode (imperial) |
+| wind_kph_max | number | Max wind speed for weekly mode (metric) |
+| hours | array<object> | Rolling 24‑hour forecast entries (hourly mode only) |
+| days | array<object> | 7‑day forecast entries starting today (weekly mode only) |
+| source | string | `"Live API"` or `"Cache"` |
+| cache_written | boolean | Whether cache was updated during this run |
+| cache_age | string | Age string (e.g., `"0s"`, `"45s"`) |
+
+### Hourly Mode (`mode = "hourly"`)
+
+Hourly mode returns a rolling 24‑hour forecast beginning at the next hour ≥ local time.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| hours | array<object> | Exactly 24 entries, each representing one hour |
+
+Each hourly entry contains:
+
+- time (ISO‑8601)
+- temperature_c / temperature_f
+- apparent_temperature_c / apparent_temperature_f
+- dewpoint_c / dewpoint_f
+- wind_kph / wind_mph
+- wind_gust_kph / wind_gust_mph
+- humidity
+- precip_mm / precip_in
+- precipitation_probability
+- cloudcover
+- visibility_m / visibility_km / visibility_mi
+- pressure_msl / pressure_inhg
+- condition (WMO code)
+- context (normalized text)
+- icon (filename)
+- sunrise / sunset (ISO‑8601)
+
+### Weekly Mode (`mode = "weekly"`)
+
+Weekly mode returns exactly 7 days beginning at the current local date.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| days | array<object> | Exactly 7 entries, one per day |
+
+Each day entry contains:
+
+- date (YYYY‑MM‑DD)
+- sunrise / sunset (ISO‑8601)
+- temp_max_c / temp_max_f
+- temp_min_c / temp_min_f
+- wind_kph_max / wind_mph_max
+- precip_mm / precip_in
+- precipitation_probability_max
+- condition (WMO code)
+- context (normalized text)
+- icon (filename)
+### Weekly Mode (`mode = "weekly"`)
+
+Weekly mode returns exactly 7 days beginning at the current local date.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| days | array<object> | Exactly 7 entries, one per day |
+
+Each day entry contains:
+
+- date (YYYY‑MM‑DD)
+- sunrise / sunset (ISO‑8601)
+- temp_max_c / temp_max_f
+- temp_min_c / temp_min_f
+- wind_kph_max / wind_mph_max
+- precip_mm / precip_in
+- precipitation_probability_max
+- condition (WMO code)
+- context (normalized text)
+- icon (filename)
+
+### Current Mode (`mode = "current"`)
+
+Current mode includes:
+
+- context (normalized condition text)
+- icon (deterministic icon filename)
+
 ## 6. resolved_location Object
 
 Contains resolver metadata, provider URLs, and normalized geographic fields.
@@ -135,5 +225,10 @@ check_weather.py guarantees:
 - resolved_location is always present
 - data always contains the full normalized weather block
 - status, message, and runtime_ms always exist
+- `hours[]` always contains exactly 24 entries in hourly mode
+- `days[]` always contains exactly 7 entries in weekly mode
+- `context` and `icon` are always present for all modes
+- `mode` is always present and validated
+- Day/night icon selection is deterministic based on sunrise/sunset timestamps
 
 This ensures compatibility with dashboards, log pipelines, and long‑term monitoring.

@@ -6,7 +6,7 @@ File: check_weather.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-07
-Last Modified: 2026-04-24
+Last Modified: 2026-04-27
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -33,7 +33,7 @@ import urllib.parse
 import urllib.request
 import zipfile
 from typing import Any, Dict, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from enum import IntEnum, auto
 
 # Root of the suite (two levels up from the tool script)
@@ -62,7 +62,7 @@ STATUS_WARNING = 1
 STATUS_CRITICAL = 2
 STATUS_UNKNOWN = 3
 # Other Global Constants
-SCRIPT_VERSION = "2.1.0"
+SCRIPT_VERSION = "2.2.0"
 SCRIPT_NAME = Path(sys.argv[0]).stem
 # Weather Constants
 DEFAULT_PROVIDER = "open-meteo"
@@ -83,35 +83,151 @@ US_STATES = {
 }
 STATE_NAME_TO_CODE = {v.lower(): k for k, v in US_STATES.items()}
 WEATHER_CODES = {
-    0: "Clear sky",
-    1: "Mainly clear",
-    2: "Partly cloudy",
-    3: "Overcast",
-    45: "Fog",
-    48: "Depositing rime fog",
-    51: "Light drizzle",
-    53: "Moderate drizzle",
-    55: "Dense drizzle",
-    56: "Freezing drizzle",
-    57: "Freezing drizzle (dense)",
-    61: "Slight rain",
-    63: "Moderate rain",
-    65: "Heavy rain",
-    66: "Freezing rain",
-    67: "Freezing rain (heavy)",
-    71: "Slight snow",
-    73: "Moderate snow",
-    75: "Heavy snow",
-    77: "Snow grains",
-    80: "Rain showers",
-    81: "Rain showers (moderate)",
-    82: "Rain showers (violent)",
-    85: "Snow showers",
-    86: "Snow showers (heavy)",
-    95: "Thunderstorm",
-    96: "Thunderstorm with hail",
-    99: "Thunderstorm with heavy hail",
+    0: {
+        "context": "Clear sky",
+        "day_icon": "wi-day-sunny.svg",
+        "night_icon": "wi-night-clear.svg",
+    },
+    1: {
+        "context": "Mainly clear",
+        "day_icon": "wi-day-sunny.svg",
+        "night_icon": "wi-night-clear.svg",
+    },
+    2: {
+        "context": "Partly cloudy",
+        "day_icon": "wi-day-cloudy.svg",
+        "night_icon": "wi-night-alt-partly-cloudy.svg",
+    },
+    3: {
+        "context": "Overcast",
+        "day_icon": "wi-cloudy.svg",
+        "night_icon": "wi-night-cloudy.svg",
+    },
+    45: {
+        "context": "Fog",
+        "day_icon": "wi-day-fog.svg",
+        "night_icon": "wi-night-fog.svg",
+    },
+    48: {
+        "context": "Depositing rime fog",
+        "day_icon": "wi-day-fog.svg",
+        "night_icon": "wi-night-fog.svg",
+    },
+    51: {
+        "context": "Light drizzle",
+        "day_icon": "wi-day-sprinkle.svg",
+        "night_icon": "wi-night-alt-sprinkle.svg",
+    },
+    53: {
+        "context": "Moderate drizzle",
+        "day_icon": "wi-day-sprinkle.svg",
+        "night_icon": "wi-night-alt-sprinkle.svg",
+    },
+    55: {
+        "context": "Dense drizzle",
+        "day_icon": "wi-day-rain-mix.svg",
+        "night_icon": "wi-night-alt-rain-mix.svg",
+    },
+    56: {
+        "context": "Freezing drizzle",
+        "day_icon": "wi-day-sleet.svg",
+        "night_icon": "wi-night-alt-sleet.svg",
+    },
+    57: {
+        "context": "Freezing drizzle (dense)",
+        "day_icon": "wi-day-sleet.svg",
+        "night_icon": "wi-night-alt-sleet.svg",
+    },
+    61: {
+        "context": "Slight rain",
+        "day_icon": "wi-day-rain.svg",
+        "night_icon": "wi-night-alt-rain.svg",
+    },
+    63: {
+        "context": "Moderate rain",
+        "day_icon": "wi-day-rain.svg",
+        "night_icon": "wi-night-alt-rain.svg",
+    },
+    65: {
+        "context": "Heavy rain",
+        "day_icon": "wi-day-rain-wind.svg",
+        "night_icon": "wi-night-alt-rain-wind.svg",
+    },
+    66: {
+        "context": "Freezing rain",
+        "day_icon": "wi-day-sleet.svg",
+        "night_icon": "wi-night-alt-sleet.svg",
+    },
+    67: {
+        "context": "Freezing rain (heavy)",
+        "day_icon": "wi-day-sleet-storm.svg",
+        "night_icon": "wi-night-alt-sleet-storm.svg",
+    },
+    71: {
+        "context": "Slight snow",
+        "day_icon": "wi-day-snow.svg",
+        "night_icon": "wi-night-alt-snow.svg",
+    },
+    73: {
+        "context": "Moderate snow",
+        "day_icon": "wi-day-snow.svg",
+        "night_icon": "wi-night-alt-snow.svg",
+    },
+    75: {
+        "context": "Heavy snow",
+        "day_icon": "wi-day-snow-wind.svg",
+        "night_icon": "wi-night-alt-snow-wind.svg",
+    },
+    77: {
+        "context": "Snow grains",
+        "day_icon": "wi-day-snow.svg",
+        "night_icon": "wi-night-alt-snow.svg",
+    },
+    80: {
+        "context": "Rain showers",
+        "day_icon": "wi-day-showers.svg",
+        "night_icon": "wi-night-alt-showers.svg",
+    },
+    81: {
+        "context": "Rain showers (moderate)",
+        "day_icon": "wi-day-showers.svg",
+        "night_icon": "wi-night-alt-showers.svg",
+    },
+    82: {
+        "context": "Rain showers (violent)",
+        "day_icon": "wi-day-storm-showers.svg",
+        "night_icon": "wi-night-alt-storm-showers.svg",
+    },
+    85: {
+        "context": "Snow showers",
+        "day_icon": "wi-day-snow.svg",
+        "night_icon": "wi-night-alt-snow.svg",
+    },
+    86: {
+        "context": "Snow showers (heavy)",
+        "day_icon": "wi-day-snow-wind.svg",
+        "night_icon": "wi-night-alt-snow-wind.svg",
+    },
+    95: {
+        "context": "Thunderstorm",
+        "day_icon": "wi-day-thunderstorm.svg",
+        "night_icon": "wi-night-alt-thunderstorm.svg",
+    },
+    96: {
+        "context": "Thunderstorm with hail",
+        "day_icon": "wi-day-hail.svg",
+        "night_icon": "wi-night-alt-hail.svg",
+    },
+    99: {
+        "context": "Thunderstorm with heavy hail",
+        "day_icon": "wi-day-hail.svg",
+        "night_icon": "wi-night-alt-hail.svg",
+    },
 }
+VALID_WMO_CODES = set(WEATHER_CODES.keys())
+def validate_weather_code(code: Any) -> bool:
+    """Return True if code is a valid WMO weather code."""
+    return isinstance(code, int) and code in VALID_WMO_CODES
 # Flag Classes
 class FlagNames(IntEnum):
     VERBOSE = auto()
@@ -829,9 +945,9 @@ def normalize_city_name(city: str) -> str:
     if city.lower().startswith("st. "):
         return "Saint " + city[4:].strip()
     return city
-# -----------------------------
-# Open-Meteo fetch
-# -----------------------------
+# -------------------------------------
+# Open-Meteo fetch and weather helpers
+# -------------------------------------
 def fetch_current_open_meteo(lat: float, lon: float, timeout: int):
     base = "https://api.open-meteo.com/v1/forecast"
     params = {
@@ -852,6 +968,7 @@ def fetch_current_open_meteo(lat: float, lon: float, timeout: int):
             "windgusts_10m",
             "weathercode",
         ]),
+        "daily": "sunrise,sunset",
         "timezone": "auto",
     }
 
@@ -862,6 +979,12 @@ def fetch_current_open_meteo(lat: float, lon: float, timeout: int):
 
     current = data.get("current_weather", {})
     hourly = data.get("hourly", {})
+    daily = data.get("daily", {})
+
+    # Extract sunrise/sunset (always arrays)
+    sunrise = daily.get("sunrise", [None])[0]
+    sunset = daily.get("sunset", [None])[0]
+
     times = hourly.get("time", [])
     current_time = current.get("time")
 
@@ -878,9 +1001,10 @@ def fetch_current_open_meteo(lat: float, lon: float, timeout: int):
             return default
         return arr[idx]
 
-    # Prefer current_weather fields when available
     result = {
         "time": current_time,
+        "sunrise": sunrise,
+        "sunset": sunset,
         "temperature_c": current.get("temperature", h("temperature_2m")),
         "wind_kph": current.get("windspeed", h("windspeed_10m")),
         "wind_gust_kph": h("windgusts_10m"),
@@ -915,6 +1039,7 @@ def fetch_hourly_open_meteo(lat: float, lon: float, timeout: int):
             "windgusts_10m",
             "weathercode",
         ]),
+        "daily": "sunrise,sunset",
         "timezone": "auto",
     }
 
@@ -924,10 +1049,35 @@ def fetch_hourly_open_meteo(lat: float, lon: float, timeout: int):
     data = json.loads(raw)
 
     hourly = data.get("hourly", {})
+    daily = data.get("daily", {})
+
+    sunrise = daily.get("sunrise", [None])[0]
+    sunset = daily.get("sunset", [None])[0]
+
     times = hourly.get("time", [])
 
+    # ---------------------------------------------------------
+    # ⭐ ROLLING 24-HOUR SLICE
+    # ---------------------------------------------------------
+    from datetime import datetime
+
+    now = datetime.now().replace(minute=0, second=0, microsecond=0)
+    parsed_times = [datetime.fromisoformat(t) for t in times]
+
+    # First index >= now
+    start = next((i for i, t in enumerate(parsed_times) if t >= now), 0)
+    end = start + 24
+
+    # Slice all hourly arrays
+    for key, arr in hourly.items():
+        hourly[key] = arr[start:end]
+
+    # Slice times too
+    times = times[start:end]
+    # ---------------------------------------------------------
+
     hours = []
-    for i, t in enumerate(times[:24]):  # next 24 hours
+    for i, t in enumerate(times):
 
         def h(field: str, default=None):
             arr = hourly.get(field)
@@ -937,6 +1087,8 @@ def fetch_hourly_open_meteo(lat: float, lon: float, timeout: int):
 
         hours.append({
             "time": t,
+            "sunrise": sunrise,
+            "sunset": sunset,
             "temperature_c": h("temperature_2m"),
             "apparent_temperature_c": h("apparent_temperature"),
             "dewpoint_c": h("dewpoint_2m"),
@@ -969,6 +1121,8 @@ def fetch_weekly_open_meteo(lat: float, lon: float, timeout: int):
             "precipitation_sum",
             "precipitation_probability_max",
             "windspeed_10m_max",
+            "sunrise",
+            "sunset",
         ]),
         "timezone": "auto",
     }
@@ -992,6 +1146,8 @@ def fetch_weekly_open_meteo(lat: float, lon: float, timeout: int):
 
         days.append({
             "date": d,
+            "sunrise": h("sunrise"),
+            "sunset": h("sunset"),
             "condition": h("weathercode"),
             "temp_max_c": h("temperature_2m_max"),
             "temp_min_c": h("temperature_2m_min"),
@@ -1006,9 +1162,17 @@ def fetch_weekly_open_meteo(lat: float, lon: float, timeout: int):
     }
 
     return result, url
-def fetch_weather(lat: float, lon: float, timeout: int, provider: str,
-                  units: str, force_cache: bool, mode: str
-                  ) -> Tuple[Dict[str, Any], Optional[str], str, Optional[float], bool]:
+def fetch_weather(
+    lat: float,
+    lon: float,
+    timeout: int,
+    provider: str,
+    units: str,
+    force_cache: bool,
+    mode: str,
+    meta: Dict[str, Any],
+    logging_enabled: bool
+) -> Tuple[Dict[str, Any], Optional[str], str, Optional[float], bool]:
 
     # Cache key must include mode
     cache_id = f"{lat},{lon}:{units}:{provider}:{mode}"
@@ -1045,19 +1209,61 @@ def fetch_weather(lat: float, lon: float, timeout: int, provider: str,
 
     # Live success → convert + save cache
     if live:
-        data = convert_units_mode_aware(live, units, mode)
+        data = convert_units_mode_aware(live, units, mode, meta, logging_enabled)
         save_cache(cache_id, data)
         return data, url, "live", 0, True
 
     # Live failed → fallback to cache
     if cached:
-        data = convert_units_mode_aware(cached, units, mode)
+        data = convert_units_mode_aware(cached, units, mode, meta, logging_enabled)
         return data, None, "cache", cache_age, False
 
     # No live + no cache → fail
     raise RuntimeError("Weather API unreachable and no cached data")
 def parse_iso(ts: str) -> datetime:
-    return datetime.strptime(ts, "%Y-%m-%dT%H:%M")# ---------------------------------------------------------------------------
+    return datetime.strptime(ts, "%Y-%m-%dT%H:%M")
+def select_icon(weather_code, sunrise, sunset, now, mapping):
+    """
+    Selects the correct icon (day or night) based on sunrise/sunset times.
+
+    Parameters:
+        weather_code (int): WMO weather code.
+        sunrise (str): ISO timestamp for sunrise, e.g. "2026-04-27T06:28".
+        sunset (str): ISO timestamp for sunset, e.g. "2026-04-27T20:12".
+        now (str or datetime): Current local time.
+        mapping (dict): WEATHER_CODES mapping with day_icon/night_icon.
+
+    Returns:
+        str: The icon filename to use.
+    """
+
+    # Normalize "now" to datetime
+    if isinstance(now, str):
+        now = datetime.fromisoformat(now)
+
+    sunrise_dt = datetime.fromisoformat(sunrise)
+    sunset_dt = datetime.fromisoformat(sunset)
+
+    entry = mapping.get(weather_code)
+
+    if not entry:
+        # Fallback to NA icon if code missing
+        return "wi-na.svg"
+
+    # Handle polar day (sun never sets)
+    if sunrise_dt == sunset_dt:
+        return entry["day_icon"]
+
+    # Handle polar night (sun never rises)
+    if sunrise_dt > sunset_dt:
+        return entry["night_icon"]
+
+    # Normal case: between sunrise and sunset = day
+    if sunrise_dt <= now < sunset_dt:
+        return entry["day_icon"]
+
+    return entry["night_icon"]
+# ---------------------------------------------------------------------------
 # Evaluation Logic
 # ---------------------------------------------------------------------------
 def evaluate_simple(value: Optional[float],
@@ -1252,7 +1458,7 @@ def verbose_current(payload):
     print(f"Precip:   {fmt_precip(data, 'precip', units)}")
     print(f"Pressure: {data.get('pressure_msl')} hPa")
     print(f"Visibility: {data.get('visibility_m')} m")
-    print(f"Condition: {data.get('condition_text', 'Unknown')}")
+    print(f"Condition: {data.get('context', 'Unknown')}")
     print(f"Source:   {data.get('source')}")
 def verbose_hourly(payload):
     data = payload["data"]
@@ -1268,7 +1474,7 @@ def verbose_hourly(payload):
         wind = fmt_wind(h, "wind", units)
         clouds = fmt_clouds(h.get("cloudcover"))
         precip = fmt_precip(h, "precip", units)
-        cond = WEATHER_CODES.get(h.get("condition"), "Unknown")
+        cond = h.get("context", "Unknown")
 
         print(f"{t}  {temp}  Wind {wind}  Clouds {clouds}  Precip {precip}  {cond}")
 def verbose_weekly(payload):
@@ -1285,8 +1491,8 @@ def verbose_weekly(payload):
         tmin = fmt_temp(d, "temp_min", units)
         precip = fmt_precip(d, "precip", units)
         prob = d.get("precipitation_probability_max")
-        wind = fmt_wind(d, "wind_kph_max", units)
-        cond = WEATHER_CODES.get(d.get("condition"), "Unknown")
+        wind = fmt_wind(d, "wind", units)
+        cond = d.get("context", "Unknown")
 
         print(f"{date}  High {tmax}  Low {tmin}  Rain {precip} ({prob}%)  Wind {wind}  {cond}")
 def quiet_current(payload):
@@ -1301,39 +1507,111 @@ def fmt_temp(data, key, units):
     if units == "imperial":
         return f"{data.get(key + '_f')}°F"
     return f"{data.get(key + '_c')}°C"
-
 def fmt_wind(data, key, units):
+    """
+    Supports:
+      - wind_kph / wind_mph
+      - wind_kph_max / wind_mph_max
+      - wind_gust_kph / wind_gust_mph
+      - wind_gust_kph_max / wind_gust_mph_max
+    """
     if units == "imperial":
-        return f"{data.get(key + '_mph')} mph"
-    return f"{data.get(key + '_kph')} kph"
-
+        # Try normal field first, then weekly max field
+        return f"{data.get(key + '_mph') or data.get(key + '_mph_max')} mph"
+    else:
+        return f"{data.get(key + '_kph') or data.get(key + '_kph_max')} kph"
 def fmt_precip(data, key, units):
     if units == "imperial":
         return f"{data.get(key + '_in')} in"
     return f"{data.get(key + '_mm')} mm"
-
 def fmt_clouds(v):
     return f"{v}%" if v is not None else "—"
-def convert_units_mode_aware(data: Dict[str, Any], units: str, mode: str) -> Dict[str, Any]:
-    if mode == "current":
-        out = convert_units_any(data, units)
-        out["units"] = units
+def slice_next_24_hours(hourly):
+    # Parse timestamps into datetime objects
+    times = [datetime.fromisoformat(t) for t in hourly["time"]]
+
+    # Round current time down to the hour
+    now = datetime.now().replace(minute=0, second=0, microsecond=0)
+
+    # Find first index >= now
+    start = next((i for i, t in enumerate(times) if t >= now), 0)
+
+    # Slice next 24 hours
+    end = start + 24
+    return range(start, min(end, len(times)))
+def slice_weekly_days(days):
+    today = date.today()
+
+    # Find first index where date >= today
+    start = next(
+        (i for i, d in enumerate(days) if date.fromisoformat(d["date"]) >= today),
+        0
+    )
+
+    # Always return 7 days if available
+    return days[start:start+7]
+def convert_units_mode_aware(
+    data: Dict[str, Any],
+    units: str,
+    mode: str,
+    meta: Dict[str, Any],
+    logging_enabled: bool
+) -> Dict[str, Any]:
+    """
+    Convert units AND inject context + icon for current, hourly, weekly modes.
+    """
+
+    def enrich(entry: Dict[str, Any]) -> Dict[str, Any]:
+        out = convert_units_any(entry, units)
+
+        code = entry.get("condition")
+        sunrise = entry.get("sunrise")
+        sunset = entry.get("sunset")
+        now = entry.get("time") or entry.get("date")
+
+        # Validate code
+        if isinstance(code, int) and code in WEATHER_CODES:
+            info = WEATHER_CODES[code]
+        else:
+            info = None
+            if logging_enabled:
+                write_log(meta, f"Unknown WMO weather code encountered: {code!r}")
+
+        # Add context
+        out["context"] = info["context"] if info else "Unknown"
+
+        # Add icon
+        if info and sunrise and sunset and now:
+            out["icon"] = select_icon(code, sunrise, sunset, now, WEATHER_CODES)
+        else:
+            out["icon"] = "wi-na.svg"
+
         return out
 
-    elif mode == "hourly":
-        out = dict(data)
-        out["hours"] = [convert_units_any(h, units) for h in data.get("hours", [])]
-        out["units"] = units
-        return out
+    match mode:
+        case "current":
+            out = enrich(data)
 
-    elif mode == "weekly":
-        out = dict(data)
-        out["days"] = [convert_units_any(d, units) for d in data.get("days", [])]
-        out["units"] = units
-        return out
+        case "hourly":
+            out = dict(data)
+            out["hours"] = [enrich(h) for h in data.get("hours", [])]
+            out["units"] = units
+            return out
 
-    return data
+        case "weekly":
+            out = dict(data)
 
+            sliced = slice_weekly_days(data["days"])
+            out["days"] = [enrich(d) for d in sliced]
+
+            out["units"] = units
+            return out
+
+        case _:
+            return data
+
+    out["units"] = units
+    return out
 def convert_units_any(data: Dict[str, Any], units: str) -> Dict[str, Any]:
     """
     Convert any weather dictionary (current, hourly, weekly) to include
@@ -1649,24 +1927,22 @@ def main() -> None:
         lat, lon, args.timeout,
         args.provider, args.units,
         args.force_cache,
-        weather_mode,      # NEW
+        weather_mode,
+        meta,
+        logging_enabled
     )
-    data = convert_units_mode_aware(data, args.units, weather_mode)
+    data = convert_units_mode_aware(
+        data,
+        args.units,
+        weather_mode,
+        meta,
+        logging_enabled
+    )
 
     data["source"] = "Live API" if source == "live" else source
     data["cache_written"] = cache_written
     if cache_age is not None:
         data["cache_age"] = format_age(cache_age)
-
-    # -----------------------------
-    # CONDITION TEXT (current only)
-    # -----------------------------
-    if weather_mode == "current":
-        code = data.get("condition")
-        if isinstance(code, int):
-            data["condition_text"] = WEATHER_CODES.get(code, "Unknown")
-        else:
-            data["condition_text"] = "Unknown"
 
     # -----------------------------
     # STATUS EVALUATION (current only)
