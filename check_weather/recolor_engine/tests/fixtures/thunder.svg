@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
+  <path d="M10 30 C 10 15, 50 15, 50 30 S 90 45, 30 45 Z" fill="#000000"/>
+  <path d="M30 45 L40 45 L35 60 L45 60 L30 80 Z" fill="#000000"/>
+</svg>
