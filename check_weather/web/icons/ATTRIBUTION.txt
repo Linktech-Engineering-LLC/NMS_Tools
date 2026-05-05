@@ -1,0 +1,3 @@
+Weather Icons by Erik Flowers and contributors
+Licensed under the MIT License
+https://github.com/erikflowers/weather-icons

@@ -9,7 +9,6 @@ Deterministic, operator‑grade monitoring tools for Linux and Nagios environmen
 ![Nightly Build](https://github.com/Linktech-Engineering-LLC/NMS_Tools/actions/workflows/nightly.yml/badge.svg)
 ![Build Packages](https://github.com/Linktech-Engineering-LLC/NMS_Tools/actions/workflows/build-packages.yml/badge.svg)
 
-
 NMS_Tools is a suite of deterministic, operator‑grade monitoring tools designed for Nagios, automation pipelines, and Linux‑based operational workflows.  
 Each tool is built with:
 
@@ -20,6 +19,14 @@ Each tool is built with:
 - consistent architecture and documentation  
 
 The suite is intentionally modular — each tool is self‑contained, predictable, and easy to deploy.
+
+## Attribution
+
+This project uses and recolors icons from the **Weather Icons** project  
+by **Erik Flowers** and contributors.  
+Weather Icons is licensed under the **MIT License**.  
+Source: https://github.com/erikflowers/weather-icons
+
 
 ## 🔧 Deterministic Vendor System
 NMS_Tools uses a fully deterministic, offline‑capable vendor system.

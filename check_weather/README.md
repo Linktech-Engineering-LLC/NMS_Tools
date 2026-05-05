@@ -1,7 +1,7 @@
 # check_weather.py
 Deterministic Weather Monitoring Plugin for *NMS_Tools*
 
-![Python](https://img.shields.io/badge/python-3.6%2B-blue)
+![Python](https://img.shields.io/badge/python-3.8%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-stable-brightgreen)
 ![NMS_Tools](https://img.shields.io/badge/NMS__Tools-weather-blueviolet)
@@ -178,6 +178,69 @@ Because that leads to:
 * increased maintenance burden
 
 The backend is the single source of truth.
+
+## Icon Classification & Recoloring Pipeline  
+*(Updated 2026‑05)*
+
+The `check_weather` tool uses a hybrid classifier to determine how each Weather Icons SVG should be recolored.  
+Classification is now handled entirely by `analyzer.py` and merges **filename semantics** with **geometry analysis**.
+
+### Filename‑Based Classification
+Weather Icons encode most semantics directly in the filename.  
+The exporter extracts:
+
+- `sun` / `moon` (day/night)
+- `cloud`
+- `rain` (rain, showers, sprinkle, mix)
+- `snow` (snow, sleet, hail)
+- `thunder` (storm, lightning)
+- `fog` (fog, haze)
+- `wind`
+
+This is the authoritative source for precipitation and special effects.
+
+### Geometry‑Based Classification
+SVG paths are parsed and curves are approximated as line segments.  
+Geometry is used **only** to detect:
+
+- `sun`
+- `moon`
+- `cloud`
+
+Night icons suppress sun geometry to avoid false positives.
+
+### Merged Classification
+Final groups are:
+
+final_groups = filename_groups ∪ geometry_base_shape
+
+
+Examples:
+
+wi-day-rain.svg       → ['sun', 'rain']
+wi-night-snow.svg     → ['moon', 'snow']
+wi-cloudy.svg         → ['cloud']
+wi-night-fog.svg      → ['moon', 'fog']
+
+
+### Recoloring
+Recoloring is performed by `recolor.py`.  
+Each `<path>` element is assigned to one or more groups and recolored using the palette defined in the engine.
+
+### Stats Summary (New)
+After processing all icons, the exporter prints and logs:
+
+- total icons  
+- group counts  
+- coverage percentages  
+- groups‑per‑icon histogram  
+- day/night breakdown  
+
+This summary acts as a regression surface to detect classification drift.
+
+### Removed Components
+The legacy `classifier.py` has been removed.  
+All classification is now handled by `analyzer.py`.
 
 --- 
 

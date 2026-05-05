@@ -1852,7 +1852,6 @@ def log_weather_weekly_flat(data: Dict[str, Any]) -> str:
         lines.append("[WEATHER] " + " ".join(fields))
 
     return "\n".join(lines)
-
 def log_summary_weather(state, message):
     return f"[RESULT] state={state} message=\"{message}\""
 def end_banner():

@@ -27,37 +27,49 @@ def apply_color(elements, color):
 def recolor(tree, verified, expected):
     """
     expected: list of semantic groups from filename
-    verified: dict of semantic groups → elements
+    verified: dict of semantic groups → list of XML elements
     """
-    # SUN
-    if "sun" in expected:
+    # Remove all existing fills so nothing stays yellow
+    for elem in tree.getroot().iter():
+        if "fill" in elem.attrib:
+            del elem.attrib["fill"]
+
+    # --- SUN ---
+    if verified["sun"]:
         apply_color(verified["sun"], SUN)
 
-    # CLOUDS
-    if "cloud" in expected:
-        if "snow" in expected:
+    # --- CLOUD ---
+    if verified["cloud"]:
+        # If snow is present, clouds get the snow-cloud color
+        if verified["snow"]:
             apply_color(verified["cloud"], CLOUD_SNOW)
         else:
             apply_color(verified["cloud"], CLOUD_RAIN)
 
-    # RAIN
-    if "rain" in expected:
+    # --- RAIN ---
+    if verified["rain"]:
         apply_color(verified["rain"], RAIN)
 
-    # SNOW
-    if "snow" in expected:
+    # --- SNOW ---
+    if verified["snow"]:
         apply_color(verified["snow"], SNOW)
 
-    # THUNDER
-    if "thunder" in expected:
+    # --- THUNDER ---
+    if verified["thunder"]:
         apply_color(verified["thunder"], THUNDER)
 
-    # FOG
-    if "fog" in expected:
+    # --- FOG ---
+    if verified["fog"]:
         apply_color(verified["fog"], FOG)
 
-    # WIND
-    if "wind" in expected:
+    # --- WIND ---
+    if verified["wind"]:
         apply_color(verified["wind"], WIND)
+
+    # --- FALLBACK ---
+    # Any element not recolored yet gets cloud color (neutral base)
+    for elem in tree.getroot().iter():
+        if "fill" not in elem.attrib or elem.attrib["fill"] in ("", None):
+            elem.attrib["fill"] = CLOUD_RAIN
 
     return tree
