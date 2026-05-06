@@ -242,6 +242,14 @@ This summary acts as a regression surface to detect classification drift.
 The legacy `classifier.py` has been removed.  
 All classification is now handled by `analyzer.py`.
 
+## Weather Demo
+
+A small HTML/JS/CSS demo is included in this directory (`weather_demo.html`,
+`weather.js`, `weather_demo.css`). These files are not part of the NMS_Tools
+suite and are not used by any monitoring scripts. They provide a visual
+demonstration of how `check_weather.py` output can be rendered in a browser
+using the same JSON schema. The demo is provided for testing and experimentation.
+
 --- 
 
 ## What’s New in v2.2.0 (2026‑04‑27)

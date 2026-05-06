@@ -1,0 +1,137 @@
+<!-- ========================================================================
+   File: weather_demo.html
+   Author: Leon McClatchey
+   Company: Linktech Engineering LLC
+   Created: 2026-05-06
+   Modified: 2026-05-06
+   Part of: NMS_Tools Monitoring Suite
+   License: MIT (see LICENSE for details)
+
+   Description:
+       Demonstrates the check_weather.py tool
+   ======================================================================== -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Weather Demo – Linktech Engineering</title>
+
+        <!-- SEO -->
+        <meta name="description" content="Interactive weather condition demo showing normalized output, condition mapping, and deterministic weather inspection powered by check_weather.py.">
+        <meta name="keywords" content="weather demo, check_weather, weather monitoring, deterministic monitoring, NMS-Tools, Linktech Engineering LLC">
+
+        <!-- Open Graph -->
+        <meta property="og:title" content="Weather Demo – Linktech Engineering">
+        <meta property="og:description" content="Interactive weather condition demo powered by deterministic normalization logic from check_weather.py.">
+        <meta property="og:type" content="website">
+        <meta property="og:url" content="https://www.linktechengineering.net/weather.html">
+
+        <!-- Twitter -->
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="Weather Demo – Linktech Engineering">
+        <meta name="twitter:description" content="Interactive weather condition demo with deterministic output normalization.">
+
+        <!-- Stylesheets -->
+        <link rel="stylesheet" href="styles/base/reset.css">
+        <link rel="stylesheet" href="styles/base/typography.css">
+        <link rel="stylesheet" href="styles/base/variable.css">
+
+        <link rel="stylesheet" href="styles/layout/layout.css">
+
+        <link rel="stylesheet" href="styles/components/cards.css">
+        <link rel="stylesheet" href="styles/components/header.css">
+        <link rel="stylesheet" href="styles/components/footer.css">
+        <link rel="stylesheet" href="styles/components/sidenav.css">
+
+        <link rel="stylesheet" href="styles/pages/weather_demo1.css">
+        <link rel="stylesheet" href="styles/responsive/mobile.css">
+    </head>
+
+    <body>
+        <header class="site-header">
+            <div class="header-left">
+                <img src="images/LT_Logo.png" alt="Linktech Engineering Logo" class="logo">
+            </div>
+            <div class="header-center">
+                <h1>Linktech Engineering LLC</h1>
+                <h2>Owner: Leon McClatchey</h2>
+            </div>
+            <div class="header-right">
+                <img src="images/LT_Logo.png" alt="Linktech Logo" class="logo">
+            </div>
+        </header>
+        <!--#include virtual="/includes/sidenav.html" -->
+
+        <div class="page-body">
+
+            <main class="content-wrapper">
+
+                <h1>Weather Demo</h1>
+
+                <p class="intro">
+                    This demo mirrors the behavior of <code>check_weather.py</code>.
+                    <br>Enter any location in a flexible format — City/State, ZIP code, or latitude/longitude.
+                    <br>The country defaults to <strong>US</strong> unless specified.
+                </p>
+
+                <form id="weather-form" class="weather-form">
+
+                    <label for="location">Location</label>
+                    <input type="text" id="location" placeholder="City/State, ZIP, or lat,lon" required>
+
+                    <label for="country">Country (optional)</label>
+                    <input type="text" id="country" placeholder="US" value="US">
+
+                    <label for="units">Units</label>
+                    <select id="units">
+                        <option value="metric">Metric (°C, kph)</option>
+                        <option value="imperial">Imperial (°F, mph)</option>
+                    </select>
+
+                    <button type="submit">Get Weather</button>
+                </form>
+                <div id="loading-spinner" class="loading-spinner" style="display:none;">
+                    <div class="spinner"></div>
+                    <div class="spinner-text">Loading weather…</div>
+                </div>
+                <div id="weather-container">
+                    <div class="content fade-target" id="current-content">
+                        <div class="icon" id="current-icon"></div>
+                        <div class="content" id="current-details"></div>
+                    </div>
+
+                    <div class="content fade-target" id="hourly-content">
+                        <div class="icon" id="hourly-icon"></div>
+                        <div class="content" id="hourly-details"></div>
+                    </div>
+
+                    <div class="content fade-target" id="weekly-content">
+                        <div class="icon" id="weekly-icon"></div>
+                        <div class="content" id="weekly-details"></div>
+                    </div>
+                </div>
+
+                <h2>Related Projects</h2>
+                <!--#include virtual="/includes/related-nms_tools.html" -->
+
+            </main>
+
+        </div>
+
+        <footer class="site-footer">
+            © 2026 Linktech Engineering LLC<br>
+            <a href="mailto:ldmcclatchey@linktechengineering.net">
+                ldmcclatchey@linktechengineering.net
+            </a><br>
+            <a href="https://github.com/sponsors/ldmcclatchey">
+                ❤️ Enjoy my tools? You can support my work on GitHub Sponsors
+            </a>
+        </footer>
+        <script src="scripts/common.js"></script>
+        <script src="scripts/weather.js"></script>
+    </body>
+</html>
