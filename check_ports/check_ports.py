@@ -40,7 +40,7 @@ NAGIOS_STATE_NAMES = {
     UNKNOWN: "UNKNOWN",
 }
 # Other Global Constants
-SCRIPT_VERSION = "1.0.0"
+SCRIPT_VERSION = "1.1.0"
 SCRIPT_NAME = Path(sys.argv[0]).stem
 # Flag Classes
 class FlagNames(IntEnum):
@@ -482,8 +482,37 @@ def start_banner_ports(meta):
     )
 def log_port_result(host, port, status):
     return f"[PORT] host={host} port={port} status={status}"
-def log_summary_ports(state, message):
-    return f"[RESULT] state={state} message=\"{message}\""
+def log_summary_ports(state, message, enf=None):
+    """
+    Build the RESULT line for the log.
+
+    If enf is provided, include grouped service/explicit info so logs
+    show which services/ports were open/closed.
+    """
+    base = f"[RESULT] state={state} message=\"{message}\""
+
+    if not enf:
+        return base
+
+    segments = []
+
+    service_open = enf.get("service_open", [])
+    service_closed = enf.get("service_closed", [])
+    explicit_open = enf.get("explicit_open", [])
+    explicit_closed = enf.get("explicit_closed", [])
+
+    if service_open:
+        segments.append("service_open=" + ",".join(service_open))
+    if service_closed:
+        segments.append("service_closed=" + ",".join(service_closed))
+    if explicit_open:
+        segments.append("explicit_open=" + ",".join(explicit_open))
+    if explicit_closed:
+        segments.append("explicit_closed=" + ",".join(explicit_closed))
+
+    if segments:
+        return base + " " + " ".join(segments)
+    return base
 def end_banner():
     return "[END]"
 def detect_mode(flags):
@@ -492,15 +521,16 @@ def detect_mode(flags):
             return mode
     return "nagios"
 # -------------------------------------
-# Nagios Functions
+# Display Functions
 # -------------------------------------
 def nagios_state_string(code):
     return NAGIOS_STATE_NAMES.get(code, "UNKNOWN")
 def build_nagios_message(enf, code):
     """
     Build the single-line Nagios output message.
-    Adds service-name awareness for single-service checks
-    and port-aware messages for single explicit-port checks.
+    - Preserves special cases for single-service and single-explicit checks
+    - Adds grouped, operator-grade output for multi-port checks
+    - Only displays non-empty categories
     """
 
     services = enf.get("services_requested", [])
@@ -557,39 +587,130 @@ def build_nagios_message(enf, code):
         return f"UNKNOWN - Port {port} unexpected state"
 
     # ------------------------------------------------------------
-    # Case 3: Fallback to original multi-port behavior
+    # Case 3: Multi-port grouped output (new behavior with service names)
     # ------------------------------------------------------------
+
+    # Build mapping: port -> service name
+    port_to_service = {}
+    for svc, port in zip(services, service_ports):
+        port_to_service[port] = svc
+
+    # Build the four buckets with service names where applicable
+    def svc_label(port):
+        return f"{port_to_service[port]}({port})" if port in port_to_service else str(port)
+
+    service_open = sorted([svc_label(p) for p in service_ports if p in enf["open_ports"]])
+    service_closed = sorted([svc_label(p) for p in service_ports if p in enf["closed_ports"]])
+
+    explicit_open = sorted([str(p) for p in explicit_ports if p in enf["open_ports"]])
+    explicit_closed = sorted([str(p) for p in explicit_ports if p in enf["closed_ports"]])
+
+    # Helper to format non-empty categories
+    def fmt(label, items):
+        if not items:
+            return None
+        return f"{label}: {','.join(items)}"
+
+    segments = []
+    for label, items in [
+        ("service_open", service_open),
+        ("service_closed", service_closed),
+        ("explicit_open", explicit_open),
+        ("explicit_closed", explicit_closed),
+    ]:
+        seg = fmt(label, items)
+        if seg:
+            segments.append(seg)
+
+    # Determine summary
     if code == OK:
-        return (
-            "OK - All ports open: "
-            + ", ".join(map(str, enf["open_ports"]))
-            if enf["open_ports"]
-            else "OK - No ports specified"
-        )
+        summary = "All ports open" if not service_closed and not explicit_closed else "Ports OK"
+    elif code == WARNING:
+        summary = "Some ports closed"
+    elif code == CRITICAL:
+        if service_open or explicit_open:
+            summary = "Closed ports detected"
+        else:
+            summary = "All ports closed"
+    else:
+        summary = "Port status"
 
-    if code == WARNING:
-        return (
-            "WARNING - Closed ports: "
-            + ", ".join(map(str, enf["closed_ports"]))
-            if enf["closed_ports"]
-            else "WARNING - No closed ports"
-        )
+    segment_str = "; ".join(segments)
 
-    if code == CRITICAL:
-        bad = (
-            enf["unreachable_ports"]
-            + enf["timeout_ports"]
-            + enf["closed_ports"]
-        )
-        return (
-            "CRITICAL - Problem ports: "
-            + ", ".join(map(str, bad))
-            if bad
-            else "CRITICAL - No ports responded"
-        )
+    perf_open = len(service_open) + len(explicit_open)
+    perf_closed = len(service_closed) + len(explicit_closed)
+    perfdata = f"ports_open={perf_open} ports_closed={perf_closed}"
 
-    return "UNKNOWN - Unexpected state"
+    if segment_str:
+        return f"{code} - {summary} ({segment_str}) | {perfdata}"
+    else:
+        return f"{code} - {summary} | {perfdata}"
+def build_enforcement_object(args, service_ports, explicit_ports, ports, results):
+    services_requested = args.service.split(",") if args.service else []
 
+    # service → port
+    service_map = {
+        svc: port
+        for svc, port in zip(services_requested, service_ports)
+    }
+
+    # port → service (string keys for JSON)
+    port_to_service = {
+        str(port): svc
+        for svc, port in zip(services_requested, service_ports)
+    }
+
+    # Helper for labeling service ports
+    def svc_label(port):
+        return f"{port_to_service[str(port)]}({port})" if str(port) in port_to_service else str(port)
+
+    # Grouped buckets
+    open_ports = [r["port"] for r in results if r["status"] == "open"]
+    closed_ports = [r["port"] for r in results if r["status"] == "closed"]
+    timeout_ports = [r["port"] for r in results if r["status"] == "timeout"]
+    unreachable_ports = [r["port"] for r in results if r["status"] == "unreachable"]
+
+    service_open = sorted([svc_label(p) for p in service_ports if p in open_ports])
+    service_closed = sorted([svc_label(p) for p in service_ports if p in closed_ports])
+
+    explicit_open = sorted([str(p) for p in explicit_ports if p in open_ports])
+    explicit_closed = sorted([str(p) for p in explicit_ports if p in closed_ports])
+
+    # status_by_port
+    status_by_port = {str(r["port"]): r["status"] for r in results}
+
+    # status_by_service
+    status_by_service = {
+        svc: status_by_port.get(str(port), "unknown")
+        for svc, port in service_map.items()
+    }
+
+    return {
+        "host": args.host,
+
+        "services_requested": services_requested,
+        "service_ports": service_ports,
+        "explicit_ports": explicit_ports,
+        "all_ports": ports,
+
+        "service_map": service_map,
+        "port_to_service": port_to_service,
+
+        "service_open": service_open,
+        "service_closed": service_closed,
+        "explicit_open": explicit_open,
+        "explicit_closed": explicit_closed,
+
+        "results": results,
+        "status_by_port": status_by_port,
+        "status_by_service": status_by_service,
+
+        "open_ports": open_ports,
+        "closed_ports": closed_ports,
+        "timeout_ports": timeout_ports,
+        "unreachable_ports": unreachable_ports,
+    }
+    
 def main():
     args = build_parser()
     command_string = " ".join(shlex.quote(arg) for arg in sys.argv)
@@ -658,31 +779,23 @@ def main():
         status = check_port(args.host, port, args.timeout)
         results.append({"port": port, "status": status})
 
+        services_requested = args.service.split(",") if args.service else []
+        service_map = dict(zip(services_requested, service_ports))
+        port_to_service = {str(port): svc for svc, port in service_map.items()}
+
         if logging_enabled:
-            write_log(meta, log_port_result(args.host, port, status))
+            # Determine service-aware label
+            svc = port_to_service.get(str(port))
+            label = f"{svc}({port})" if svc else port
+            write_log(meta, log_port_result(args.host, label, status))
 
-    # ------------------------------------------------------------
-    # Build enforcement object
-    # ------------------------------------------------------------
-    enf = {
-        "host": args.host,
-        "services_requested": args.service.split(",") if args.service else [],
-        "service_ports": service_ports,          # ports resolved from services
-        "explicit_ports": explicit_ports,        # ports from --ports
-        "all_ports": ports,                      # final combined list
-        "service_map": dict(zip(
-            "services_requested",
-            "service_ports"
-        )),
-
-        "results": results,
-
-        "open_ports":        [r["port"] for r in results if r["status"] == "open"],
-        "closed_ports":      [r["port"] for r in results if r["status"] == "closed"],
-        "timeout_ports":     [r["port"] for r in results if r["status"] == "timeout"],
-        "unreachable_ports": [r["port"] for r in results if r["status"] == "unreachable"],
-    }
-
+    enf = build_enforcement_object(
+        args,
+        service_ports,
+        explicit_ports,
+        ports,
+        results
+    )
     # ------------------------------------------------------------
     # Compute Nagios exit code
     # ------------------------------------------------------------
@@ -694,29 +807,43 @@ def main():
     if args.json:
         print(json.dumps(enf, indent=2))
         if logging_enabled:
-            write_log(meta, log_summary_ports(nagios_state_string(code), "json output"))
+            write_log(meta, log_summary_ports(nagios_state_string(code), "json output", enf))
             write_log(meta, end_banner())
         sys.exit(code)
 
     if args.verbose:
         print(f"Host: {args.host}")
         print(f"Services requested: {', '.join(args.service.split(',')) if args.service else 'None'}")
-        print(f"Service ports:      {', '.join(str(p) for p in service_ports) if service_ports else 'None'}")
+
+        # Show service ports with service names
+        if service_ports:
+            svc_labels = [
+                f"{svc}({port})"
+                for svc, port in zip(args.service.split(","), service_ports)
+            ]
+            print(f"Service ports:      {', '.join(svc_labels)}")
+        else:
+            print("Service ports:      None")
+
         print(f"Explicit ports:     {', '.join(str(p) for p in explicit_ports) if explicit_ports else 'None'}")
         print(f"All ports:          {', '.join(str(p) for p in ports)}")
         print()
 
+        # Per-port results with service names when applicable
         for r in results:
-            print(f"{args.host}:{r['port']} = {r['status']}")
+            port = r["port"]
+            svc = enf["port_to_service"].get(str(port))
+            label = f"{svc}({port})" if svc else str(port)
+            print(f"{args.host}:{label} = {r['status']}")
 
         if logging_enabled:
-            write_log(meta, log_summary_ports(nagios_state_string(code), "verbose output"))
+            write_log(meta, log_summary_ports(nagios_state_string(code), "verbose output", enf))
             write_log(meta, end_banner())
         sys.exit(code)
 
     if args.quiet:
         if logging_enabled:
-            write_log(meta, log_summary_ports(nagios_state_string(code), "quiet output"))
+            write_log(meta, log_summary_ports(nagios_state_string(code), "quiet output", enf))
             write_log(meta, end_banner())
         sys.exit(code)
 

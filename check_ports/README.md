@@ -109,12 +109,26 @@ Produces:
 
 ### Verbose Mode
 
-Shows one line per port:
+Verbose mode shows a human‑readable breakdown of what the tool resolved and the status of each port check.
+It prints:
+- the host
+- the requested services
+- the resolved service‑to‑port mapping
+- explicit ports
+- all ports being checked
+- one line per port with its status
+When service names are provided using -s, verbose mode displays the service name alongside its port number:
 
-```
-server:22 = open
-server:80 = closed
-```
+```Service ports: ssh(22), mysql(3306)```
+
+Each per‑port result also includes the service name when applicable:
+
+```Mom:ssh(22) = closed```
+```Mom:2222 = open```
+```Mom:mysql(3306) = open```
+
+Explicit ports (those provided via -p) are always shown as raw port numbers.
+Verbose mode is intended for operators who want to see exactly what the tool resolved and how each port responded. It does not output JSON or Nagios‑formatted text.
 
 ### Quiet Mode
 
@@ -153,7 +167,30 @@ Logging is enabled if:
 - mode != "nagios"
 - `--log-dir` is specified
 
-Example:
+When logging is enabled, the tool writes:
+- a [START] banner with command, host, and resolved ports
+- one [PORT] line per port
+- a [RESULT] summary line
+- a final [END] banner
+
+### Service‑Aware Logging
+
+When services are specified using -s, log entries now include the service name alongside the port number:
+
+[PORT] host=Mom port=ssh(22) status=closed
+[PORT] host=Mom port=mysql(3306) status=open
+
+Explicit ports (those provided via -p) are always logged as raw port numbers:
+
+[PORT] host=Mom port=2222 status=open
+
+The [RESULT] line includes grouped breakdowns:
+
+```service_open=mysql(3306) service_closed=ssh(22) explicit_open=2222```
+
+This makes logs fully service‑aware and consistent with verbose, JSON, and Nagios modes.
+
+### Example:
 
 ```bash
 check_ports.py -H server -p 22,80 -j --log-dir /var/log/nms_tools
@@ -162,12 +199,27 @@ check_ports.py -H server -p 22,80 -j --log-dir /var/log/nms_tools
 Log entries follow the suite‑standard format:
 
 ```
-2026-04-20 11:29:55; [START] check_ports.py host=server ports=22,80 timeout=5 require_all=False require_any=False
+2026-04-20 11:29:55; [START] check_ports.py host=server ports_explicit=[22,80] ports_service=[] ports_all=[22,80] timeout=5 require_all=False require_any=False
 2026-04-20 11:29:55; [PORT] host=server port=22 status=open
 2026-04-20 11:29:55; [PORT] host=server port=80 status=closed
-2026-04-20 11:29:55; [RESULT] state=CRITICAL message="json output"
+2026-04-20 11:29:55; [RESULT] state=CRITICAL message="json output" explicit_open=22 explicit_closed=80
 2026-04-20 11:29:55; [END]
 ```
+
+If services are specified using -s, log entries include service names:
+
+```bash
+check_ports.py -H server -s ssh,http -j --log-dir /var/log/nms_tools
+```
+
+Produces:
+
+2026-04-20 11:29:55; [START] check_ports.py host=server ports_explicit=[] ports_service=[22,80] ports_all=[22,80] timeout=5 require_all=False require_any=False
+2026-04-20 11:29:55; [PORT] host=server port=ssh(22) status=open
+2026-04-20 11:29:55; [PORT] host=server port=http(80) status=closed
+2026-04-20 11:29:55; [RESULT] state=CRITICAL message="json output" service_open=ssh(22) service_closed=http(80)
+2026-04-20 11:29:55; [END]
+
 
 Log rotation is automatic when the file exceeds `--log-max-mb` (default: 50 MB).
 
