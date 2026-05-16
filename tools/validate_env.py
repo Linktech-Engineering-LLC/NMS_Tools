@@ -25,7 +25,8 @@ REQUIRED_PYTHON = (3, 8)
 
 def check_python_version():
     if sys.version_info < REQUIRED_PYTHON:
-        print(f"[env] ERROR: Python {REQUIRED_PYTHON[0]}.{REQUIRED_PYTHON[1]}+ required.")
+        print(f"[env] ERROR: Python {REQUIRED_PYTHON[0]}.{REQUIRED_PYTHON[1]}+ required "
+            f"(found {sys.version.split()[0]}).")
         sys.exit(1)
     print(f"[env] Python version OK: {sys.version.split()[0]}")
 
@@ -33,7 +34,7 @@ def check_python_version():
 def check_venv():
     if sys.prefix == sys.base_prefix:
         print("[env] WARNING: Not running inside a virtual environment.")
-        print("[env] This is fine for installation, but required for building.")
+        print("[env] A venv is required for building the suite locally, but not for installation or CI release.")
     else:
         print("[env] Virtual environment detected.")
 
