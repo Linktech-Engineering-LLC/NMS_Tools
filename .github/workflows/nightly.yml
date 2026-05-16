@@ -82,10 +82,6 @@ jobs:
           name: nightly-nms-tools
           path: artifacts
 
-      - name: Unzip nightly artifacts
-        run: |
-          unzip artifacts/nightly-nms-tools.zip -d artifacts/
-
       - name: Extract version metadata
         id: meta
         run: |
