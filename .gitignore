@@ -20,6 +20,7 @@ venv/
 *.code-workspace
 checklist*.md
 CHECKLIST*.md
+ReleaseNotes*
 
 # Packaging Files
 libs/
