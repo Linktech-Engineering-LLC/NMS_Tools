@@ -82,12 +82,40 @@ jobs:
           name: nightly-nms-tools
           path: artifacts
 
+      - name: Unzip nightly artifacts
+        run: |
+          unzip artifacts/nightly-nms-tools.zip -d artifacts/
+
       - name: Extract version metadata
         id: meta
         run: |
-          VERSION=$(ls artifacts | sed -n 's/.*nms-tools_\(.*\)\.deb/\1/p')
-          DATESTAMP=$(echo "$VERSION" | cut -d+ -f2 | cut -d. -f1)
-          GIT_HASH=$(echo "$VERSION" | sed 's/.*git//')
+          # Find the first .deb file
+          DEB_FILE=$(ls artifacts/*.deb 2>/dev/null | head -n 1 || true)
+
+          if [ -z "$DEB_FILE" ]; then
+            echo "No DEB file found, applying fallback metadata"
+            VERSION="unknown"
+            DATESTAMP=$(date -u +"%Y%m%d")
+            GIT_HASH="unknown"
+          else
+            BASENAME=$(basename "$DEB_FILE")
+
+            # Extract version from filename: nms-tools_<version>.deb
+            VERSION=$(echo "$BASENAME" | sed -n 's/nms-tools_\(.*\)\.deb/\1/p')
+
+            # Extract datestamp if present, else fallback to today
+            DATESTAMP=$(echo "$VERSION" | grep -o '+[0-9]\{8\}' | tr -d '+' || true)
+            if [ -z "$DATESTAMP" ]; then
+              DATESTAMP=$(date -u +"%Y%m%d")
+            fi
+
+            # Extract git hash if present
+            GIT_HASH=$(echo "$VERSION" | sed -n 's/.*git\([0-9a-f]\+\).*/\1/p')
+            if [ -z "$GIT_HASH" ]; then
+              GIT_HASH="unknown"
+            fi
+          fi
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "datestamp=$DATESTAMP" >> $GITHUB_OUTPUT
           echo "hash=$GIT_HASH" >> $GITHUB_OUTPUT
@@ -95,19 +123,84 @@ jobs:
       - name: Generate dashboard HTML
         run: |
           mkdir -p dashboard
+          NOW=$(date -u +"%Y-%m-%d %H:%M UTC")
+
+          # Compute checksums
+          DEB_FILE=$(ls artifacts/*.deb 2>/dev/null | head -n 1 || true)
+          RPM_FILE=$(ls artifacts/*.rpm 2>/dev/null | head -n 1 || true)
+
+          DEB_SHA256=$(sha256sum $DEB_FILE 2>/dev/null | awk '{print $1}')
+          RPM_SHA256=$(sha256sum $RPM_FILE 2>/dev/null | awk '{print $1}')
+
+          # Build status
+          if [ -f "$DEB_FILE" ]; then
+            STATUS_COLOR="green"
+            STATUS_TEXT="Success"
+          else
+            STATUS_COLOR="red"
+            STATUS_TEXT="Failed"
+          fi
+
+          # Changelog snippet (last 5 commits between nightly and main)
+          CHANGELOG=$(git log -n 5 --pretty=format:"• %s" nightly..main || echo "No recent changes")
+
+          # Create ZIP of all artifacts
+          zip -j dashboard/nms-tools_${VERSION}_all.zip artifacts/* || true
+
+          # Generate QR code (points to dashboard homepage)
+          QR_URL="https://linktech-engineering-llc.github.io/"
+          curl -s -o dashboard/qr.png \
+            "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${QR_URL}"
+
           cat > dashboard/index.html <<EOF
           <html>
-          <head><title>NMS_Tools Nightly Dashboard</title></head>
+          <head>
+            <title>NMS_Tools Nightly Dashboard</title>
+          </head>
           <body>
           <h1>NMS_Tools Nightly Dashboard</h1>
-          <p><strong>Version:</strong> ${VERSION}</p>
-          <p><strong>Build Date:</strong> ${DATESTAMP}</p>
-          <p><strong>Commit:</strong> ${GIT_HASH}</p>
+
+          <p><strong>Status:</strong> <span style="color:${STATUS_COLOR};">${STATUS_TEXT}</span></p>
+
+          <table border="1" cellpadding="6" cellspacing="0">
+            <tr><th align="left">Field</th><th align="left">Value</th></tr>
+            <tr><td>Version</td><td>${VERSION}</td></tr>
+            <tr><td>Build Date</td><td>${DATESTAMP}</td></tr>
+            <tr><td>Commit</td><td>${GIT_HASH}</td></tr>
+            <tr><td>Nightly Tag</td><td><a href="https://github.com/Linktech-Engineering-LLC/NMS_Tools/tree/nightly">nightly</a></td></tr>
+            <tr><td>Workflow Run</td><td><a href="https://github.com/Linktech-Engineering-LLC/NMS_Tools/actions/runs/${GITHUB_RUN_ID}">View Run</a></td></tr>
+            <tr><td>Diff (nightly → main)</td><td><a href="https://github.com/Linktech-Engineering-LLC/NMS_Tools/compare/nightly...main">Compare</a></td></tr>
+          </table>
+
           <h2>Downloads</h2>
-          <ul>
-            <li><a href="nms-tools_${VERSION}.deb">DEB Package</a></li>
-            <li><a href="nms_tools-${VERSION}-1.noarch.rpm">RPM Package</a></li>
-          </ul>
+          <table border="1" cellpadding="6" cellspacing="0">
+            <tr><th>Artifact</th><th>Download</th><th>SHA256</th></tr>
+            <tr>
+              <td>DEB Package</td>
+              <td><a href="nms-tools_${VERSION}.deb">Download</a></td>
+              <td>${DEB_SHA256}</td>
+            </tr>
+            <tr>
+              <td>RPM Package</td>
+              <td><a href="nms_tools-${VERSION}-1.noarch.rpm">Download</a></td>
+              <td>${RPM_SHA256}</td>
+            </tr>
+            <tr>
+              <td>All Artifacts (ZIP)</td>
+              <td><a href="nms-tools_${VERSION}_all.zip">Download</a></td>
+              <td>—</td>
+            </tr>
+          </table>
+
+          <h2>QR Code</h2>
+          <p>Scan to open nightly dashboard:</p>
+          <img src="qr.png" alt="QR Code">
+
+          <h2>Recent Changes</h2>
+          <pre>${CHANGELOG}</pre>
+
+          <hr>
+          <p><em>Last updated: ${NOW}</em></p>
           </body>
           </html>
           EOF
