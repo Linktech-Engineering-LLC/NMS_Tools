@@ -121,6 +121,10 @@ jobs:
           mkdir -p dashboard
           NOW=$(date -u +"%Y-%m-%d %H:%M UTC")
 
+          VERSION="${{ steps.meta.outputs.version }}"
+          DATESTAMP="${{ steps.meta.outputs.datestamp }}"
+          GIT_HASH="${{ steps.meta.outputs.hash }}"
+
           # Compute checksums
           DEB_FILE=$(ls artifacts/*.deb 2>/dev/null | head -n 1 || true)
           RPM_FILE=$(ls artifacts/*.rpm 2>/dev/null | head -n 1 || true)
