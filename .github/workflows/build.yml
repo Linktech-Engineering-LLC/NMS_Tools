@@ -28,6 +28,11 @@ jobs:
 
       - name: Build all tools
         run: ./scripts/build_all.sh
+      - name: Copy binaries to build folder
+        run: |
+          mkdir -p build/linux-x86_64
+          cp -r dist/* build/linux-x86_64/
+
       - name: List build output
         run: ls -R build/linux-x86_64 || echo "No build output found"
       - name: Verify build contents
