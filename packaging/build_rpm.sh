@@ -41,7 +41,7 @@ done
 # ------------------------------------------------------------
 echo "[NMS_Tools] Discovering tools..."
 
-TOOLS=$(find "$ROOT_DIR" -maxdepth 1 -type d -name "check_*" -printf "%f\n")
+TOOLS=$(find "$ROOT_DIR/src" -maxdepth 1 -type d -name "check_*" -printf "%f\n")
 
 echo "Tools detected:"
 echo "$TOOLS"
