@@ -34,7 +34,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nms_tools-linux-x86_64
-          path: build/linux-x86_64/
+          path: build/linux-x86_64/**/*
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
