@@ -33,7 +33,11 @@ echo " Output:        $BUILD_DIR"
 echo "========================================"
 
 # Build using curated spec file
-pyinstaller "$SPEC_FILE" --clean
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+(
+    cd "$REPO_ROOT"
+    pyinstaller "$SPEC_FILE" --clean
+)
 
 # Cleanup PyInstaller temp build directory
 if [ -d "build/$TOOL" ]; then
