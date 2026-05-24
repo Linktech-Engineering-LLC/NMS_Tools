@@ -28,6 +28,8 @@ jobs:
 
       - name: Build all tools
         run: ./scripts/build_all.sh
+      - name: List build output
+        run: ls -R build/linux-x86_64 || echo "No build output found"
 
       - name: Upload build artifacts (manual runs)
         if: github.event_name == 'workflow_dispatch'
