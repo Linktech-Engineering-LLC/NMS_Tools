@@ -79,7 +79,7 @@ mkdir -p "$TOP"
 
 # Copy tools
 for tool in $TOOLS; do
-    cp -r "$tool" "$TOP"/
+    cp -r "$ROOT_DIR/src/$tool" "$TOP"/
 done
 
 # Copy man pages
