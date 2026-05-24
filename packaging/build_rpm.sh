@@ -7,11 +7,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SPEC_FILE="$ROOT_DIR/packaging/rpm/nms_tools.spec"
 
 cd "$ROOT_DIR"
+
 # ------------------------------------------------------------
 # Set up rpmbuild directory structure
 # ------------------------------------------------------------
 RPMBUILD="$HOME/rpmbuild"
-
 mkdir -p "$RPMBUILD"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
 # ------------------------------------------------------------
@@ -37,11 +37,11 @@ for md in "$MAN_SRC_DIR"/*.md; do
 done
 
 # ------------------------------------------------------------
-# Discover tools dynamically
+# Discover built tools (binaries in dist/)
 # ------------------------------------------------------------
 echo "[NMS_Tools] Discovering tools..."
 
-TOOLS=$(find "$ROOT_DIR/src" -maxdepth 1 -type d -name "check_*" -printf "%f\n")
+TOOLS=$(find "$ROOT_DIR/dist" -maxdepth 1 -type f -name "check_*" -printf "%f\n")
 
 echo "Tools detected:"
 echo "$TOOLS"
@@ -68,7 +68,7 @@ sed -i \
     "$MAN_OUT_DIR/nms_tools.7"
 
 # ------------------------------------------------------------
-# Create source tarball (correct, non-append, RPM-safe)
+# Create source tarball (contains binaries + man pages)
 # ------------------------------------------------------------
 echo "[NMS_Tools] Creating source tarball..."
 
@@ -77,9 +77,9 @@ TOP="$STAGING_DIR/nms_tools-$VERSION"
 
 mkdir -p "$TOP"
 
-# Copy tools
+# Copy binaries (flat files)
 for tool in $TOOLS; do
-    cp -r "$ROOT_DIR/src/$tool" "$TOP"/
+    cp "$ROOT_DIR/dist/$tool" "$TOP/$tool"
 done
 
 # Copy man pages
@@ -87,8 +87,8 @@ mkdir -p "$TOP/man/generated"
 cp -r "$MAN_OUT_DIR"/* "$TOP/man/generated/"
 
 # Copy metadata files required by the spec
-cp "$ROOT_DIR/README.md" "$TOP"/
-cp "$ROOT_DIR/LICENSE" "$TOP"/
+cp "$ROOT_DIR/README.md" "$TOP/"
+cp "$ROOT_DIR/LICENSE" "$TOP/"
 
 # Create tarball with correct top-level directory
 TARBALL="$RPMBUILD/SOURCES/nms_tools-$VERSION.tar.gz"
