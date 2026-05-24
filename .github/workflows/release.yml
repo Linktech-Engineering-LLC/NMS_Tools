@@ -25,13 +25,17 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.12"
 
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pandoc shellcheck
-          pip install flake8 black isort yamllint
+          sudo apt-get install -y \
+            pandoc \
+            shellcheck \
+            rpm \
+            dpkg-dev
+          pip install flake8 black isort yamllint pyinstaller
 
       - name: Run lint checks (non-blocking)
         run: |
@@ -42,23 +46,33 @@ jobs:
           shellcheck **/*.sh || true
 
       - name: Validate environment
-        run: |
-          python3 tools/validate_env.py
+        run: python3 tools/validate_env.py
 
-      - name: Build suite (vendor + tarball + man pages)
-        run: |
-          make all
+      - name: Build PyInstaller binaries
+        run: ./scripts/build_all.sh
 
-      - name: Upload suite artifact
+      - name: Build DEB and RPM packages
+        run: make packages
+
+      - name: Collect release artifacts
+        run: |
+          mkdir -p release_artifacts
+          cp build/linux-x86_64/* release_artifacts/ || true
+          cp packaging/nms-tools_*.deb release_artifacts/ || true
+          find "$HOME/rpmbuild/RPMS" -type f -name "*.rpm" -exec cp {} release_artifacts/ \; || true
+
+      - name: Upload artifacts (manual runs)
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: nms_tools_suite
-          path: dist/*.tar.gz
+          name: nms-tools-release
+          path: release_artifacts/
 
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.tar.gz
+          files: release_artifacts/*
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
         env:

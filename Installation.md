@@ -2,74 +2,158 @@
 
 ## Overview
 
-NMS_Tools can be installed as a complete suite using the included `install.sh` script.  
-This installer performs environment validation, prepares the Python runtime, builds the vendor library, and deploys all tools consistently across the system.
+NMS_Tools is distributed as standalone Linux binaries and native system packages (DEB/RPM).  
+No Python runtime is required — each tool is a self‑contained executable built with PyInstaller.
 
-Tools may also be installed individually if only specific functionality is required.
+You may install the entire suite or individual tools depending on your environment.
+
+---
+
+## Installation Locations
+
+NMS_Tools binaries may be installed in either of two locations:
+
+### **1. System‑wide path (default)**  
+For general CLI usage, automation, cron jobs, and operator workflows:
+
+[/usr/bin/]
+
+### **2. Nagios plugin directory**  
+For monitoring environments (Nagios, Icinga, Naemon, NRPE, NCPA):
+
+
+[/usr/local/nagios/libexec/]
+
+Or, optionally, to keep the suite organized:
+
+[/usr/local/nagios/libexec/NMS_Tools/]
+
+All tools are fully Nagios‑compatible and can be used as drop‑in plugins.
 
 ---
 
 ## Prerequisites
 
-- Linux system with standard utilities (bash, coreutils, etc.)
-- Python 3.x (minimum version required by the suite)
-- Permission to install into system paths (sudo may be required)
+- Linux system (x86_64)
+- Standard utilities (bash, coreutils)
+- Root/sudo access for system‑wide installation (DEB/RPM)
+
+No Python installation is required.
 
 ---
 
 ## Installing the Full Suite
 
-To install all tools at once:
+### Option 1 — Install via DEB package (Debian/Ubuntu)
 
-`./install.sh`
+```bash
+sudo dpkg -i nms-tools_<version>.deb
+```
 
+### Option 2 — Install via RPM package (Fedora/RHEL/openSUSE)
 
-The installer will:
+```bash
+sudo rpm -i nms_tools-<version>-1.noarch.rpm
+```
 
-- Validate the Python environment using `validate_env.py`
-- Ensure the correct Python version is available
-- Build the vendor library deterministically
-- Bump tool scripts to the correct version
-- Deploy all tools to their target locations
+Packages install all tools into standard system paths:
 
-The process is deterministic and safe to run multiple times.
-
----
+/usr/bin/check_cert
+/usr/bin/check_html
+/usr/bin/check_interfaces
+/usr/bin/check_ports
+/usr/bin/check_weather
 
 ## Installing Individual Tools
+Each tool is also available as a standalone binary.
 
-Each tool in the suite may also be installed independently.  
-Refer to the README in each tool’s directory for usage and installation details.
+Download from:
+
+* **Stable releases:**  
+  https://github.com/Linktech-Engineering-LLC/NMS_Tools/releases
+
+* **Nightly builds:**
+  https://linktech-engineering-llc.github.io/NMS_Tools/
+
+Make the binary executable:
+
+```bash
+chmod +x check_cert
+```
+
+Install to system path:
+
+```bash
+sudo mv check_cert /usr/local/bin/
+```
+
+Or install as a Nagios plugin:
+
+```bash
+sudo mv check_cert /usr/local/nagios/libexec/
+```
+
+Or into a dedicated suite folder:
+
+```bash
+sudo mkdir -p /usr/local/nagios/libexec/NMS_Tools
+sudo mv check_cert /usr/local/nagios/libexec/NMS_Tools/
+```
+
+Repeat for any tool you want to install individually.
 
 ---
 
-## Vendor Library
+## Nightly Builds
 
-The suite includes a vendor library that is built automatically during installation.  
-This ensures:
+Nightly builds include:
 
-- Deterministic behavior  
-- No external runtime dependencies  
-- Reproducible builds  
+* Latest binaries
+* DEB/RPM packages
+* Checksums
+* Build metadata
 
-The vendor library is rebuilt only when required.
+Available at:
 
----
+https://linktech-engineering-llc.github.io/NMS_Tools/
 
-## Environment Validation
+## Uninstallation
 
-The installer uses `validate_env.py` to confirm:
+### DEB
 
-- Python version compatibility  
-- Required modules are available  
-- The environment is suitable for deterministic operation  
+```bash
+sudo dpkg -r nms-tools
+```
 
-If validation fails, the installer will exit with a clear diagnostic message.
+### RPM
 
----
+```bash
+sudo rpm -e nms_tools
+```
 
-## Notes
+### Manual binary removal
 
-- The installer is idempotent and may be re‑run safely.  
-- Vendor libraries are rebuilt only when necessary.  
-- Individual tools can be deployed without installing the full suite.
+System‑wide:
+
+```bash
+sudo rm /usr/local/bin/check_*
+```
+
+Nagios plugin directory:
+
+```bash
+sudo rm /usr/local/nagios/libexec/check_*
+```
+
+Or:
+
+```bash
+sudo rm -r /usr/local/nagios/libexec/NMS_Tools/
+```
+
+# Notes
+
+* All binaries are deterministic and self‑contained.
+* No Python environment or vendor library is required.
+* Tools may be installed individually or as a suite.
+* Nagios plugin installation is fully supported.

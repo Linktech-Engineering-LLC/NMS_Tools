@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.12
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2026 Leon McClatchey, Linktech Engineering LLC
 """

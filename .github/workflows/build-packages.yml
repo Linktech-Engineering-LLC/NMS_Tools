@@ -1,10 +1,10 @@
 name: Build NMS_Tools Packages
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    tags:
+      - "v*"
 
 jobs:
   build-packages:
@@ -17,7 +17,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.12'
 
       - name: Install RPM build dependencies
         run: |
@@ -35,31 +35,24 @@ jobs:
         run: |
           make packages
 
-      - name: Collect DEB artifact
+      - name: Collect DEB and RPM artifacts
         if: always()
         run: |
           mkdir -p artifacts
-          cp packaging/debian/nms-tools.deb artifacts/ || true
-
-      - name: Collect RPM artifacts
-        if: always()
-        run: |
-          mkdir -p artifacts
+          cp packaging/nms-tools_*.deb artifacts/ || true
           find "$HOME/rpmbuild/RPMS" -type f -name "nms_tools-*.rpm" -exec cp {} artifacts/ \; || true
 
-      - name: Upload build artifacts
+      - name: Upload artifacts (manual runs)
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: nms-tools-packages
-          path: artifacts
-      - name: Upload DEB package
-        uses: actions/upload-artifact@v4
-        with:
-          name: nms-tools-deb
-          path: packaging/nms-tools_*.deb
+          path: artifacts/
 
-      - name: Upload RPM package
-        uses: actions/upload-artifact@v4
+      - name: Upload to GitHub Release (tagged builds)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
         with:
-          name: nms-tools-rpm
-          path: /home/runner/rpmbuild/RPMS/noarch/*.rpm
+          files: artifacts/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

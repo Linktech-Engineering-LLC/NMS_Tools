@@ -20,7 +20,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.12'
 
       - name: Install build dependencies
         run: |
@@ -147,16 +147,14 @@ jobs:
           # Create ZIP of all artifacts
           zip -j dashboard/nms-tools_${VERSION}_all.zip artifacts/* || true
 
-          # Generate QR code (points to dashboard homepage)
+          # Generate QR code
           QR_URL="https://linktech-engineering-llc.github.io/"
           curl -s -o dashboard/qr.png \
             "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${QR_URL}"
 
           cat > dashboard/index.html <<EOF
           <html>
-          <head>
-            <title>NMS_Tools Nightly Dashboard</title>
-          </head>
+          <head><title>NMS_Tools Nightly Dashboard</title></head>
           <body>
           <h1>NMS_Tools Nightly Dashboard</h1>
 
@@ -178,38 +176,4 @@ jobs:
             <tr>
               <td>DEB Package</td>
               <td><a href="nms-tools_${VERSION}.deb">Download</a></td>
-              <td>${DEB_SHA256}</td>
-            </tr>
-            <tr>
-              <td>RPM Package</td>
-              <td><a href="nms_tools-${VERSION}-1.noarch.rpm">Download</a></td>
-              <td>${RPM_SHA256}</td>
-            </tr>
-            <tr>
-              <td>All Artifacts (ZIP)</td>
-              <td><a href="nms-tools_${VERSION}_all.zip">Download</a></td>
-              <td>—</td>
-            </tr>
-          </table>
-
-          <h2>QR Code</h2>
-          <p>Scan to open nightly dashboard:</p>
-          <img src="qr.png" alt="QR Code">
-
-          <h2>Recent Changes</h2>
-          <pre>${CHANGELOG}</pre>
-
-          <hr>
-          <p><em>Last updated: ${NOW}</em></p>
-          </body>
-          </html>
-          EOF
-
-          cp artifacts/*.deb dashboard/ || true
-          cp artifacts/*.rpm dashboard/ || true
-
-      - name: Publish to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: dashboard
+              <td>

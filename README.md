@@ -5,11 +5,10 @@ Deterministic, operator‑grade monitoring tools for Linux and Nagios environmen
 ![Tools Suite](https://img.shields.io/badge/TOOLS%20SUITE-purple)
 ![Status](https://img.shields.io/badge/STATUS-ACTIVE-brightgreen)
 ![License](https://img.shields.io/badge/LICENSE-MIT-blue)
-![Python](https://img.shields.io/badge/PYTHON-3.10%2B-blue)
+![Python](https://img.shields.io/badge/PYTHON-3.12%2B-blue)
 ![Platform](https://img.shields.io/badge/Platform-Linux-blue)
 ![Packages](https://img.shields.io/badge/Packages-DEB%20%7C%20RPM-orange)
 ![Nightly Build](https://img.shields.io/badge/Nightly%20Build-passing-brightgreen)
-![Build Packages](https://img.shields.io/badge/Build%20NMS_Tools%20Packages-passing-brightgreen)
 ![Dashboard](https://img.shields.io/badge/Nightly-Dashboard-blue)
 
 ---
@@ -21,47 +20,19 @@ Each tool is built to produce predictable, machine‑readable output suitable fo
 
 The suite currently includes certificate inspection, HTML/HTTP validation, interface inspection, port checking, and weather‑based monitoring utilities.
 
+All tools are compiled as standalone binaries using PyInstaller, requiring no Python runtime.
+
 ---
 
 ## Tools in This Suite
 
-### **check_cert**
-TLS certificate inspection and validation tool.  
-Designed for monitoring certificate expiration, chain validation, and operational readiness.
-
-→ See: `check_cert/README.md`
-
----
-
-### **check_html**
-HTTP/HTTPS content validation tool.  
-Performs deterministic checks on status codes, headers, and HTML content.
-
-→ See: `check_html/README.md`
-
----
-
-### **check_interfaces**
-Network interface inspection tool.  
-Reports interface state, IP configuration, carrier status, and operational metrics.
-
-→ See: `check_interfaces/README.md`
-
----
-
-### **check_ports**
-Port and service inspection tool.  
-Validates port availability, service responsiveness, and connection behavior.
-
-→ See: `check_ports/README.md`
-
----
-
-### **check_weather**
-Weather client for monitoring pipelines and dashboards.  
-Provides deterministic current, hourly, and weekly forecasts with normalized output.
-
-→ See: `check_weather/README.md`
+| Tool | Description | Documentation |
+|------|-------------|---------------|
+| **check_cert** | TLS certificate inspection and expiration validation | [src/check_cert/README.md](src/check_cert/README.md) |
+| **check_html** | HTTP/HTTPS content validation and deterministic HTML checks | [src/check_html/README.md](src/check_html/README.md) |
+| **check_interfaces** | Network interface inspection and operational state reporting | [src/check_interfaces/README.md](src/check_interfaces/README.md) |
+| **check_ports** | Port and service availability inspection | [src/check_ports/README.md](src/check_ports/README.md) |
+| **check_weather** | Deterministic weather client for monitoring pipelines | [src/check_weather/README.md](src/check_weather/README.md) |
 
 ---
 
@@ -78,10 +49,26 @@ Packages install cleanly into standard system paths and are suitable for deploym
 
 ## Installation
 
-NMS_Tools can be deployed as a complete suite using the included `install.sh` script.  
-A detailed installation guide is available in `Installation.md`.
+NMS_Tools is distributed as:
 
-Each tool may also be installed independently if only specific functionality is required.
+### **Standalone binaries (PyInstaller)**
+Download from the GitHub Releases page:
+
+https://github.com/Linktech-Engineering-LLC/NMS_Tools/releases
+
+Each tool is a self‑contained executable requiring no Python installation.
+
+### **DEB package (Debian/Ubuntu)**
+
+```bash
+sudo dpkg -i nms-tools_<version>.deb
+```
+
+### **RPM package (Fedora/RHEL/openSUSE)**
+
+```bash
+sudo rpm -i nms_tools-<version>-1.noarch.rpm
+```
 
 --- 
 
@@ -89,12 +76,68 @@ Each tool may also be installed independently if only specific functionality is 
 
 A nightly build dashboard is published via GitHub Pages and includes:
 
-- Latest build status  
-- Version and commit information  
-- Download links for DEB/RPM packages  
+* Latest build status
+* Version and commit information
+* Download links for DEB/RPM packages
+* Checksums
+* Recent changes
 
-**(Link will appear here once GitHub Pages is active)**  
-`https://linktech-engineering-llc.github.io/NMS_Tools/`
+**Nightly Dashboard:**
+https://linktech-engineering-llc.github.io/NMS_Tools/
+
+## Downloads
+
+**Stable releases:**
+https://github.com/Linktech-Engineering-LLC/NMS_Tools/releases
+
+**Nightly builds:**
+https://linktech-engineering-llc.github.io/NMS_Tools/
+
+## Building From Source
+
+### Build all PyInstaller binaries
+
+```Bash
+./scripts/build_all.sh
+```
+
+Outputs to:
+
+`build/linux-x86_64/`
+
+### Build DEB/RPM packages
+
+```Bash
+make packages
+```
+
+Outputs to:
+
+```Code
+packaging/*.deb
+~/rpmbuild/RPMS/noarch/*.rpm
+```
+
+---
+
+## Repository Structure
+
+```Code
+src/
+  check_cert/
+  check_html/
+  check_interfaces/
+  check_ports/
+  check_weather/
+scripts/
+  build_one.sh
+  build_all.sh
+packaging/
+  debian/
+  rpm/
+.github/
+  workflows/
+```
 
 ---
 
@@ -124,4 +167,5 @@ Please keep submissions:
 ## License
 
 MIT License  
-See `LICENSE` for details.
+See [LICENSE] for details.
+
