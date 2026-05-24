@@ -22,18 +22,25 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install RPM build dependencies
+      - name: Install build dependencies
         run: |
-          sudo apt-get install -y pandoc rpm dpkg-dev      
+          sudo apt-get update
+          sudo apt-get install -y \
+            pandoc \
+            rpm \
+            dpkg-dev
 
       - name: Install Python build dependencies
         run: |
+          sudo apt-get install -y python3-pip
           pip install pyinstaller
+
       - name: Make scripts executable
         run: chmod +x scripts/*.sh
+
       - name: Build tools
-        run: |
-          ./scripts/build_all.sh
+        run: ./scripts/build_all.sh
+
       - name: Copy binaries to build folder
         run: |
           mkdir -p build/linux-x86_64
