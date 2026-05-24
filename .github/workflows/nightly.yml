@@ -130,6 +130,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Clean working directory (remove all binaries)
+        run: |
+          rm -rf artifacts
+          rm -rf zipbuild
+          rm -f nms-tools.zip
+          rm -f *.deb
+          rm -f *.rpm
+          rm -f *.zip
+
       - name: Generate dashboard HTML
         run: |
           VERSION="${{ steps.meta.outputs.version }}"
