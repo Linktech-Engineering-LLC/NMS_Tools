@@ -86,8 +86,11 @@ jobs:
       NIGHTLY: "1"
 
     steps:
-      - name: Checkout repository
+      # IMPORTANT: checkout gh-pages directly
+      - name: Checkout gh-pages branch
         uses: actions/checkout@v4
+        with:
+          ref: gh-pages
 
       - name: Download nightly artifacts
         uses: actions/download-artifact@v4
@@ -98,8 +101,8 @@ jobs:
       - name: Extract version metadata
         id: meta
         run: |
-          # Find the first .deb file
-          DEB_FILE=$(ls artifacts/*.deb 2>/dev/null | head -n 1 || true)
+          # Pick newest DEB (fixes stale metadata)
+          DEB_FILE=$(ls -t artifacts/*.deb 2>/dev/null | head -n 1 || true)
 
           if [ -z "$DEB_FILE" ]; then
             echo "No DEB file found, applying fallback metadata"
@@ -109,20 +112,13 @@ jobs:
           else
             BASENAME=$(basename "$DEB_FILE")
 
-            # Extract version from filename: nms-tools_<version>.deb
             VERSION=$(echo "$BASENAME" | sed -n 's/nms-tools_\(.*\)\.deb/\1/p')
 
-            # Extract datestamp if present, else fallback to today
             DATESTAMP=$(echo "$VERSION" | grep -o '+[0-9]\{8\}' | tr -d '+' || true)
-            if [ -z "$DATESTAMP" ]; then
-              DATESTAMP=$(date -u +"%Y%m%d")
-            fi
+            [ -z "$DATESTAMP" ] && DATESTAMP=$(date -u +"%Y%m%d")
 
-            # Extract git hash if present
             GIT_HASH=$(echo "$VERSION" | sed -n 's/.*git\([0-9a-f]\+\).*/\1/p')
-            if [ -z "$GIT_HASH" ]; then
-              GIT_HASH="unknown"
-            fi
+            [ -z "$GIT_HASH" ] && GIT_HASH="unknown"
           fi
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -132,21 +128,18 @@ jobs:
       - name: Generate dashboard HTML
         run: |
           mkdir -p dashboard
-          NOW=$(date -u +"%Y-%m-%d %H:%M UTC")
           rm -f dashboard/*
 
           VERSION="${{ steps.meta.outputs.version }}"
           DATESTAMP="${{ steps.meta.outputs.datestamp }}"
           GIT_HASH="${{ steps.meta.outputs.hash }}"
 
-          # Compute checksums
           DEB_FILE=$(ls -t artifacts/*.deb 2>/dev/null | head -n 1 || true)
           RPM_FILE=$(ls -t artifacts/*.rpm 2>/dev/null | head -n 1 || true)
 
           DEB_SHA256=$(sha256sum $DEB_FILE 2>/dev/null | awk '{print $1}')
           RPM_SHA256=$(sha256sum $RPM_FILE 2>/dev/null | awk '{print $1}')
 
-          # Build status
           if [ -f "$DEB_FILE" ]; then
             STATUS_COLOR="green"
             STATUS_TEXT="Success"
@@ -155,13 +148,10 @@ jobs:
             STATUS_TEXT="Failed"
           fi
 
-          # Changelog snippet (last 5 commits between nightly and main)
           CHANGELOG=$(git log -n 5 --pretty=format:"• %s" nightly..main || echo "No recent changes")
 
-          # Create ZIP of all artifacts
           zip -j dashboard/nms-tools_${VERSION}_all.zip artifacts/* || true
 
-          # Generate QR code
           QR_URL="https://linktech-engineering-llc.github.io/"
           curl -s -o dashboard/qr.png \
             "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${QR_URL}"
@@ -190,4 +180,28 @@ jobs:
             <tr>
               <td>DEB Package</td>
               <td><a href="nms-tools_${VERSION}.deb">Download</a></td>
-              <td>
+              <td>${DEB_SHA256}</td>
+            </tr>
+            <tr>
+              <td>RPM Package</td>
+              <td><a href="nms_tools-${VERSION}.rpm">Download</a></td>
+              <td>${RPM_SHA256}</td>
+            </tr>
+          </table>
+          </body>
+          </html>
+          EOF
+
+          cp $DEB_FILE dashboard/nms-tools_${VERSION}.deb || true
+          cp $RPM_FILE dashboard/nms_tools-${VERSION}.rpm || true
+
+      - name: Publish dashboard to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          cp -r dashboard/* .
+
+          git add .
+          git commit -m "Update nightly dashboard" || echo "No changes to commit"
+          git push origin gh-pages
