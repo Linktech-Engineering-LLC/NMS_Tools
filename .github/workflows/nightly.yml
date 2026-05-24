@@ -76,17 +76,11 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -f nightly
           git push -f origin nightly
-
-
   publish-dashboard:
     runs-on: ubuntu-latest
     needs: nightly-build
 
-    env:
-      NIGHTLY: "1"
-
     steps:
-      # IMPORTANT: checkout gh-pages directly
       - name: Checkout gh-pages branch
         uses: actions/checkout@v4
         with:
@@ -101,133 +95,101 @@ jobs:
       - name: Extract version metadata
         id: meta
         run: |
-          # Pick newest DEB (fixes stale metadata)
-          DEB_FILE=$(ls -t artifacts/*.deb 2>/dev/null | head -n 1 || true)
+          DEB_FILE=$(ls -t artifacts/*.deb | head -n 1)
+          RPM_FILE=$(ls -t artifacts/*.rpm | head -n 1)
 
-          if [ -z "$DEB_FILE" ]; then
-            echo "No DEB file found, applying fallback metadata"
-            VERSION="unknown"
-            DATESTAMP=$(date -u +"%Y%m%d")
-            GIT_HASH="unknown"
-          else
-            BASENAME=$(basename "$DEB_FILE")
+          BASENAME=$(basename "$DEB_FILE")
+          VERSION=$(echo "$BASENAME" | sed -n 's/nms-tools_\(.*\)\.deb/\1/p')
 
-            VERSION=$(echo "$BASENAME" | sed -n 's/nms-tools_\(.*\)\.deb/\1/p')
-
-            DATESTAMP=$(echo "$VERSION" | grep -o '+[0-9]\{8\}' | tr -d '+' || true)
-            [ -z "$DATESTAMP" ] && DATESTAMP=$(date -u +"%Y%m%d")
-
-            GIT_HASH=$(echo "$VERSION" | sed -n 's/.*git\([0-9a-f]\+\).*/\1/p')
-            [ -z "$GIT_HASH" ] && GIT_HASH="unknown"
-          fi
+          DATESTAMP=$(echo "$VERSION" | grep -o '+[0-9]\{8\}' | tr -d '+')
+          GIT_HASH=$(echo "$VERSION" | sed -n 's/.*git\([0-9a-f]\+\).*/\1/p')
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "datestamp=$DATESTAMP" >> $GITHUB_OUTPUT
           echo "hash=$GIT_HASH" >> $GITHUB_OUTPUT
 
+      - name: Create ZIP (DEB + RPM)
+        run: |
+          mkdir -p zipbuild
+          cp artifacts/*.deb zipbuild/
+          cp artifacts/*.rpm zipbuild/
+          cd zipbuild
+          zip ../nms-tools.zip *
+          cd ..
+
+      - name: Upload assets to nightly Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: "Nightly Build"
+          prerelease: true
+          files: |
+            artifacts/*.deb
+            artifacts/*.rpm
+            nms-tools.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Generate dashboard HTML
         run: |
-          mkdir -p dashboard
-          rm -f dashboard/*
-
           VERSION="${{ steps.meta.outputs.version }}"
           DATESTAMP="${{ steps.meta.outputs.datestamp }}"
           GIT_HASH="${{ steps.meta.outputs.hash }}"
 
-          DEB_FILE=$(ls -t artifacts/*.deb 2>/dev/null | head -n 1 || true)
-          RPM_FILE=$(ls -t artifacts/*.rpm 2>/dev/null | head -n 1 || true)
+          RELEASE_URL="https://github.com/Linktech-Engineering-LLC/NMS_Tools/releases/download/nightly"
 
-          DEB_SHA256=$(sha256sum $DEB_FILE 2>/dev/null | awk '{print $1}')
-          RPM_SHA256=$(sha256sum $RPM_FILE 2>/dev/null | awk '{print $1}')
+          mkdir -p dashboard
+          rm -f dashboard/*
 
-          if [ -f "$DEB_FILE" ]; then
-            STATUS_COLOR="green"
-            STATUS_TEXT="Success"
-          else
-            STATUS_COLOR="red"
-            STATUS_TEXT="Failed"
-          fi
-
-          CHANGELOG=$(git log -n 5 --pretty=format:"• %s" nightly..main || echo "No recent changes")
-
-          zip -j dashboard/nms-tools_${VERSION}_all.zip artifacts/* || true
-
-          QR_URL="https://linktech-engineering-llc.github.io/"
           curl -s -o dashboard/qr.png \
-            "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${QR_URL}"
+            "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://linktech-engineering-llc.github.io/"
 
           cat > dashboard/index.html <<EOF
           <html>
           <head>
             <title>NMS_Tools Nightly Dashboard</title>
             <style>
-              body { font-family: Arial, sans-serif; margin: 20px; }
+              body { font-family: Arial; margin: 20px; }
               table { border-collapse: collapse; margin-top: 10px; }
               th, td { padding: 8px 12px; border: 1px solid #ccc; }
               th { background: #f0f0f0; }
-              h1, h2 { margin-top: 24px; }
-              .status { font-weight: bold; }
             </style>
           </head>
-
           <body>
 
           <h1>NMS_Tools Nightly Dashboard</h1>
 
-          <p class="status">
-            <strong>Status:</strong>
-            <span style="color:${STATUS_COLOR};">${STATUS_TEXT}</span>
-          </p>
-
           <h2>Build Metadata</h2>
           <table>
-            <tr><th align="left">Field</th><th align="left">Value</th></tr>
+            <tr><th>Field</th><th>Value</th></tr>
             <tr><td>Version</td><td>${VERSION}</td></tr>
-            <tr><td>Build Date</td><td>${DATESTAMP}</td></tr>
+            <tr><td>Date</td><td>${DATESTAMP}</td></tr>
             <tr><td>Commit</td><td>${GIT_HASH}</td></tr>
-            <tr><td>Nightly Tag</td><td><a href="https://github.com/Linktech-Engineering-LLC/NMS_Tools/tree/nightly">nightly</a></td></tr>
-            <tr><td>Workflow Run</td><td><a href="https://github.com/Linktech-Engineering-LLC/NMS_Tools/actions/runs/${GITHUB_RUN_ID}">View Run</a></td></tr>
-            <tr><td>Diff (nightly → main)</td><td><a href="https://github.com/Linktech-Engineering-LLC/NMS_Tools/compare/nightly...main">Compare</a></td></tr>
           </table>
 
           <h2>Downloads</h2>
           <table>
-            <tr><th>Artifact</th><th>Download</th><th>SHA256</th></tr>
-
+            <tr><th>Artifact</th><th>Download</th></tr>
             <tr>
               <td>DEB Package</td>
-              <td><a href="nms-tools_${VERSION}.deb">nms-tools_${VERSION}.deb</a></td>
-              <td>${DEB_SHA256}</td>
+              <td><a href="${RELEASE_URL}/nms-tools.deb">nms-tools.deb</a></td>
             </tr>
-
             <tr>
               <td>RPM Package</td>
-              <td><a href="nms_tools-${VERSION}.rpm">nms_tools-${VERSION}.rpm</a></td>
-              <td>${RPM_SHA256}</td>
+              <td><a href="${RELEASE_URL}/nms-tools.rpm">nms-tools.rpm</a></td>
             </tr>
-
             <tr>
               <td>All Artifacts (ZIP)</td>
-              <td><a href="nms-tools_${VERSION}_all.zip">nms-tools_${VERSION}_all.zip</a></td>
-              <td>(contains DEB, RPM, etc.)</td>
+              <td><a href="${RELEASE_URL}/nms-tools.zip">nms-tools.zip</a></td>
             </tr>
           </table>
 
           <h2>QR Code</h2>
-          <p>Scan to visit the project homepage:</p>
           <img src="qr.png" width="200" height="200">
-
-          <h2>Recent Changes</h2>
-          <pre>
-          ${CHANGELOG}
-          </pre>
 
           </body>
           </html>
           EOF
-
-          cp $DEB_FILE dashboard/nms-tools_${VERSION}.deb || true
-          cp $RPM_FILE dashboard/nms_tools-${VERSION}.rpm || true
 
       - name: Publish dashboard to gh-pages
         run: |
@@ -237,5 +199,5 @@ jobs:
           cp -r dashboard/* .
 
           git add .
-          git commit -m "Update nightly dashboard" || echo "No changes to commit"
+          git commit -m "Update nightly dashboard" || echo "No changes"
           git push origin gh-pages
