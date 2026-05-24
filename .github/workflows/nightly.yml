@@ -31,6 +31,10 @@ jobs:
             rpm \
             dpkg-dev
 
+      - name: Build tools
+        run: |
+          ./scripts/build_all.sh
+
       - name: Build DEB and RPM via Makefile
         run: make packages
 
