@@ -117,6 +117,25 @@ jobs:
           zip ../nms-tools.zip *
           cd ..
 
+      - name: Compute checksums and sizes
+        id: sums
+        run: |
+          DEB=$(ls artifacts/*.deb | head -n 1)
+          RPM=$(ls artifacts/*.rpm | head -n 1)
+          ZIP=nms-tools.zip
+
+          echo "deb_size=$(stat -c%s "$DEB")" >> $GITHUB_OUTPUT
+          echo "rpm_size=$(stat -c%s "$RPM")" >> $GITHUB_OUTPUT
+          echo "zip_size=$(stat -c%s "$ZIP")" >> $GITHUB_OUTPUT
+
+          echo "deb_sha256=$(sha256sum "$DEB" | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "rpm_sha256=$(sha256sum "$RPM" | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "zip_sha256=$(sha256sum "$ZIP" | awk '{print $1}')" >> $GITHUB_OUTPUT
+
+          echo "deb_crc32=$(crc32 "$DEB")" >> $GITHUB_OUTPUT
+          echo "rpm_crc32=$(crc32 "$RPM")" >> $GITHUB_OUTPUT
+          echo "zip_crc32=$(crc32 "$ZIP")" >> $GITHUB_OUTPUT
+
       - name: Upload assets to nightly Release
         uses: softprops/action-gh-release@v2
         with:
@@ -178,6 +197,33 @@ jobs:
             <tr><td>Date</td><td>${DATESTAMP}</td></tr>
             <tr><td>Commit</td><td>${GIT_HASH}</td></tr>
           </table>
+
+          <h2>Checksums & File Info</h2>
+          <table>
+            <tr><th>File</th><th>Size (bytes)</th><th>SHA256</th><th>CRC32</th></tr>
+
+            <tr>
+              <td>nms-tools.deb</td>
+              <td>${{ steps.sums.outputs.deb_size }}</td>
+              <td>${{ steps.sums.outputs.deb_sha256 }}</td>
+              <td>${{ steps.sums.outputs.deb_crc32 }}</td>
+            </tr>
+
+            <tr>
+              <td>nms-tools.rpm</td>
+              <td>${{ steps.sums.outputs.rpm_size }}</td>
+              <td>${{ steps.sums.outputs.rpm_sha256 }}</td>
+              <td>${{ steps.sums.outputs.rpm_crc32 }}</td>
+            </tr>
+
+            <tr>
+              <td>nms-tools.zip</td>
+              <td>${{ steps.sums.outputs.zip_size }}</td>
+              <td>${{ steps.sums.outputs.zip_sha256 }}</td>
+              <td>${{ steps.sums.outputs.zip_crc32 }}</td>
+            </tr>
+          </table>
+
 
           <h2>Downloads</h2>
           <table>
