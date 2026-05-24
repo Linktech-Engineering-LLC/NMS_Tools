@@ -39,7 +39,7 @@ jobs:
         run: chmod +x scripts/*.sh
 
       - name: Build tools
-        run: ./scripts/build_all.sh
+        run: bash "$GITHUB_WORKSPACE/scripts/build_all.sh"
 
       - name: Copy binaries to build folder
         run: |
