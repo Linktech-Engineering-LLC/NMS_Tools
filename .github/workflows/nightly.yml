@@ -158,13 +158,29 @@ jobs:
 
           cat > dashboard/index.html <<EOF
           <html>
-          <head><title>NMS_Tools Nightly Dashboard</title></head>
+          <head>
+            <title>NMS_Tools Nightly Dashboard</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              table { border-collapse: collapse; margin-top: 10px; }
+              th, td { padding: 8px 12px; border: 1px solid #ccc; }
+              th { background: #f0f0f0; }
+              h1, h2 { margin-top: 24px; }
+              .status { font-weight: bold; }
+            </style>
+          </head>
+
           <body>
+
           <h1>NMS_Tools Nightly Dashboard</h1>
 
-          <p><strong>Status:</strong> <span style="color:${STATUS_COLOR};">${STATUS_TEXT}</span></p>
+          <p class="status">
+            <strong>Status:</strong>
+            <span style="color:${STATUS_COLOR};">${STATUS_TEXT}</span>
+          </p>
 
-          <table border="1" cellpadding="6" cellspacing="0">
+          <h2>Build Metadata</h2>
+          <table>
             <tr><th align="left">Field</th><th align="left">Value</th></tr>
             <tr><td>Version</td><td>${VERSION}</td></tr>
             <tr><td>Build Date</td><td>${DATESTAMP}</td></tr>
@@ -175,19 +191,37 @@ jobs:
           </table>
 
           <h2>Downloads</h2>
-          <table border="1" cellpadding="6" cellspacing="0">
+          <table>
             <tr><th>Artifact</th><th>Download</th><th>SHA256</th></tr>
+
             <tr>
               <td>DEB Package</td>
-              <td><a href="nms-tools_${VERSION}.deb">Download</a></td>
+              <td><a href="nms-tools_${VERSION}.deb">nms-tools_${VERSION}.deb</a></td>
               <td>${DEB_SHA256}</td>
             </tr>
+
             <tr>
               <td>RPM Package</td>
-              <td><a href="nms_tools-${VERSION}.rpm">Download</a></td>
+              <td><a href="nms_tools-${VERSION}.rpm">nms_tools-${VERSION}.rpm</a></td>
               <td>${RPM_SHA256}</td>
             </tr>
+
+            <tr>
+              <td>All Artifacts (ZIP)</td>
+              <td><a href="nms-tools_${VERSION}_all.zip">nms-tools_${VERSION}_all.zip</a></td>
+              <td>(contains DEB, RPM, etc.)</td>
+            </tr>
           </table>
+
+          <h2>QR Code</h2>
+          <p>Scan to visit the project homepage:</p>
+          <img src="qr.png" width="200" height="200">
+
+          <h2>Recent Changes</h2>
+          <pre>
+          ${CHANGELOG}
+          </pre>
+
           </body>
           </html>
           EOF
