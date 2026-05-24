@@ -117,6 +117,11 @@ jobs:
           zip ../nms-tools.zip *
           cd ..
 
+      - name: Install crc32 tool
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libarchive-zip-perl
+
       - name: Compute checksums and sizes
         id: sums
         run: |
