@@ -133,14 +133,15 @@ jobs:
         run: |
           mkdir -p dashboard
           NOW=$(date -u +"%Y-%m-%d %H:%M UTC")
+          rm -f dashboard/*
 
           VERSION="${{ steps.meta.outputs.version }}"
           DATESTAMP="${{ steps.meta.outputs.datestamp }}"
           GIT_HASH="${{ steps.meta.outputs.hash }}"
 
           # Compute checksums
-          DEB_FILE=$(ls artifacts/*.deb 2>/dev/null | head -n 1 || true)
-          RPM_FILE=$(ls artifacts/*.rpm 2>/dev/null | head -n 1 || true)
+          DEB_FILE=$(ls -t artifacts/*.deb 2>/dev/null | head -n 1 || true)
+          RPM_FILE=$(ls -t artifacts/*.rpm 2>/dev/null | head -n 1 || true)
 
           DEB_SHA256=$(sha256sum $DEB_FILE 2>/dev/null | awk '{print $1}')
           RPM_SHA256=$(sha256sum $RPM_FILE 2>/dev/null | awk '{print $1}')
