@@ -30,6 +30,9 @@ jobs:
             python3 \
             rpm \
             dpkg-dev
+      - name: Install Python build dependencies
+        run: |
+          pip install pyinstaller
 
       - name: Build tools
         run: |
