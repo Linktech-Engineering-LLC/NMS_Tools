@@ -41,11 +41,6 @@ jobs:
       - name: Build tools
         run: bash "$GITHUB_WORKSPACE/scripts/build_all.sh"
 
-      - name: Copy binaries to build folder
-        run: |
-          mkdir -p build/linux-x86_64
-          cp -r dist/* build/linux-x86_64/
-
       - name: Build DEB and RPM via Makefile
         run: |
           make packages

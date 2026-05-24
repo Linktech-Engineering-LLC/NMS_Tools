@@ -26,7 +26,7 @@ mkdir -p %{buildroot}/usr/share/man/man1
 mkdir -p %{buildroot}/usr/share/man/man7
 
 # Install all tools dynamically
-install -m 0755 check_*/check_*.py %{buildroot}/usr/local/bin/
+install -m 0755 check_* %{buildroot}/usr/local/bin/
 
 # Install generated man pages
 install -m 0644 man/generated/*.1 %{buildroot}/usr/share/man/man1/
