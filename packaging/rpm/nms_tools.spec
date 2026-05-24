@@ -40,7 +40,7 @@ gzip -9 %{buildroot}/usr/share/man/man7/*.7
 %license LICENSE
 %doc README.md
 
-/usr/local/bin/check_*.py
+/usr/local/bin/check_*
 /usr/share/man/man1/check_*.1.gz
 /usr/share/man/man7/*.7.gz
 
