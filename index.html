@@ -1,23 +1,19 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>NMS_Tools Nightly Dashboard</title>
-  <style>
-    body { font-family: Arial; margin: 20px; }
-    table { border-collapse: collapse; margin-top: 10px; width: 100%; }
-    th, td { padding: 8px 12px; border: 1px solid #ccc; }
-    th { background: #f0f0f0; }
-    .badge-row img { margin-right: 8px; }
-  </style>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
 <h1>NMS_Tools Nightly Dashboard</h1>
 
 <div class="badge-row">
-  <img src="https://img.shields.io/badge/version-loading-blue" id="version-badge">
-  <img src="https://img.shields.io/badge/date-loading-lightgrey" id="date-badge">
-  <img src="https://img.shields.io/badge/python-loading-yellow" id="python-badge">
-  <img src="https://img.shields.io/badge/pyinstaller-loading-orange" id="pyi-badge">
+  <img id="version-badge">
+  <img id="date-badge">
+  <img id="python-badge">
+  <img id="pyi-badge">
 </div>
 
 <h2>Build Metadata</h2>
@@ -31,9 +27,6 @@
   <img id="qr-code" src="qr.png" alt="QR Code">
 </div>
 
-<script>
-  const RELEASE_URL = "https://github.com/Linktech-Engineering-LLC/NMS_Tools/releases/download/nightly";
-</script>
 <script src="dashboard.js"></script>
 </body>
 </html>
