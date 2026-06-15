@@ -64,8 +64,9 @@ jobs:
           VERSION=$(echo "$BASENAME" | sed -E 's/nms-tools[-_]?([0-9]+\.[0-9]+\.[0-9]+).*$/\1/')
           PYI_VERSION=$(pyinstaller --version)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "hash=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          echo "git_hash=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
           echo "pyinstaller=$PYI_VERSION" >> $GITHUB_OUTPUT
+          echo "build_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
 
       - name: Upload nightly artifacts to release
         uses: softprops/action-gh-release@v1
@@ -184,12 +185,12 @@ jobs:
 
       - name: Generate metadata.json
         run: |
-          VERSION="${{ steps.meta.outputs.version }}"
-          DATESTAMP="${{ steps.meta.outputs.datestamp }}"
-          GIT_HASH="${{ needs.nightly-build.outputs.hash }}"
+          VERSION="${{ needs.nightly-build.outputs.version }}"
+          DATESTAMP="${{ needs.nightly-build.outputs.build_date }}"
+          GIT_HASH="${{ needs.nightly-build.outputs.gig-hash }}"
           RUN_ID="${{ github.run_id }}"
           PYTHON_VERSION=$(python3 --version | awk '{print $2}')
-          PYINSTALLER_VERSION=$(pyinstaller --version 2>/dev/null || echo "unknown")
+          PYINSTALLER_VERSION="${{ needs.nightly-build.outputs.pyinstaller }}"
 
           mkdir -p dashboard
 
@@ -197,14 +198,15 @@ jobs:
           {
             "meta_version": 2,
             "build": {
-              "date": "${{ steps.capture.outputs.build_date }}",
-              "commit": "${{ steps.capture.outputs.git_hash }}",
+              "date": "${DATESTAMP}",
+              "commit": "${COMMIT}",
+              "version": "${VERSION}",
               "branch": "nightly",
-              "workflow_run_id": $GITHUB_RUN_ID
+              "workflow_run_id": "${RUN_ID}"
             },
             "toolchain": {
-              "python": "$PYTHON_VERSION",
-              "pyinstaller": "$PYINSTALLER_VERSION",
+              "python": "$(python3 --version | awk '{print $2}')",
+              "pyinstaller": "${PYI_VERSION}"
             },
             "artifacts": [
           EOF
