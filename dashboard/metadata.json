@@ -3,12 +3,13 @@
   "build": {
     "date": "",
     "commit": "",
+    "version": "1.0.0",
     "branch": "nightly",
-    "workflow_run_id": 27583762693
+    "workflow_run_id": "27584360338"
   },
   "toolchain": {
     "python": "3.12.3",
-    "pyinstaller": "6.21.0",
+    "pyinstaller": ""
   },
   "artifacts": [
     {
