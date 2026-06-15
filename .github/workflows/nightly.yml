@@ -179,10 +179,10 @@ jobs:
         run: |
           VERSION="${{ steps.meta.outputs.version }}"
           DATESTAMP="${{ steps.meta.outputs.datestamp }}"
-          GIT_HASH="${{ steps.meta.outputs.hash }}"
+          GIT_HASH="${{ needs.nightly-build.outputs.hash }}"
           RUN_ID="${{ github.run_id }}"
           COMMIT="${{ needs.nightly-build.outputs.hash }}"
-          PYI_VERSION=$(pyinstaller --version)
+          PYI_VERSION="${{ steps.meta.outputs.pyinstaller }}"
 
           mkdir -p dashboard
 
