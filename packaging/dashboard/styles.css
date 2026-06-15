@@ -1,0 +1,47 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+  background: #f5f5f5;
+}
+
+h1, h2 {
+  margin-bottom: 10px;
+}
+
+.badge-row img {
+  margin-right: 10px;
+  height: 28px;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  background: white;
+  margin-bottom: 20px;
+}
+
+th, td {
+  border: 1px solid #ccc;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+th {
+  background: #eee;
+}
+
+.qr {
+  margin-top: 20px;
+}
+
+.qr img {
+  height: 200px;
+}
+
+.download-btn {
+  padding: 4px 8px;
+  background: #0078d4;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+}

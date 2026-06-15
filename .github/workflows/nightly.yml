@@ -30,7 +30,8 @@ jobs:
             pandoc \
             rpm \
             dpkg-dev \
-            zip
+            zip \
+            crc32
 
       - name: Install Python build dependencies
         run: |
@@ -74,20 +75,17 @@ jobs:
     needs: nightly-build
 
     steps:
-      # Checkout GH-PAGES branch (dashboard.js already lives here)
       - name: Checkout gh-pages branch
         uses: actions/checkout@v4
         with:
           ref: gh-pages
 
-      # Preserve existing dashboard.js
       - name: Preserve existing dashboard.js
         run: |
           if [ -f dashboard.js ]; then
             cp dashboard.js dashboard.js.bak
           fi
 
-      # Extract version metadata
       - name: Extract version metadata
         id: meta
         run: |
@@ -101,7 +99,6 @@ jobs:
           echo "datestamp=$DATESTAMP" >> $GITHUB_OUTPUT
           echo "hash=$GIT_HASH" >> $GITHUB_OUTPUT
 
-      # Compute checksums and sizes
       - name: Compute checksums and sizes
         id: sums
         run: |
@@ -115,10 +112,10 @@ jobs:
 
       - name: Generate QR code
         run: |
+          mkdir -p dashboard
           curl -s -o dashboard/qr.png \
             "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://linktech-engineering-llc.github.io/NMS_Tools/"
 
-      # Generate dashboard HTML
       - name: Generate dashboard HTML
         run: |
           mkdir -p dashboard
@@ -126,26 +123,22 @@ jobs:
           rm -f dashboard/*
 
           cat > dashboard/index.html <<EOF
-          <html>
+          <!DOCTYPE html>
+          <html lang="en">
           <head>
+            <meta charset="UTF-8">
             <title>NMS_Tools Nightly Dashboard</title>
-            <style>
-              body { font-family: Arial; margin: 20px; }
-              table { border-collapse: collapse; margin-top: 10px; width: 100%; }
-              th, td { padding: 8px 12px; border: 1px solid #ccc; }
-              th { background: #f0f0f0; }
-              .badge-row img { margin-right: 8px; }
-            </style>
+            <link rel="stylesheet" href="styles.css">
           </head>
           <body>
 
           <h1>NMS_Tools Nightly Dashboard</h1>
 
           <div class="badge-row">
-            <img src="https://img.shields.io/badge/version-loading-blue" id="version-badge">
-            <img src="https://img.shields.io/badge/date-loading-lightgrey" id="date-badge">
-            <img src="https://img.shields.io/badge/python-loading-yellow" id="python-badge">
-            <img src="https://img.shields.io/badge/pyinstaller-loading-orange" id="pyi-badge">
+            <img id="version-badge">
+            <img id="date-badge">
+            <img id="python-badge">
+            <img id="pyi-badge">
           </div>
 
           <h2>Build Metadata</h2>
@@ -159,21 +152,19 @@ jobs:
             <img id="qr-code" src="qr.png" alt="QR Code">
           </div>
 
-          <script>
-            const RELEASE_URL = "${RELEASE_URL}";
-          </script>
           <script src="dashboard.js"></script>
           </body>
           </html>
           EOF
 
-      # Generate metadata.json
       - name: Generate metadata.json
         run: |
           VERSION="${{ steps.meta.outputs.version }}"
           DATESTAMP="${{ steps.meta.outputs.datestamp }}"
           GIT_HASH="${{ steps.meta.outputs.hash }}"
           RUN_ID="${{ github.run_id }}"
+
+          mkdir -p dashboard
 
           cat > dashboard/metadata.json <<EOF
           {
@@ -191,25 +182,38 @@ jobs:
             "artifacts": [
           EOF
 
-          FIRST=1
+          FIRST=true
           for f in artifacts/*; do
+            [ -f "$f" ] || continue
+
             NAME=$(basename "$f")
             SIZE=$(stat -c%s "$f")
-            SHA=$(sha256sum "$f" | awk '{print $1}')
-            CRC=$(crc32 "$f" || echo "00000000")
-            TYPE=$(echo "$NAME" | sed -E 's/.*\.(tgz|zip|deb|rpm)$/\1/')
-            OS="linux"
-            ARCH="x86_64"
+            SHA256=$(sha256sum "$f" | awk '{print $1}')
+            CRC32=$(crc32 "$f")
 
-            if [ $FIRST -eq 0 ]; then echo "," >> dashboard/metadata.json; fi
-            FIRST=0
+            TYPE="unknown"
+            OS="unknown"
+            ARCH="unknown"
+
+            case "$NAME" in
+              *.zip) TYPE="zip"; OS="any"; ARCH="any" ;;
+              *.tgz) TYPE="tgz"; OS="any"; ARCH="any" ;;
+              *.deb) TYPE="deb"; OS="linux"; ARCH="amd64" ;;
+              *.rpm) TYPE="rpm"; OS="linux"; ARCH="x86_64" ;;
+            esac
+
+            if [ "$FIRST" = true ]; then
+              FIRST=false
+            else
+              echo "," >> dashboard/metadata.json
+            fi
 
             cat >> dashboard/metadata.json <<EOF
               {
                 "name": "${NAME}",
                 "size": ${SIZE},
-                "sha256": "${SHA}",
-                "crc32": "${CRC}",
+                "sha256": "${SHA256}",
+                "crc32": "${CRC32}",
                 "type": "${TYPE}",
                 "os": "${OS}",
                 "arch": "${ARCH}"
@@ -217,17 +221,20 @@ jobs:
           EOF
           done
 
-          echo "    ]" >> dashboard/metadata.json
+          echo "      ]" >> dashboard/metadata.json
           echo "}" >> dashboard/metadata.json
 
-      # Restore dashboard.js
       - name: Restore dashboard.js
         run: |
           if [ -f dashboard.js.bak ]; then
-            mv dashboard.js.bak dashboard.js
+            mv dashboard.js.bak dashboard/dashboard.js
           fi
 
-      # Publish dashboard to gh-pages
+      - name: Copy dashboard assets
+        run: |
+          cp dashboard.js dashboard/
+          cp styles.css dashboard/
+
       - name: Publish dashboard to gh-pages
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
