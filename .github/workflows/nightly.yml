@@ -104,13 +104,14 @@ jobs:
           DEB_FILE=$(ls -t artifacts/nms-tools_* | head -n 1)
           BASENAME=$(basename "$DEB_FILE")
           VERSION=$(echo "$BASENAME" | sed -E 's/nms-tools[-_]?([0-9]+\.[0-9]+\.[0-9]+).*$/\1/')
-          DATESTAMP=$(echo "$VERSION" | grep -o '+[0-9]\{8\}' | tr -d '+')
+          DATESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           GIT_HASH=$(git rev-parse --short HEAD)
           PYI_VERSION=$(pyinstaller --version)
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "datestamp=$DATESTAMP" >> $GITHUB_OUTPUT
           echo "hash=$GIT_HASH" >> $GITHUB_OUTPUT
+          echo "pyinstaller=$PYI_VERSION" >> $GITHUB_OUTPUT
 
       - name: Compute checksums and sizes
         id: sums
@@ -190,7 +191,7 @@ jobs:
             },
             "toolchain": {
               "python": "$(python3 --version | awk '{print $2}')",
-              "pyinstaller": "${PYI_VERSION}"
+              "pyinstaller": "${{ steps.meta.outputs.pyinstaller }}"
             },
             "artifacts": [
           EOF
