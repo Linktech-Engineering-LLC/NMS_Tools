@@ -80,17 +80,23 @@ jobs:
         with:
           ref: gh-pages
 
+      - name: Checkout main branch into subfolder
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: source
+      - name: Copy dashboard assets from main
+        run: |
+          cp source/packaging/dashboard/index.html dashboard/
+          cp source/packaging/dashboard/styles.css dashboard/
+          cp source/packaging/dashboard/dashboard.js dashboard/
+
+
       - name: Install dashboard dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libarchive-zip-perl
           python3 -m pip install pyinstaller
-
-      - name: Preserve existing dashboard.js
-        run: |
-          if [ -f dashboard.js ]; then
-            cp dashboard.js dashboard.js.bak
-          fi
 
       - name: Extract version metadata
         id: meta
@@ -229,17 +235,6 @@ jobs:
 
           echo "      ]" >> dashboard/metadata.json
           echo "}" >> dashboard/metadata.json
-
-      - name: Restore dashboard.js
-        run: |
-          if [ -f dashboard.js.bak ]; then
-            mv dashboard.js.bak dashboard/dashboard.js
-          fi
-
-      - name: Copy dashboard assets
-        run: |
-          cp dashboard.js dashboard/
-          cp styles.css dashboard/
 
       - name: Publish dashboard to gh-pages
         env:
