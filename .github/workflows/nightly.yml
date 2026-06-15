@@ -181,8 +181,8 @@ jobs:
           DATESTAMP="${{ steps.meta.outputs.datestamp }}"
           GIT_HASH="${{ needs.nightly-build.outputs.hash }}"
           RUN_ID="${{ github.run_id }}"
-          COMMIT="${{ needs.nightly-build.outputs.hash }}"
-          PYI_VERSION="${{ steps.meta.outputs.pyinstaller }}"
+          PYTHON_VERSION=$(python3 --version | awk '{print $2}')
+          PYINSTALLER_VERSION=$(pyinstaller --version 2>/dev/null || echo "unknown")
 
           mkdir -p dashboard
 
@@ -196,8 +196,8 @@ jobs:
               "workflow_run_id": "${RUN_ID}"
             },
             "toolchain": {
-              "python": "$(python3 --version | awk '{print $2}')",
-              "pyinstaller": "${{ steps.meta.outputs.pyinstaller }}"
+              "python": "$PYTHON_VERSION",
+              "pyinstaller": "$PYINSTALLER_VERSION",
             },
             "artifacts": [
           EOF
