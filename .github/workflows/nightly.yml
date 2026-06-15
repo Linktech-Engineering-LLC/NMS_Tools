@@ -69,10 +69,18 @@ jobs:
     needs: nightly-build
 
     steps:
+      # Checkout MAIN so we can access dashboard.js and templates
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          path: main
+
+      # Checkout GH-PAGES into a separate folder
       - name: Checkout gh-pages branch
         uses: actions/checkout@v4
         with:
           ref: gh-pages
+          path: gh-pages
 
       - name: Download nightly artifacts
         uses: actions/download-artifact@v4
@@ -104,13 +112,13 @@ jobs:
             echo "${NAME}_sha256=$SHA" >> $GITHUB_OUTPUT
           done
 
-      # -----------------------------
-      # ⭐ Generate HTML FIRST
-      # -----------------------------
+      # Build dashboard inside gh-pages/nightly
+      - name: Prepare nightly folder
+        run: mkdir -p gh-pages/nightly
+
       - name: Generate dashboard HTML
         run: |
-          mkdir -p dashboard
-          cat > dashboard/index.html <<EOF
+          cat > gh-pages/nightly/index.html <<EOF
           <html>
           <head>
             <title>NMS_Tools Dashboard</title>
@@ -142,9 +150,6 @@ jobs:
           </html>
           EOF
 
-      # -----------------------------
-      # ⭐ Generate metadata.json
-      # -----------------------------
       - name: Generate metadata.json
         run: |
           VERSION="${{ steps.meta.outputs.version }}"
@@ -152,19 +157,21 @@ jobs:
           GIT_HASH="${{ steps.meta.outputs.hash }}"
           RUN_ID="${{ github.run_id }}"
 
-          echo "{" > dashboard/metadata.json
-          echo "  \"meta_version\": 2," >> dashboard/metadata.json
-          echo "  \"build\": {" >> dashboard/metadata.json
-          echo "    \"date\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> dashboard/metadata.json
-          echo "    \"commit\": \"${GIT_HASH}\"," >> dashboard/metadata.json
-          echo "    \"branch\": \"nightly\"," >> dashboard/metadata.json
-          echo "    \"workflow_run_id\": \"${RUN_ID}\"" >> dashboard/metadata.json
-          echo "  }," >> dashboard/metadata.json
-          echo "  \"toolchain\": {" >> dashboard/metadata.json
-          echo "    \"python\": \"$(python3 --version | awk '{print $2}')\"," >> dashboard/metadata.json
-          echo "    \"pyinstaller\": \"$(pyinstaller --version)\"" >> dashboard/metadata.json
-          echo "  }," >> dashboard/metadata.json
-          echo "  \"artifacts\": [" >> dashboard/metadata.json
+          cat > gh-pages/nightly/metadata.json <<EOF
+          {
+            "meta_version": 2,
+            "build": {
+              "date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+              "commit": "${GIT_HASH}",
+              "branch": "nightly",
+              "workflow_run_id": "${RUN_ID}"
+            },
+            "toolchain": {
+              "python": "$(python3 --version | awk '{print $2}')",
+              "pyinstaller": "$(pyinstaller --version)"
+            },
+            "artifacts": [
+          EOF
 
           FIRST=1
           for f in artifacts/*; do
@@ -176,30 +183,34 @@ jobs:
             OS="linux"
             ARCH="x86_64"
 
-            if [ $FIRST -eq 0 ]; then echo "," >> dashboard/metadata.json; fi
+            if [ $FIRST -eq 0 ]; then echo "," >> gh-pages/nightly/metadata.json; fi
             FIRST=0
 
-            echo "    {" >> dashboard/metadata.json
-            echo "      \"name\": \"${NAME}\"," >> dashboard/metadata.json
-            echo "      \"size\": ${SIZE}," >> dashboard/metadata.json
-            echo "      \"sha256\": \"${SHA}\"," >> dashboard/metadata.json
-            echo "      \"crc32\": \"${CRC}\"," >> dashboard/metadata.json
-            echo "      \"type\": \"${TYPE}\"," >> dashboard/metadata.json
-            echo "      \"os\": \"${OS}\"," >> dashboard/metadata.json
-            echo "      \"arch\": \"${ARCH}\"" >> dashboard/metadata.json
-            echo -n "    }" >> dashboard/metadata.json
+            cat >> gh-pages/nightly/metadata.json <<EOF
+              {
+                "name": "${NAME}",
+                "size": ${SIZE},
+                "sha256": "${SHA}",
+                "crc32": "${CRC}",
+                "type": "${TYPE}",
+                "os": "${OS}",
+                "arch": "${ARCH}"
+              }
+          EOF
           done
 
-          echo "" >> dashboard/metadata.json
-          echo "  ]" >> dashboard/metadata.json
-          echo "}" >> dashboard/metadata.json
+          echo "    ]" >> gh-pages/nightly/metadata.json
+          echo "}" >> gh-pages/nightly/metadata.json
 
-      # -----------------------------
-      # ⭐ Copy dashboard.js LAST
-      # -----------------------------
+      # Copy dashboard.js from MAIN
       - name: Copy dashboard.js
-        run: |
-          cp ${{ github.workspace }}/packaging/dashboard/dashboard.js dashboard/
+        run: cp main/packaging/dashboard/dashboard.js gh-pages/nightly/
+
+      # Upload gh-pages folder for deployment
+      - name: Upload dashboard artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: gh-pages
 
       # -----------------------------
       # ⭐ Publish to gh-pages

@@ -212,7 +212,7 @@ jobs:
                 "os": "${OS}",
                 "arch": "${ARCH}"
               }
-EOF
+          EOF
           done
 
           echo "    ]" >> stable/metadata.json
