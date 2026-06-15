@@ -115,5 +115,8 @@ echo "[NMS_Tools] Building DEB package..."
 cd "$DEBIAN_DIR"
 dpkg-deb --build "$PKG_NAME" "../nms-tools_${VERSION}.deb"
 
+mkdir -p "$ROOT_DIR/packaging/output"
+mv "$DEBIAN_DIR/../nms-tools_${VERSION}.deb" "$ROOT_DIR/packaging/output/"
+
 echo "[NMS_Tools] DEB build complete."
 echo "Package located at: $DEBIAN_DIR/../nms-tools_${VERSION}.deb"

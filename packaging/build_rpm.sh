@@ -113,5 +113,8 @@ sed -i "s/^Version:.*/Version: ${VERSION}/" "$RPMBUILD_DIR/SPECS/nms_tools.spec"
 echo "[NMS_Tools] Running rpmbuild..."
 rpmbuild -ba "$RPMBUILD_DIR/SPECS/nms_tools.spec"
 
+mkdir -p "$ROOT_DIR/packaging/output"
+find "$RPMBUILD/RPMS" -name "*.rpm" -exec cp {} "$ROOT_DIR/packaging/output/" \;
+
 echo "[NMS_Tools] RPM build complete."
 echo "Packages located in: $RPMBUILD_DIR/RPMS/"

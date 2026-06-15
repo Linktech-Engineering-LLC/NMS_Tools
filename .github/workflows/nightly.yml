@@ -93,9 +93,9 @@ jobs:
       - name: Extract version metadata
         id: meta
         run: |
-          DEB_FILE=$(ls -t artifacts/*.deb | head -n 1)
+          DEB_FILE=$(ls -t artifacts/nms-tools_* | head -n 1)
           BASENAME=$(basename "$DEB_FILE")
-          VERSION=$(echo "$BASENAME" | sed -n 's/nms-tools_\(.*\)\.deb/\1/p')
+          VERSION=$(echo "$BASENAME" | sed -E 's/nms-tools[-_]?([0-9]+\.[0-9]+\.[0-9]+).*$/\1/')
           DATESTAMP=$(echo "$VERSION" | grep -o '+[0-9]\{8\}' | tr -d '+')
           GIT_HASH=$(echo "$VERSION" | sed -n 's/.*git\([0-9a-f]\+\).*/\1/p')
 
@@ -119,6 +119,7 @@ jobs:
       - name: Generate dashboard HTML
         run: |
           mkdir -p dashboard
+          RELEASE_URL="https://github.com/Linktech-Engineering-LLC/NMS_Tools/releases/download/nightly"
           rm -f dashboard/*
 
           cat > dashboard/index.html <<EOF
@@ -150,6 +151,9 @@ jobs:
           <h2>Artifacts</h2>
           <div id="artifact-table"></div>
 
+          <script>
+            const RELEASE_URL = "${RELEASE_URL}";
+          </script>
           <script src="dashboard.js"></script>
           </body>
           </html>
