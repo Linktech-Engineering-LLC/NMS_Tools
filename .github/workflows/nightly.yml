@@ -87,13 +87,6 @@ jobs:
             cp dashboard.js dashboard.js.bak
           fi
 
-      # Download nightly artifacts
-      - name: Download nightly artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: nightly-nms-tools
-          path: artifacts
-
       # Extract version metadata
       - name: Extract version metadata
         id: meta
