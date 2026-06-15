@@ -1,0 +1,34 @@
+{
+  "meta_version": 2,
+  "build": {
+    "date": "2026-06-15T17:56:59Z",
+    "commit": "",
+    "branch": "nightly",
+    "workflow_run_id": "27565577216"
+  },
+  "toolchain": {
+    "python": "3.12.3",
+    "pyinstaller": ""
+  },
+  "artifacts": [
+    {
+      "name": "nms_tools-1.0.0.tgz",
+      "size": 100513834,
+      "sha256": "1cb5c78e8995a2a14d1175211831e9970f71d6e1d5f288b3ec54db78cdd5deb3",
+      "crc32": "00000000",
+      "type": "tgz",
+      "os": "linux",
+      "arch": "x86_64"
+    }
+,
+    {
+      "name": "nms_tools-1.0.0.zip",
+      "size": 100512897,
+      "sha256": "31449bf1e06c9e5c6cae9de9bfc8af9e008b1ba00d48de49d54f36553cfcfc84",
+      "crc32": "00000000",
+      "type": "zip",
+      "os": "linux",
+      "arch": "x86_64"
+    }
+    ]
+}

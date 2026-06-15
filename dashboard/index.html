@@ -3,69 +3,29 @@
   <title>NMS_Tools Nightly Dashboard</title>
   <style>
     body { font-family: Arial; margin: 20px; }
-    table { border-collapse: collapse; margin-top: 10px; }
+    table { border-collapse: collapse; margin-top: 10px; width: 100%; }
     th, td { padding: 8px 12px; border: 1px solid #ccc; }
     th { background: #f0f0f0; }
+    .badge-row img { margin-right: 8px; }
   </style>
 </head>
 <body>
 
 <h1>NMS_Tools Nightly Dashboard</h1>
 
+<div class="badge-row">
+  <img src="https://img.shields.io/badge/version-loading-blue" id="version-badge">
+  <img src="https://img.shields.io/badge/date-loading-lightgrey" id="date-badge">
+  <img src="https://img.shields.io/badge/python-loading-yellow" id="python-badge">
+  <img src="https://img.shields.io/badge/pyinstaller-loading-orange" id="pyi-badge">
+</div>
+
 <h2>Build Metadata</h2>
-<table>
-  <tr><th>Field</th><th>Value</th></tr>
-  <tr><td>Version</td><td>1.0.0+20260615.git928e9a4</td></tr>
-  <tr><td>Date</td><td>20260615</td></tr>
-  <tr><td>Commit</td><td>928e9a4</td></tr>
-</table>
+<div id="build-info"></div>
 
-<h2>Checksums & File Info</h2>
-<table>
-  <tr><th>File</th><th>Size (bytes)</th><th>SHA256</th><th>CRC32</th></tr>
+<h2>Artifacts</h2>
+<div id="artifact-table"></div>
 
-  <tr>
-    <td>nms-tools.deb</td>
-    <td>11284</td>
-    <td>10fef20dfc8a2e3c0592dc0673aeaff03d5ab4bdd4fa42ac6471811bca686e78</td>
-    <td>a3aaa707	BAD a3aaa707 != 20260615</td>
-  </tr>
-
-  <tr>
-    <td>nms-tools.rpm</td>
-    <td>100556840</td>
-    <td>66a7346a62c418e912fb7a906b6487cb6f5dbd6d3a44758b6b45df623c69246b</td>
-    <td>7440c4ad	BAD 7440c4ad != 20260615</td>
-  </tr>
-
-  <tr>
-    <td>nms-tools.zip</td>
-    <td>100573750</td>
-    <td>c856859382ea8e94d3e25479f7389557cb69254a8e1cb759e12d78ca386e49f9</td>
-    <td>8d6510e8</td>
-  </tr>
-</table>
-
-
-<h2>Downloads</h2>
-<table>
-  <tr><th>Artifact</th><th>Download</th></tr>
-  <tr>
-    <td>DEB Package</td>
-    <td><a href="https://github.com/Linktech-Engineering-LLC/NMS_Tools/releases/download/nightly/nms-tools.deb">nms-tools.deb</a></td>
-  </tr>
-  <tr>
-    <td>RPM Package</td>
-    <td><a href="https://github.com/Linktech-Engineering-LLC/NMS_Tools/releases/download/nightly/nms-tools.rpm">nms-tools.rpm</a></td>
-  </tr>
-  <tr>
-    <td>All Artifacts (ZIP)</td>
-    <td><a href="https://github.com/Linktech-Engineering-LLC/NMS_Tools/releases/download/nightly/nms-tools.zip">nms-tools.zip</a></td>
-  </tr>
-</table>
-
-<h2>QR Code</h2>
-<img src="qr.png" width="200" height="200">
-
+<script src="dashboard.js"></script>
 </body>
 </html>
