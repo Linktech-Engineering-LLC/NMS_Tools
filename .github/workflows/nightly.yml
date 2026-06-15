@@ -51,11 +51,16 @@ jobs:
           cp packaging/output/*.deb artifacts/ || true
           cp packaging/output/*.rpm artifacts/ || true
 
-      - name: Upload nightly artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload nightly artifacts to release
+        uses: softprops/action-gh-release@v1
         with:
-          name: nightly-nms-tools
-          path: artifacts
+          tag_name: nightly
+          prerelease: true
+          files: |
+            packaging/output/*.zip
+            packaging/output/*.tgz
+            packaging/output/*.deb
+            packaging/output/*.rpm
 
       - name: Update nightly tag
         run: |
@@ -115,6 +120,11 @@ jobs:
             echo "${NAME}_sha256=$SHA" >> $GITHUB_OUTPUT
           done
 
+      - name: Generate QR code
+        run: |
+          curl -s -o dashboard/qr.png \
+            "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://linktech-engineering-llc.github.io/NMS_Tools/"
+
       # Generate dashboard HTML
       - name: Generate dashboard HTML
         run: |
@@ -150,6 +160,11 @@ jobs:
 
           <h2>Artifacts</h2>
           <div id="artifact-table"></div>
+
+          <div class="qr">
+            <h2>QR Code</h2>
+            <img id="qr-code" src="qr.png" alt="QR Code">
+          </div>
 
           <script>
             const RELEASE_URL = "${RELEASE_URL}";
