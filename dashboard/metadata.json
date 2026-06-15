@@ -1,14 +1,14 @@
 {
   "meta_version": 2,
   "build": {
-    "date": "2026-06-15T22:59:51Z",
-    "commit": "69422fa",
+    "date": "2026-06-15T23:09:35Z",
+    "commit": "",
     "branch": "nightly",
-    "workflow_run_id": "27581819822"
+    "workflow_run_id": "27582280030"
   },
   "toolchain": {
     "python": "3.12.3",
-    "pyinstaller": "6.21.0"
+    "pyinstaller": "6.21.0",
   },
   "artifacts": [
     {
