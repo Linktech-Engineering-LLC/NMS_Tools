@@ -31,7 +31,7 @@ jobs:
             rpm \
             dpkg-dev \
             zip \
-            crc32
+            libarchive-zip-perl
 
       - name: Install Python build dependencies
         run: |
