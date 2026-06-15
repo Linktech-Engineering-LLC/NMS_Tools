@@ -69,25 +69,27 @@ jobs:
     needs: nightly-build
 
     steps:
-      # Checkout MAIN so we can access dashboard.js and templates
-      - name: Checkout main branch
-        uses: actions/checkout@v4
-        with:
-          path: main
-
-      # Checkout GH-PAGES into a separate folder
+      # Checkout GH-PAGES branch (dashboard.js already lives here)
       - name: Checkout gh-pages branch
         uses: actions/checkout@v4
         with:
           ref: gh-pages
-          path: gh-pages
 
+      # Preserve existing dashboard.js
+      - name: Preserve existing dashboard.js
+        run: |
+          if [ -f dashboard.js ]; then
+            cp dashboard.js dashboard.js.bak
+          fi
+
+      # Download nightly artifacts
       - name: Download nightly artifacts
         uses: actions/download-artifact@v4
         with:
           name: nightly-nms-tools
           path: artifacts
 
+      # Extract version metadata
       - name: Extract version metadata
         id: meta
         run: |
@@ -101,6 +103,7 @@ jobs:
           echo "datestamp=$DATESTAMP" >> $GITHUB_OUTPUT
           echo "hash=$GIT_HASH" >> $GITHUB_OUTPUT
 
+      # Compute checksums and sizes
       - name: Compute checksums and sizes
         id: sums
         run: |
@@ -112,44 +115,47 @@ jobs:
             echo "${NAME}_sha256=$SHA" >> $GITHUB_OUTPUT
           done
 
-      # Build dashboard inside gh-pages/nightly
-      - name: Prepare nightly folder
-        run: mkdir -p gh-pages/nightly
-
+      # Generate dashboard HTML
       - name: Generate dashboard HTML
         run: |
-          cat > gh-pages/nightly/index.html <<EOF
+          mkdir -p dashboard
+          rm -f dashboard/*
+
+          cat > dashboard/index.html <<EOF
           <html>
           <head>
-            <title>NMS_Tools Dashboard</title>
+            <title>NMS_Tools Nightly Dashboard</title>
             <style>
               body { font-family: Arial; margin: 20px; }
-              table { border-collapse: collapse; margin-top: 10px; }
+              table { border-collapse: collapse; margin-top: 10px; width: 100%; }
               th, td { padding: 8px 12px; border: 1px solid #ccc; }
               th { background: #f0f0f0; }
+              .badge-row img { margin-right: 8px; }
             </style>
           </head>
           <body>
 
-          <h1>NMS_Tools Dashboard</h1>
+          <h1>NMS_Tools Nightly Dashboard</h1>
 
-          <img id="version-badge">
-          <img id="date-badge">
-          <img id="python-badge">
-          <img id="pyi-badge">
+          <div class="badge-row">
+            <img src="https://img.shields.io/badge/version-loading-blue" id="version-badge">
+            <img src="https://img.shields.io/badge/date-loading-lightgrey" id="date-badge">
+            <img src="https://img.shields.io/badge/python-loading-yellow" id="python-badge">
+            <img src="https://img.shields.io/badge/pyinstaller-loading-orange" id="pyi-badge">
+          </div>
 
-          <h2>Build Information</h2>
+          <h2>Build Metadata</h2>
           <div id="build-info"></div>
 
           <h2>Artifacts</h2>
           <div id="artifact-table"></div>
 
           <script src="dashboard.js"></script>
-
           </body>
           </html>
           EOF
 
+      # Generate metadata.json
       - name: Generate metadata.json
         run: |
           VERSION="${{ steps.meta.outputs.version }}"
@@ -157,7 +163,7 @@ jobs:
           GIT_HASH="${{ steps.meta.outputs.hash }}"
           RUN_ID="${{ github.run_id }}"
 
-          cat > gh-pages/nightly/metadata.json <<EOF
+          cat > dashboard/metadata.json <<EOF
           {
             "meta_version": 2,
             "build": {
@@ -183,10 +189,10 @@ jobs:
             OS="linux"
             ARCH="x86_64"
 
-            if [ $FIRST -eq 0 ]; then echo "," >> gh-pages/nightly/metadata.json; fi
+            if [ $FIRST -eq 0 ]; then echo "," >> dashboard/metadata.json; fi
             FIRST=0
 
-            cat >> gh-pages/nightly/metadata.json <<EOF
+            cat >> dashboard/metadata.json <<EOF
               {
                 "name": "${NAME}",
                 "size": ${SIZE},
@@ -199,29 +205,25 @@ jobs:
           EOF
           done
 
-          echo "    ]" >> gh-pages/nightly/metadata.json
-          echo "}" >> gh-pages/nightly/metadata.json
+          echo "    ]" >> dashboard/metadata.json
+          echo "}" >> dashboard/metadata.json
 
-      # Copy dashboard.js from MAIN
-      - name: Copy dashboard.js
-        run: cp main/packaging/dashboard/dashboard.js gh-pages/nightly/
+      # Restore dashboard.js
+      - name: Restore dashboard.js
+        run: |
+          if [ -f dashboard.js.bak ]; then
+            mv dashboard.js.bak dashboard.js
+          fi
 
-      # Upload gh-pages folder for deployment
-      - name: Upload dashboard artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: gh-pages
-
-      # -----------------------------
-      # ⭐ Publish to gh-pages
-      # -----------------------------
+      # Publish dashboard to gh-pages
       - name: Publish dashboard to gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          mkdir -p nightly
-          cp -r dashboard/* nightly/
+          cp -r dashboard/* .
 
           git add .
           git commit -m "Update nightly dashboard" || echo "No changes"
