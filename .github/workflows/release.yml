@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*.*.*"
-
   workflow_dispatch:
     inputs:
       manual_version:
@@ -12,7 +11,12 @@ on:
         required: false
         default: ""
 
+concurrency:
+  group: release
+  cancel-in-progress: true
+
 jobs:
+
   build-release:
     runs-on: ubuntu-latest
 
@@ -34,8 +38,13 @@ jobs:
             pandoc \
             shellcheck \
             rpm \
-            dpkg-dev
-          pip install flake8 black isort yamllint pyinstaller
+            dpkg-dev \
+            zip
+
+      - name: Install Python build dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pyinstaller flake8 black isort yamllint
 
       - name: Run lint checks (non-blocking)
         run: |
@@ -48,18 +57,19 @@ jobs:
       - name: Validate environment
         run: python3 tools/validate_env.py
 
-      - name: Build PyInstaller binaries
-        run: ./scripts/build_all.sh
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh packaging/*.sh
 
-      - name: Build DEB and RPM packages
-        run: make packages
+      - name: Run full packaging pipeline
+        run: packaging/build_all.sh
 
       - name: Collect release artifacts
         run: |
           mkdir -p release_artifacts
-          cp build/linux-x86_64/* release_artifacts/ || true
-          cp packaging/nms-tools_*.deb release_artifacts/ || true
-          find "$HOME/rpmbuild/RPMS" -type f -name "*.rpm" -exec cp {} release_artifacts/ \; || true
+          cp packaging/output/*.tgz release_artifacts/ || true
+          cp packaging/output/*.zip release_artifacts/ || true
+          cp packaging/output/*.deb release_artifacts/ || true
+          cp packaging/output/*.rpm release_artifacts/ || true
 
       - name: Upload artifacts (manual runs)
         if: github.event_name == 'workflow_dispatch'
@@ -77,3 +87,125 @@ jobs:
           name: ${{ github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-stable-dashboard:
+    runs-on: ubuntu-latest
+    needs: build-release
+
+    steps:
+      - name: Checkout gh-pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+
+      - name: Download release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nms-tools-release
+          path: artifacts
+
+      - name: Extract version metadata
+        id: meta
+        run: |
+          DEB_FILE=$(ls -t artifacts/*.deb | head -n 1)
+          BASENAME=$(basename "$DEB_FILE")
+          VERSION=$(echo "$BASENAME" | sed -n 's/nms-tools_\(.*\)\.deb/\1/p')
+          DATESTAMP=$(echo "$VERSION" | grep -o '+[0-9]\{8\}' | tr -d '+')
+          GIT_HASH=$(echo "$VERSION" | sed -n 's/.*git\([0-9a-f]\+\).*/\1/p')
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "datestamp=$DATESTAMP" >> $GITHUB_OUTPUT
+          echo "hash=$GIT_HASH" >> $GITHUB_OUTPUT
+
+      - name: Compute checksums and sizes
+        id: sums
+        run: |
+          for f in artifacts/*; do
+            NAME=$(basename "$f")
+            SIZE=$(stat -c%s "$f")
+            SHA=$(sha256sum "$f" | awk '{print $1}')
+            echo "${NAME}_size=$SIZE" >> $GITHUB_OUTPUT
+            echo "${NAME}_sha256=$SHA" >> $GITHUB_OUTPUT
+          done
+
+      # -----------------------------
+      # ⭐ Generate HTML FIRST
+      # -----------------------------
+      - name: Generate stable dashboard HTML
+        run: |
+          mkdir -p stable
+          cat > stable/index.html <<EOF
+          <html>
+          <head>
+            <title>NMS_Tools Stable Dashboard</title>
+            <style>
+              body { font-family: Arial; margin: 20px; }
+              table { border-collapse: collapse; margin-top: 10px; }
+              th, td { padding: 8px 12px; border: 1px solid #ccc; }
+              th { background: #f0f0f0; }
+            </style>
+          </head>
+          <body>
+
+          <h1>NMS_Tools Stable Dashboard</h1>
+
+          <img id="version-badge">
+          <img id="date-badge">
+          <img id="python-badge">
+          <img id="pyi-badge">
+
+          <h2>Build Information</h2>
+          <div id="build-info"></div>
+
+          <h2>Artifacts</h2>
+          <div id="artifact-table"></div>
+
+          <script src="dashboard.js"></script>
+
+          </body>
+          </html>
+          EOF
+
+      # -----------------------------
+      # ⭐ Generate metadata.json
+      # -----------------------------
+      - name: Generate metadata.json
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          DATESTAMP="${{ steps.meta.outputs.datestamp }}"
+          GIT_HASH="${{ steps.meta.outputs.hash }}"
+          RUN_ID="${{ github.run_id }}"
+
+          echo "{" > stable/metadata.json
+          echo "  \"meta_version\": 2," >> stable/metadata.json
+          echo "  \"build\": {" >> stable/metadata.json
+          echo "    \"date\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> stable/metadata.json
+          echo "    \"commit\": \"${GIT_HASH}\"," >> stable/metadata.json
+          echo "    \"branch\": \"stable\"," >> stable/metadata.json
+          echo "    \"version\": \"${VERSION}\"," >> stable/metadata.json
+          echo "    \"workflow_run_id\": \"${RUN_ID}\"" >> stable/metadata.json
+          echo "  }," >> stable/metadata.json
+          echo "  \"toolchain\": {" >> stable/metadata.json
+          echo "    \"python\": \"$(python3 --version | awk '{print $2}')\"," >> stable/metadata.json
+          echo "    \"pyinstaller\": \"$(pyinstaller --version)\"" >> stable/metadata.json
+          echo "  }," >> stable/metadata.json
+          echo "  \"artifacts\": [" >> stable/metadata.json
+
+          FIRST=1
+          for f in artifacts/*; do
+            NAME=$(basename "$f")
+            SIZE=$(stat -c%s "$f")
+            SHA=$(sha256sum "$f" | awk '{print $1}')
+            CRC=$(crc32 "$f" || echo "00000000")
+            TYPE=$(echo "$NAME" | sed -E 's/.*\.(tgz|zip|deb|rpm)$/\1/')
+            OS="linux"
+            ARCH="x86_64"
+
+            if [ $FIRST -eq 0 ]; then echo "," >> stable/metadata.json; fi
+            FIRST=0
+
+            echo "    {" >> stable/metadata.json
+            echo "      \"name\": \"${NAME}\"," >> stable/metadata.json
+            echo "      \"size\": ${SIZE}," >> stable/metadata.json
+            echo "      \"sha256\": \"${SHA}\"," >> stable/metadata.json
+            echo "      \"crc32\":

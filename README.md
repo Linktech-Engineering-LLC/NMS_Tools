@@ -1,15 +1,28 @@
 # NMS_Tools  
 Deterministic, operator‑grade monitoring tools for Linux and Nagios environments.
 
-![Linktech Engineering](https://img.shields.io/badge/LINKTECH%20ENGINEERING-gray)
+<!-- Branding -->
+[![Linktech Engineering](https://img.shields.io/badge/LINKTECH%20ENGINEERING-gray)](https://github.com/Linktech-Engineering-LLC)
 ![Tools Suite](https://img.shields.io/badge/TOOLS%20SUITE-purple)
 ![Status](https://img.shields.io/badge/STATUS-ACTIVE-brightgreen)
 ![License](https://img.shields.io/badge/LICENSE-MIT-blue)
+
+<!-- Technical -->
 ![Python](https://img.shields.io/badge/PYTHON-3.12%2B-blue)
 ![Platform](https://img.shields.io/badge/Platform-Linux-blue)
 ![Packages](https://img.shields.io/badge/Packages-DEB%20%7C%20RPM-orange)
-![Nightly Build](https://img.shields.io/badge/Nightly%20Build-passing-brightgreen)
-![Dashboard](https://img.shields.io/badge/Nightly-Dashboard-blue)
+
+<!-- Build Status -->
+[![Nightly Build](https://github.com/Linktech-Engineering-LLC/NMS_Tools/actions/workflows/nightly.yml/badge.svg)](https://github.com/Linktech-Engineering-LLC/NMS_Tools/actions/workflows/nightly.yml)
+[![Stable Build](https://github.com/Linktech-Engineering-LLC/NMS_Tools/actions/workflows/release.yml/badge.svg)](https://github.com/Linktech-Engineering-LLC/NMS_Tools/actions/workflows/release.yml)
+
+<!-- Dashboards -->
+[![Nightly Dashboard](https://img.shields.io/badge/Nightly-Dashboard-blue)](https://linktech-engineering-llc.github.io/NMS_Tools/nightly/)
+[![Stable Dashboard](https://img.shields.io/badge/Stable-Dashboard-green)](https://linktech-engineering-llc.github.io/NMS_Tools/stable/)
+
+<!-- Versions -->
+[![Latest Release](https://img.shields.io/github/v/release/Linktech-Engineering-LLC/NMS_Tools)](https://github.com/Linktech-Engineering-LLC/NMS_Tools/releases/latest)
+![Nightly Version](https://img.shields.io/badge/Nightly-latest-blue)
 
 ---
 
@@ -21,6 +34,8 @@ Each tool is built to produce predictable, machine‑readable output suitable fo
 The suite currently includes certificate inspection, HTML/HTTP validation, interface inspection, port checking, and weather‑based monitoring utilities.
 
 All tools are compiled as standalone binaries using PyInstaller, requiring no Python runtime.
+
+The suite currently includes certificate inspection, HTML/HTTP validation, interface inspection, port checking, and weather‑based monitoring utilities.
 
 ---
 
@@ -40,8 +55,8 @@ All tools are compiled as standalone binaries using PyInstaller, requiring no Py
 
 NMS_Tools is packaged for Linux environments using native system formats:
 
-- **DEB** packages for Debian/Ubuntu  
-- **RPM** packages for Fedora, openSUSE, and RHEL‑based systems  
+* **DEB** packages for Debian/Ubuntu  
+* **RPM** packages for Fedora, openSUSE, and RHEL‑based systems  
 
 Packages install cleanly into standard system paths and are suitable for deployment in monitoring environments.
 
@@ -72,18 +87,17 @@ sudo rpm -i nms_tools-<version>-1.noarch.rpm
 
 --- 
 
-## Nightly Dashboard
+## Dashboards
 
-A nightly build dashboard is published via GitHub Pages and includes:
+### Nightly Dashboard
 
-* Latest build status
-* Version and commit information
-* Download links for DEB/RPM packages
-* Checksums
-* Recent changes
+Live rolling builds with metadata, checksums, and artifacts:
+https://linktech-engineering-llc.github.io/NMS_Tools/nightly/
 
-**Nightly Dashboard:**
-https://linktech-engineering-llc.github.io/NMS_Tools/
+### Stable Dashboard
+
+Versioned, immutable release builds:
+https://linktech-engineering-llc.github.io/NMS_Tools/stable/
 
 ## Downloads
 
@@ -141,14 +155,95 @@ packaging/
 
 ---
 
+## Quick Start
+
+NMS_Tools provides deterministic, standalone monitoring utilities that behave consistently across environments.  
+Each tool is a single PyInstaller‑compiled binary with predictable exit codes and machine‑readable output.
+
+### Check a TLS certificate
+
+```bash
+check_cert --host example.com --port 443
+```
+
+### Validate HTML/HTTP content
+
+```bash
+check_html --url https://example.com --expect-title "Example Domain"
+```
+
+### Inspect network interfaces
+
+```bash
+check_interfaces
+```
+
+### Check port availability
+
+```bash
+check_ports --host 192.168.1.10 --port 22
+```
+
+### Query deterministic weather data
+
+```bash
+check_weather --city "Wichita, KS"
+```
+
+All tools return Nagios‑compatible exit codes (0=OK, 1=WARNING, 2=CRITICAL, 3=UNKNOWN) and structured output suitable for automation, dashboards, and monitoring pipelines.
+
+
+---
+
+## Why NMS_Tools?
+
+Traditional monitoring scripts often suffer from:
+
+* inconsistent output formats  
+* reliance on system Python installations  
+* unpredictable behavior across distributions  
+* non‑deterministic parsing  
+* ad‑hoc logic that breaks under load  
+
+NMS_Tools solves these problems by providing:
+
+### **Deterministic Output**
+Every tool produces stable, machine‑readable output designed for automation, dashboards, and monitoring pipelines.
+
+### **Standalone Binaries**
+All tools are compiled with PyInstaller — no Python runtime, no dependency drift, no environment issues.
+
+### **Operator‑Grade Behavior**
+Tools are designed for real production environments:
+* consistent exit codes  
+* predictable failure modes  
+* clear error messages  
+* stable CLI interfaces  
+
+### **Linux‑First Design**
+NMS_Tools targets real Linux systems, not cross‑platform abstractions.  
+Packaging is native (`DEB` and `RPM`), and behavior is tuned for operational reliability.
+
+### **Nagios‑Friendly**
+Output formats, exit codes, and CLI patterns integrate cleanly with:
+* Nagios  
+* Icinga  
+* Sensu  
+* Zabbix  
+* custom monitoring pipelines  
+
+NMS_Tools is built for operators who need tools that behave the same way every time — no surprises, no guesswork.
+
+---
+
 ## Philosophy
 
 NMS_Tools is built around a few core principles:
 
-- **Determinism** — predictable, stable output suitable for automation  
-- **Operator‑grade design** — tools that behave consistently under load and in production  
-- **Linux‑first** — designed for real systems, not cross‑platform abstraction  
-- **Nagios‑friendly** — output formats and behaviors that integrate cleanly with monitoring systems  
+* **Determinism** — predictable, stable output suitable for automation  
+* **Operator‑grade design** — tools that behave consistently under load and in production  
+* **Linux‑first** — designed for real systems, not cross‑platform abstraction  
+* **Nagios‑friendly** — output formats and behaviors that integrate cleanly with monitoring systems  
 
 ---
 
@@ -157,15 +252,17 @@ NMS_Tools is built around a few core principles:
 Contributions are welcome.  
 Please keep submissions:
 
-- Deterministic  
-- Lightweight  
-- Operationally focused  
-- Consistent with the suite’s monitoring philosophy  
+* Deterministic  
+* Lightweight  
+* Operationally focused  
+* Consistent with the suite’s monitoring philosophy  
+
+See [CONTRIBUTING](CONTRIBUTING.md) for details.
 
 ---
 
 ## License
 
 MIT License  
-See [LICENSE] for details.
+See [LICENSE](LICENSE) for details.
 
