@@ -17,7 +17,7 @@ Deterministic, operator‑grade monitoring tools for Linux and Nagios environmen
 [![Stable Build](https://github.com/Linktech-Engineering-LLC/NMS_Tools/actions/workflows/release.yml/badge.svg)](https://github.com/Linktech-Engineering-LLC/NMS_Tools/actions/workflows/release.yml)
 
 <!-- Dashboards -->
-[![Nightly Dashboard](https://img.shields.io/badge/Nightly-Dashboard-blue)](https://linktech-engineering-llc.github.io/NMS_Tools/nightly/)
+[![Nightly Dashboard](https://img.shields.io/badge/Nightly-Dashboard-blue)](https://linktech-engineering-llc.github.io/NMS_Tools/)
 [![Stable Dashboard](https://img.shields.io/badge/Stable-Dashboard-green)](https://linktech-engineering-llc.github.io/NMS_Tools/stable/)
 
 <!-- Versions -->
@@ -92,7 +92,7 @@ sudo rpm -i nms_tools-<version>-1.noarch.rpm
 ### Nightly Dashboard
 
 Live rolling builds with metadata, checksums, and artifacts:
-https://linktech-engineering-llc.github.io/NMS_Tools/nightly/
+https://linktech-engineering-llc.github.io/NMS_Tools/
 
 ### Stable Dashboard
 
