@@ -39,7 +39,8 @@ jobs:
             shellcheck \
             rpm \
             dpkg-dev \
-            zip
+            zip \
+            crc32
 
       - name: Install Python build dependencies
         run: |
@@ -93,10 +94,8 @@ jobs:
     needs: build-release
 
     steps:
-      - name: Checkout gh-pages branch
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: gh-pages
 
       - name: Download release artifacts
         uses: actions/download-artifact@v4
@@ -128,12 +127,12 @@ jobs:
             echo "${NAME}_sha256=$SHA" >> $GITHUB_OUTPUT
           done
 
-      # -----------------------------
-      # ⭐ Generate HTML FIRST
-      # -----------------------------
-      - name: Generate stable dashboard HTML
+      - name: Prepare stable dashboard folder
         run: |
           mkdir -p stable
+
+      - name: Generate stable dashboard HTML
+        run: |
           cat > stable/index.html <<EOF
           <html>
           <head>
@@ -166,9 +165,6 @@ jobs:
           </html>
           EOF
 
-      # -----------------------------
-      # ⭐ Generate metadata.json
-      # -----------------------------
       - name: Generate metadata.json
         run: |
           VERSION="${{ steps.meta.outputs.version }}"
@@ -176,20 +172,22 @@ jobs:
           GIT_HASH="${{ steps.meta.outputs.hash }}"
           RUN_ID="${{ github.run_id }}"
 
-          echo "{" > stable/metadata.json
-          echo "  \"meta_version\": 2," >> stable/metadata.json
-          echo "  \"build\": {" >> stable/metadata.json
-          echo "    \"date\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\"," >> stable/metadata.json
-          echo "    \"commit\": \"${GIT_HASH}\"," >> stable/metadata.json
-          echo "    \"branch\": \"stable\"," >> stable/metadata.json
-          echo "    \"version\": \"${VERSION}\"," >> stable/metadata.json
-          echo "    \"workflow_run_id\": \"${RUN_ID}\"" >> stable/metadata.json
-          echo "  }," >> stable/metadata.json
-          echo "  \"toolchain\": {" >> stable/metadata.json
-          echo "    \"python\": \"$(python3 --version | awk '{print $2}')\"," >> stable/metadata.json
-          echo "    \"pyinstaller\": \"$(pyinstaller --version)\"" >> stable/metadata.json
-          echo "  }," >> stable/metadata.json
-          echo "  \"artifacts\": [" >> stable/metadata.json
+          cat > stable/metadata.json <<EOF
+          {
+            "meta_version": 2,
+            "build": {
+              "date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+              "commit": "${GIT_HASH}",
+              "branch": "stable",
+              "version": "${VERSION}",
+              "workflow_run_id": "${RUN_ID}"
+            },
+            "toolchain": {
+              "python": "$(python3 --version | awk '{print $2}')",
+              "pyinstaller": "$(pyinstaller --version)"
+            },
+            "artifacts": [
+          EOF
 
           FIRST=1
           for f in artifacts/*; do
@@ -204,8 +202,43 @@ jobs:
             if [ $FIRST -eq 0 ]; then echo "," >> stable/metadata.json; fi
             FIRST=0
 
-            echo "    {" >> stable/metadata.json
-            echo "      \"name\": \"${NAME}\"," >> stable/metadata.json
-            echo "      \"size\": ${SIZE}," >> stable/metadata.json
-            echo "      \"sha256\": \"${SHA}\"," >> stable/metadata.json
-            echo "      \"crc32\":
+            cat >> stable/metadata.json <<EOF
+              {
+                "name": "${NAME}",
+                "size": ${SIZE},
+                "sha256": "${SHA}",
+                "crc32": "${CRC}",
+                "type": "${TYPE}",
+                "os": "${OS}",
+                "arch": "${ARCH}"
+              }
+EOF
+          done
+
+          echo "    ]" >> stable/metadata.json
+          echo "}" >> stable/metadata.json
+
+      - name: Copy dashboard.js
+        run: cp packaging/dashboard/dashboard.js stable/
+
+      - name: Upload dashboard artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: stable
+
+  deploy:
+    needs: publish-stable-dashboard
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

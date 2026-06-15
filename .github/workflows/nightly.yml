@@ -199,7 +199,7 @@ jobs:
       # -----------------------------
       - name: Copy dashboard.js
         run: |
-          cp packaging/dashboard/dashboard.js dashboard/
+          cp ${{ github.workspace }}/packaging/dashboard/dashboard.js dashboard/
 
       # -----------------------------
       # ⭐ Publish to gh-pages
