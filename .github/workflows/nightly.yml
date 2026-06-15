@@ -16,16 +16,11 @@ jobs:
       build_date: ${{ steps.capture.outputs.build_date }}
       version: ${{ steps.meta.outputs.version }}
       hash: ${{ steps.meta.outputs.hash }}
+      pyinstaller: ${{ steps.meta.outputs.pyinstaller }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Capture metadata
-        id: capture
-        run: |
-          echo "build_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
-          echo "git_hash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -67,8 +62,10 @@ jobs:
           DEB_FILE=$(ls -t packaging/output/nms-tools_* | head -n 1)
           BASENAME=$(basename "$DEB_FILE")
           VERSION=$(echo "$BASENAME" | sed -E 's/nms-tools[-_]?([0-9]+\.[0-9]+\.[0-9]+).*$/\1/')
+          PYI_VERSION=$(pyinstaller --version)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "hash=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+          echo "pyinstaller=$PYI_VERSION" >> $GITHUB_OUTPUT
 
       - name: Upload nightly artifacts to release
         uses: softprops/action-gh-release@v1
@@ -126,13 +123,6 @@ jobs:
           BASENAME=$(basename "$DEB_FILE")
           VERSION=$(echo "$BASENAME" | sed -E 's/nms-tools[-_]?([0-9]+\.[0-9]+\.[0-9]+).*$/\1/')
           DATESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          GIT_HASH=$(git rev-parse --short HEAD)
-          PYI_VERSION=$(pyinstaller --version)
-
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "datestamp=$DATESTAMP" >> $GITHUB_OUTPUT
-          echo "hash=$GIT_HASH" >> $GITHUB_OUTPUT
-          echo "pyinstaller=$PYI_VERSION" >> $GITHUB_OUTPUT
 
       - name: Compute checksums and sizes
         id: sums
