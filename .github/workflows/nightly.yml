@@ -10,9 +10,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-
   nightly-build:
     runs-on: ubuntu-latest
+    outputs:
+      hash: ${{ steps.commit.outputs.hash }}
 
     steps:
       - name: Checkout repository
