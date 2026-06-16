@@ -23,8 +23,6 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -34,8 +32,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pandoc rpm dpkg-dev 
-          sudo apt-get install -y libarchive-zip-perl
+          sudo apt-get install -y pandoc rpm dpkg-dev libarchive-zip-perl
 
       - name: Install Python build dependencies
         run: |
@@ -80,30 +77,39 @@ jobs:
           PYINSTALLER_VERSION=$(pyinstaller --version 2>&1)
           BUILDER_OS="ubuntu-latest"
 
-          # Start metadata.json
-          cat > artifacts/metadata.json <<EOF
-          {
-            "meta_version": 2,
-            "build": {
-              "date": "$BUILD_DATE",
-              "commit": "$COMMIT",
-              "version": "$VERSION",
-              "branch": "nightly",
-              "workflow_run_id": $GITHUB_RUN_ID
-            },
-            "toolchain": {
-              "python": "$PYTHON_VERSION",
-              "pyinstaller": "$PYINSTALLER_VERSION",
-              "builder_os": "$BUILDER_OS"
-            },
-            "binary_license": {
-              "name": "NMS_Tools Binary License",
-              "file": "LICENSE_BINARY.txt",
-              "url": "https://github.com/linktech-engineering-llc/NMS_Tools/blob/nightly/LICENSE_BINARY.txt"
-            },
-            "artifacts": [
-          EOF
+          # Write JSON header using literal HEREDOC (indentation allowed)
+          cat > artifacts/metadata.json <<'EOF'
+{
+  "meta_version": 2,
+  "build": {
+    "date": "__DATE__",
+    "commit": "__COMMIT__",
+    "version": "__VERSION__",
+    "branch": "nightly",
+    "workflow_run_id": __RUN_ID__
+  },
+  "toolchain": {
+    "python": "__PYTHON__",
+    "pyinstaller": "__PYINSTALLER__",
+    "builder_os": "ubuntu-latest"
+  },
+  "binary_license": {
+    "name": "NMS_Tools Binary License",
+    "file": "LICENSE_BINARY.txt",
+    "url": "https://github.com/linktech-engineering-llc/NMS_Tools/blob/nightly/LICENSE_BINARY.txt"
+  },
+  "artifacts": [
+EOF
 
+          # Replace placeholders
+          sed -i "s/__DATE__/$BUILD_DATE/" artifacts/metadata.json
+          sed -i "s/__COMMIT__/$COMMIT/" artifacts/metadata.json
+          sed -i "s/__VERSION__/$VERSION/" artifacts/metadata.json
+          sed -i "s/__RUN_ID__/$GITHUB_RUN_ID/" artifacts/metadata.json
+          sed -i "s/__PYTHON__/$PYTHON_VERSION/" artifacts/metadata.json
+          sed -i "s/__PYINSTALLER__/$PYINSTALLER_VERSION/" artifacts/metadata.json
+
+          # Append artifacts
           FIRST=1
           for f in artifacts/nms-tools*; do
             NAME=$(basename "$f")
@@ -111,33 +117,12 @@ jobs:
             SHA=$(sha256sum "$f" | awk '{print $1}')
             CRC=$(crc32 "$f")
 
-            # Detect type, OS, arch
             case "$NAME" in
-              *.deb)
-                TYPE="deb"
-                OS="linux"
-                ARCH="amd64"
-                ;;
-              *.rpm)
-                TYPE="rpm"
-                OS="linux"
-                ARCH="x86_64"
-                ;;
-              *.zip)
-                TYPE="zip"
-                OS="windows"
-                ARCH="x86_64"
-                ;;
-              *.tgz|*.tar.gz)
-                TYPE="tgz"
-                OS="linux"
-                ARCH="amd64"
-                ;;
-              *)
-                TYPE="unknown"
-                OS="unknown"
-                ARCH="unknown"
-                ;;
+              *.deb) TYPE="deb"; OS="linux"; ARCH="amd64" ;;
+              *.rpm) TYPE="rpm"; OS="linux"; ARCH="x86_64" ;;
+              *.zip) TYPE="zip"; OS="windows"; ARCH="x86_64" ;;
+              *.tgz|*.tar.gz) TYPE="tgz"; OS="linux"; ARCH="amd64" ;;
+              *) TYPE="unknown"; OS="unknown"; ARCH="unknown" ;;
             esac
 
             if [ $FIRST -eq 0 ]; then
@@ -146,27 +131,26 @@ jobs:
             FIRST=0
 
             cat >> artifacts/metadata.json <<EOF
-              {
-                "name": "$NAME",
-                "type": "$TYPE",
-                "os": "$OS",
-                "arch": "$ARCH",
-                "size": $SIZE,
-                "sha256": "$SHA",
-                "crc32": "$CRC"
-              }
-          EOF
-
+    {
+      "name": "$NAME",
+      "type": "$TYPE",
+      "os": "$OS",
+      "arch": "$ARCH",
+      "size": $SIZE,
+      "sha256": "$SHA",
+      "crc32": "$CRC"
+    }
+EOF
           done
 
-              cat >> artifacts/metadata.json <<EOF
-            ]
-          }
-          EOF
+          # Close JSON
+          cat >> artifacts/metadata.json <<'EOF'
+  ]
+}
+EOF
 
       - name: Validate metadata.json
-        run: |
-          python3 packaging/metadata/validate.py artifacts/metadata.json
+        run: python3 packaging/metadata/validate.py artifacts/metadata.json
 
       - name: Upload nightly artifacts
         uses: actions/upload-artifact@v4
@@ -181,7 +165,6 @@ jobs:
           ASSETS=$(gh release view nightly --json assets --jq '.assets[].name')
           for asset in $ASSETS; do
             if [[ "$asset" == nms-tools* ]]; then
-              echo "Deleting asset: $asset"
               gh release delete-asset nightly "$asset" --yes
             fi
           done
@@ -210,7 +193,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: gh-pages
-          submodules: false
 
       - name: Preserve existing dashboard files
         run: |
@@ -231,7 +213,6 @@ jobs:
         with:
           ref: main
           path: source
-          submodules: false
 
       - name: Copy dashboard assets
         run: |
