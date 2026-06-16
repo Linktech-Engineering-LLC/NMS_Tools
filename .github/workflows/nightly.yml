@@ -90,6 +90,11 @@ jobs:
               "pyinstaller": "$PYINSTALLER_VERSION",
               "builder_os": "$BUILDER_OS"
             },
+            "binary_license": {
+              "name": "NMS_Tools Binary License",
+              "file": "LICENSE_BINARY.txt",
+              "url": "https://github.com/linktech-engineering-llc/NMS_Tools/blob/nightly/LICENSE_BINARY.txt"
+            },
             "artifacts": [
           EOF
 

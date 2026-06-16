@@ -5,7 +5,8 @@ Deterministic, operator‑grade monitoring tools for Linux and Nagios environmen
 [![Linktech Engineering](https://img.shields.io/badge/LINKTECH%20ENGINEERING-gray)](https://github.com/Linktech-Engineering-LLC)
 ![Tools Suite](https://img.shields.io/badge/TOOLS%20SUITE-purple)
 ![Status](https://img.shields.io/badge/STATUS-ACTIVE-brightgreen)
-![License](https://img.shields.io/badge/LICENSE-MIT-blue)
+![Source License: MIT](https://img.shields.io/badge/Source%20License-MIT-green?style=flat-square)
+![Binary License: Proprietary](https://img.shields.io/badge/Binary%20License-Proprietary-red?style=flat-square)
 
 <!-- Technical -->
 ![Python](https://img.shields.io/badge/PYTHON-3.12%2B-blue)

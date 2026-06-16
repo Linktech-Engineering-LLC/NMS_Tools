@@ -4,15 +4,15 @@ set -euo pipefail
 echo "[NMS_Tools] Building RPM package..."
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SPEC_FILE="$ROOT_DIR/packaging/rpm/nms_tools.spec"
+SPEC_FILE="$ROOT_DIR/packaging/rpm/nms-tools.spec"
 
 cd "$ROOT_DIR"
 
 # ------------------------------------------------------------
-# Set up rpmbuild directory structure
+# Set up rpmbuild directory structure (single, unified block)
 # ------------------------------------------------------------
-RPMBUILD="$HOME/rpmbuild"
-mkdir -p "$RPMBUILD"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+RPMBUILD_DIR="$HOME/rpmbuild"
+mkdir -p "$RPMBUILD_DIR"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
 # ------------------------------------------------------------
 # Generate man pages (Markdown → groff)
@@ -60,6 +60,8 @@ else
 fi
 
 echo "[NMS_Tools] Using version: $VERSION"
+
+# Stamp version into manpage
 sed -i \
     -e "s/{{VERSION}}/${VERSION}/" \
     -e "s/{{BUILD_TYPE}}/${NIGHTLY:-0}/" \
@@ -73,11 +75,13 @@ sed -i \
 echo "[NMS_Tools] Creating source tarball..."
 
 STAGING_DIR="$(mktemp -d)"
-TOP="$STAGING_DIR/nms_tools-$VERSION"
+TOP="$STAGING_DIR/nms-tools-$VERSION"
 
 mkdir -p "$TOP"
 
-# Copy binaries (flat files)
+cp "$ROOT_DIR/LICENSE_BINARY.txt" "$TOP/"
+
+# Copy binaries
 for tool in $TOOLS; do
     cp "$ROOT_DIR/dist/$tool" "$TOP/$tool"
 done
@@ -86,35 +90,32 @@ done
 mkdir -p "$TOP/man/generated"
 cp -r "$MAN_OUT_DIR"/* "$TOP/man/generated/"
 
-# Copy metadata files required by the spec
+# Copy metadata files
 cp "$ROOT_DIR/README.md" "$TOP/"
 cp "$ROOT_DIR/LICENSE" "$TOP/"
 
-# Create tarball with correct top-level directory
-TARBALL="$RPMBUILD/SOURCES/nms_tools-$VERSION.tar.gz"
-tar -czf "$TARBALL" -C "$STAGING_DIR" "nms_tools-$VERSION"
+# Create tarball
+TARBALL="$RPMBUILD_DIR/SOURCES/nms-tools-$VERSION.tar.gz"
+tar -czf "$TARBALL" -C "$STAGING_DIR" "nms-tools-$VERSION"
 
 rm -rf "$STAGING_DIR"
 
 # ------------------------------------------------------------
 # Prepare rpmbuild tree
 # ------------------------------------------------------------
-RPMBUILD_DIR="$HOME/rpmbuild"
-mkdir -p "$RPMBUILD_DIR"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-
 cp "$SPEC_FILE" "$RPMBUILD_DIR/SPECS/"
 
 # Inject version into spec file copy
-sed -i "s/^Version:.*/Version: ${VERSION}/" "$RPMBUILD_DIR/SPECS/nms_tools.spec"
+sed -i "s/^Version:.*/Version: ${VERSION}/" "$RPMBUILD_DIR/SPECS/nms-tools.spec"
 
 # ------------------------------------------------------------
 # Build RPM
 # ------------------------------------------------------------
 echo "[NMS_Tools] Running rpmbuild..."
-rpmbuild -ba "$RPMBUILD_DIR/SPECS/nms_tools.spec"
+rpmbuild -ba "$RPMBUILD_DIR/SPECS/nms-tools.spec"
 
 mkdir -p "$ROOT_DIR/packaging/output"
-find "$RPMBUILD/RPMS" -name "*.rpm" -exec cp {} "$ROOT_DIR/packaging/output/" \;
+find "$RPMBUILD_DIR/RPMS" -name "*.rpm" -exec cp {} "$ROOT_DIR/packaging/output/" \;
 
 echo "[NMS_Tools] RPM build complete."
 echo "Packages located in: $RPMBUILD_DIR/RPMS/"

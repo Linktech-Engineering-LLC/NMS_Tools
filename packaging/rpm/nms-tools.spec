@@ -1,4 +1,4 @@
-Name:           nms_tools
+Name:           nms-tools
 Version:        1.0.0
 Release:        1%{?dist}
 Summary:        Deterministic operator-grade monitoring tools
@@ -37,6 +37,7 @@ gzip -9 %{buildroot}/usr/share/man/man7/*.7
 %files
 %license LICENSE
 %doc README.md
+%doc LICENSE_BINARY.txt
 
 /usr/local/bin/check_*
 /usr/share/man/man1/check_*.1.gz

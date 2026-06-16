@@ -31,12 +31,17 @@ for md in "$MAN_SRC_DIR"/*.md; do
     pandoc -s -t man "$md" -o "$out"
 done
 
-# ------------------------------------------------------------
-# Discover tools dynamically
-# ------------------------------------------------------------
-echo "[NMS_Tools] Discovering tools..."
+# Install binary license
+mkdir -p "$STAGE/usr/share/doc/nms-tools"
+install -m 0644 "$ROOT_DIR/LICENSE_BINARY.txt" "$STAGE/usr/share/doc/nms-tools/"
 
-TOOLS=$(find "$ROOT_DIR" -maxdepth 1 -type d -name "check_*" -printf "%f\n")
+# ------------------------------------------------------------
+# Discover frozen binaries (dist/)
+# ------------------------------------------------------------
+echo "[NMS_Tools] Discovering frozen tools..."
+
+BIN_DIR="$ROOT_DIR/dist"
+TOOLS=$(find "$BIN_DIR" -maxdepth 1 -type f -name "check_*" -printf "%f\n")
 
 echo "Tools detected:"
 echo "$TOOLS"
@@ -55,7 +60,7 @@ mkdir -p "$STAGE/usr/share/man/man7"
 cp "$DEBIAN_DIR/control" "$STAGE/DEBIAN/control"
 
 # ------------------------------------------------------------
-# Version stamping (AFTER staging exists)
+# Version stamping
 # ------------------------------------------------------------
 BASE_VERSION=$(grep -m1 "^Version:" "$DEBIAN_DIR/control" | awk '{print $2}')
 DATESTAMP=$(date +%Y%m%d)
@@ -71,24 +76,23 @@ echo "[NMS_Tools] Using version: $VERSION"
 
 # Inject version into staged DEBIAN/control
 sed -i "s/^Version:.*/Version: ${VERSION}/" "$STAGE/DEBIAN/control"
+
+# Stamp version into manpage
 sed -i \
     -e "s/{{VERSION}}/${VERSION}/" \
     -e "s/{{BUILD_TYPE}}/${NIGHTLY:-0}/" \
     -e "s/{{BUILD_DATE}}/${DATESTAMP}/" \
     -e "s/{{GIT_HASH}}/${GIT_HASH}/" \
-    "$MAN_OUT_DIR/nms_tools.7"
+    "$MAN_OUT_DIR/nms-tools.7"
 
 # ------------------------------------------------------------
-# Install tools dynamically
+# Install frozen binaries
 # ------------------------------------------------------------
-echo "[NMS_Tools] Installing tools..."
+echo "[NMS_Tools] Installing frozen tools..."
 
 for tool in $TOOLS; do
-    script="$tool/$tool.py"
-    if [[ -f "$script" ]]; then
-        echo "  Installing $script"
-        install -m 0755 "$script" "$STAGE/usr/local/bin/"
-    fi
+    echo "  Installing $tool"
+    install -m 0755 "$BIN_DIR/$tool" "$STAGE/usr/local/bin/"
 done
 
 # ------------------------------------------------------------
@@ -96,13 +100,8 @@ done
 # ------------------------------------------------------------
 echo "[NMS_Tools] Installing man pages..."
 
-for manfile in "$MAN_OUT_DIR"/*.1; do
-    install -m 0644 "$manfile" "$STAGE/usr/share/man/man1/"
-done
-
-for manfile in "$MAN_OUT_DIR"/*.7; do
-    install -m 0644 "$manfile" "$STAGE/usr/share/man/man7/"
-done
+install -m 0644 "$MAN_OUT_DIR"/*.1 "$STAGE/usr/share/man/man1/"
+install -m 0644 "$MAN_OUT_DIR"/*.7 "$STAGE/usr/share/man/man7/"
 
 gzip -9 "$STAGE/usr/share/man/man1/"*.1
 gzip -9 "$STAGE/usr/share/man/man7/"*.7
@@ -119,4 +118,4 @@ mkdir -p "$ROOT_DIR/packaging/output"
 mv "$DEBIAN_DIR/../nms-tools_${VERSION}.deb" "$ROOT_DIR/packaging/output/"
 
 echo "[NMS_Tools] DEB build complete."
-echo "Package located at: $DEBIAN_DIR/../nms-tools_${VERSION}.deb"
+echo "Package located at: $ROOT_DIR/packaging/output/nms-tools_${VERSION}.deb"

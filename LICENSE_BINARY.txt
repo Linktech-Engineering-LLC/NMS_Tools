@@ -1,0 +1,55 @@
+NMS_Tools Binary License Agreement
+==================================
+
+This license applies ONLY to the compiled binary distributions of NMS_Tools
+(including but not limited to RPM, DEB, TGZ, and ZIP packages). It does NOT
+apply to the NMS_Tools source code published on GitHub, which is licensed
+separately under the MIT License.
+
+1. License Grant
+----------------
+Linktech Engineering grants you a non-exclusive, non-transferable license to
+use the NMS_Tools binary for personal, internal, or organizational purposes.
+
+2. Restrictions
+---------------
+You may NOT:
+  - redistribute the NMS_Tools binary in any form;
+  - sell, sublicense, or host the binary as a service;
+  - reverse-engineer, decompile, or extract components of the binary;
+  - modify or create derivative works of the binary distribution.
+
+3. Source Code Availability
+---------------------------
+The NMS_Tools source code is available under the MIT License at:
+
+  https://github.com/linktech-engineering-llc/NMS_Tools
+
+You are free to clone, modify, and build your own binaries from the MIT-
+licensed source code. However, this license does NOT grant permission to
+redistribute the official binary builds produced by Linktech Engineering.
+
+4. Embedded Components and Internal Modules
+-------------------------------------------
+The NMS_Tools binary includes embedded components such as internal modules,
+support libraries, and tooling integrations that are not part of the MIT-
+licensed source tree. These components are proprietary and may not be
+redistributed or extracted.
+
+5. Warranty Disclaimer
+----------------------
+The NMS_Tools binary is provided "as is" without warranty of any kind,
+express or implied, including but not limited to fitness for a particular
+purpose or non-infringement.
+
+6. Limitation of Liability
+--------------------------
+In no event shall Linktech Engineering be liable for any damages arising from
+the use or inability to use the NMS_Tools binary.
+
+7. Contact
+----------
+For support or licensing questions, contact:
+
+  Linktech Engineering Support
+  support@linktechengineering.net
