@@ -1,11 +1,11 @@
 {
   "meta_version": 2,
   "build": {
-    "date": "2026-06-16T11:21:18Z",
-    "commit": "ef8d270",
+    "date": "2026-06-16T17:56:40Z",
+    "commit": "aef6d27",
     "version": "1.0.0",
     "branch": "nightly",
-    "workflow_run_id": "27613815721"
+    "workflow_run_id": "27637272543"
   },
   "toolchain": {
     "python": "3.12.3",
