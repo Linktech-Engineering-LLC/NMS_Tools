@@ -70,28 +70,31 @@ jobs:
         run: |
           mkdir -p artifacts
 
+          # Capture GitHub outputs into shell variables
           VERSION="${{ steps.capture.outputs.version }}"
           COMMIT="${{ steps.capture.outputs.commit }}"
           BUILD_DATE="${{ steps.capture.outputs.build_date }}"
 
+          # Detect toolchain versions
           PYTHON_VERSION=$(python3 --version | awk '{print $2}')
-          PYINSTALLER_VERSION=$(pyinstaller --version 2>&1)
+          PYINSTALLER_VERSION=$(pyinstaller --version 2>/dev/null || echo "unknown")
           BUILDER_OS="ubuntu-latest"
 
-          cat > artifacts/metadata.json <<'EOF'
+          # Start metadata.json  (NOTE: indentation matches RunUpdates)
+          cat > artifacts/metadata.json <<EOF
           {
             "meta_version": 2,
             "build": {
-              "date": "__DATE__",
-              "commit": "__COMMIT__",
-              "version": "__VERSION__",
+              "date": "$BUILD_DATE",
+              "commit": "$COMMIT",
+              "version": "$VERSION",
               "branch": "nightly",
-              "workflow_run_id": __RUN_ID__
+              "workflow_run_id": $GITHUB_RUN_ID
             },
             "toolchain": {
-              "python": "__PYTHON__",
-              "pyinstaller": "__PYINSTALLER__",
-              "builder_os": "ubuntu-latest"
+              "python": "$PYTHON_VERSION",
+              "pyinstaller": "$PYINSTALLER_VERSION",
+              "builder_os": "$BUILDER_OS"
             },
             "binary_license": {
               "name": "NMS_Tools Binary License",
@@ -101,26 +104,40 @@ jobs:
             "artifacts": [
           EOF
 
-          sed -i "s/__DATE__/$BUILD_DATE/" artifacts/metadata.json
-          sed -i "s/__COMMIT__/$COMMIT/" artifacts/metadata.json
-          sed -i "s/__VERSION__/$VERSION/" artifacts/metadata.json
-          sed -i "s/__RUN_ID__/$GITHUB_RUN_ID/" artifacts/metadata.json
-          sed -i "s/__PYTHON__/$PYTHON_VERSION/" artifacts/metadata.json
-          sed -i "s/__PYINSTALLER__/$PYINSTALLER_VERSION/" artifacts/metadata.json
-
           FIRST=1
-          for f in artifacts/nms-tools*; do
+          for f in artifacts/nms-tools_*; do
             NAME=$(basename "$f")
             SIZE=$(stat -c%s "$f")
             SHA=$(sha256sum "$f" | awk '{print $1}')
             CRC=$(crc32 "$f")
 
+            # Detect type, OS, arch
             case "$NAME" in
-              *.deb) TYPE="deb"; OS="linux"; ARCH="amd64" ;;
-              *.rpm) TYPE="rpm"; OS="linux"; ARCH="x86_64" ;;
-              *.zip) TYPE="zip"; OS="windows"; ARCH="x86_64" ;;
-              *.tgz|*.tar.gz) TYPE="tgz"; OS="linux"; ARCH="amd64" ;;
-              *) TYPE="unknown"; OS="unknown"; ARCH="unknown" ;;
+              *.deb)
+                TYPE="deb"
+                OS="linux"
+                ARCH="amd64"
+                ;;
+              *.rpm)
+                TYPE="rpm"
+                OS="linux"
+                ARCH="x86_64"
+                ;;
+              *.zip)
+                TYPE="zip"
+                OS="windows"
+                ARCH="x86_64"
+                ;;
+              *.tgz|*.tar.gz)
+                TYPE="tgz"
+                OS="linux"
+                ARCH="amd64"
+                ;;
+              *)
+                TYPE="unknown"
+                OS="unknown"
+                ARCH="unknown"
+                ;;
             esac
 
             if [ $FIRST -eq 0 ]; then
@@ -129,19 +146,21 @@ jobs:
             FIRST=0
 
             cat >> artifacts/metadata.json <<EOF
-          {
-            "name": "$NAME",
-            "type": "$TYPE",
-            "os": "$OS",
-            "arch": "$ARCH",
-            "size": $SIZE,
-            "sha256": "$SHA",
-            "crc32": "$CRC"
-          }
+              {
+                "name": "$NAME",
+                "type": "$TYPE",
+                "os": "$OS",
+                "arch": "$ARCH",
+                "size": $SIZE,
+                "sha256": "$SHA",
+                "crc32": "$CRC"
+              }
           EOF
+
           done
 
-          cat >> artifacts/metadata.json <<'EOF'
+          # Close JSON
+          cat >> artifacts/metadata.json <<EOF
             ]
           }
           EOF
