@@ -1,31 +1,31 @@
 {
   "meta_version": 2,
   "build": {
-    "date": "2026-06-16T23:43:19Z",
-    "commit": "0f7d1b7",
+    "date": "2026-06-16T23:53:11Z",
+    "commit": "1d395a4",
     "version": "1.0.0",
     "branch": "nightly",
-    "workflow_run_id": 27655490892
-  },
+    "workflow_run_id": 27655882391
+},
   "toolchain": {
     "python": "3.12.13",
     "pyinstaller": "6.21.0",
     "builder_os": "ubuntu-latest"
-  },
+},
   "binary_license": {
     "name": "NMS_Tools Binary License",
     "file": "LICENSE_BINARY.txt",
     "url": "https://github.com/linktech-engineering-llc/NMS_Tools/blob/nightly/LICENSE_BINARY.txt"
-  },
+},
   "artifacts": [
     {
       "name": "nms-tools_1.0.0.deb",
       "type": "deb",
       "os": "linux",
       "arch": "amd64",
-      "size": 101672764,
-      "sha256": "3a3f1ab55cb6377b628e042a0965edeb1553efdf99da8d4ba0a54194b29db07c",
-      "crc32": "177f5cde"
+      "size": 101677592,
+      "sha256": "267bb18404ffa3710754f8f1d01a337cfd4dcfc183d0d9b56059216f8b8c1579",
+      "crc32": "8698cee8"
     }
   ]
 }
