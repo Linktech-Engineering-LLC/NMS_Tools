@@ -70,9 +70,14 @@ jobs:
         run: |
           mkdir -p artifacts
 
+          # Capture GitHub outputs into shell variables
+          VERSION="${{ steps.capture.outputs.version }}"
+          COMMIT="${{ steps.capture.outputs.commit }}"
+          BUILD_DATE="${{ steps.capture.outputs.build_date }}"
+
           # Detect toolchain versions
           PYTHON_VERSION=$(python3 --version | awk '{print $2}')
-          PYINSTALLER_VERSION=$(pyinstaller --version 2>/dev/null || echo "unknown")
+          PYINSTALLER_VERSION=$(pyinstaller --version 2>&1)
           BUILDER_OS="ubuntu-latest"
 
           # Start metadata.json
@@ -80,9 +85,9 @@ jobs:
           {
             "meta_version": 2,
             "build": {
-              "date": "${{ steps.capture.outputs.build_date }}",
-              "commit": "${{ steps.capture.outputs.commit }}",
-              "version": "${{ steps.capture.outputs.version }}",
+              "date": "$BUILD_DATE",
+              "commit": "$COMMIT",
+              "version": "$VERSION",
               "branch": "nightly",
               "workflow_run_id": $GITHUB_RUN_ID
             },
@@ -99,63 +104,29 @@ jobs:
             "artifacts": [
           EOF
 
-          FIRST=1
-          for f in artifacts/nms-tools_*; do
-            NAME=$(basename "$f")
-            SIZE=$(stat -c%s "$f")
-            SHA=$(sha256sum "$f" | awk '{print $1}')
-            CRC=$(crc32 "$f")
+              FIRST=1
+              for f in artifacts/nms-tools*; do
+                NAME=$(basename "$f")
+                SIZE=$(stat -c%s "$f")
+                SHA=$(sha256sum "$f" | awk '{print $1}')
+                CRC=$(crc32 "$f")
 
-            # Detect type, OS, arch
-            case "$NAME" in
-              *.deb)
-                TYPE="deb"
-                OS="linux"
-                ARCH="amd64"
-                ;;
-              *.rpm)
-                TYPE="rpm"
-                OS="linux"
-                ARCH="x86_64"
-                ;;
-              *.zip)
-                TYPE="zip"
-                OS="windows"
-                ARCH="x86_64"
-                ;;
-              *.tgz|*.tar.gz)
-                TYPE="tgz"
-                OS="linux"
-                ARCH="amd64"
-                ;;
-              *)
-                TYPE="unknown"
-                OS="unknown"
-                ARCH="unknown"
-                ;;
-            esac
+                if [ $FIRST -eq 0 ]; then
+                  echo "," >> artifacts/metadata.json
+                fi
+                FIRST=0
 
-            if [ $FIRST -eq 0 ]; then
-              echo "," >> artifacts/metadata.json
-            fi
-            FIRST=0
-
-            cat >> artifacts/metadata.json <<EOF
+                cat >> artifacts/metadata.json <<EOF
               {
                 "name": "$NAME",
-                "type": "$TYPE",
-                "os": "$OS",
-                "arch": "$ARCH",
                 "size": $SIZE,
                 "sha256": "$SHA",
                 "crc32": "$CRC"
               }
           EOF
+              done
 
-          done
-
-          # Close JSON
-          cat >> artifacts/metadata.json <<EOF
+              cat >> artifacts/metadata.json <<EOF
             ]
           }
           EOF
