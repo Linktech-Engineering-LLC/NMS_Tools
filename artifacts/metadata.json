@@ -1,0 +1,26 @@
+{
+  "meta_version": 2,
+  "build": {
+    "date": "2026-06-16T19:23:02Z",
+    "commit": "21393fa",
+    "version": "1.0.0",
+    "branch": "nightly",
+    "workflow_run_id": 27642196421
+  },
+  "toolchain": {
+    "python": "3.12.13",
+    "pyinstaller": "6.21.0",
+    "builder_os": "ubuntu-latest"
+  },
+  "artifacts": [
+    {
+      "name": "nms-tools_1.0.0.deb",
+      "type": "deb",
+      "os": "linux",
+      "arch": "amd64",
+      "size": 11258,
+      "sha256": "9497561a34a9cb8dd02657acbfd9bee0e35b37c1a46d0d74d2411160bc4bbec1",
+      "crc32": "ac93e4a0"
+    }
+  ]
+}
