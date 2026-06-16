@@ -40,10 +40,13 @@ jobs:
           python3 -m pip install pyinstaller jsonschema
 
       - name: Make scripts executable
-        run: chmod +x scripts/*.sh packaging/*.sh
+        run: |
+          chmod +x scripts/*.sh
+          chmod +x packaging/*.sh
 
       - name: Run full packaging pipeline
-        run: packaging/build_all.sh
+        run: |
+          packaging/build_all.sh
 
       - name: Collect artifacts
         run: |
@@ -67,41 +70,37 @@ jobs:
         run: |
           mkdir -p artifacts
 
-          # Capture GitHub outputs into shell variables
           VERSION="${{ steps.capture.outputs.version }}"
           COMMIT="${{ steps.capture.outputs.commit }}"
           BUILD_DATE="${{ steps.capture.outputs.build_date }}"
 
-          # Detect toolchain versions
           PYTHON_VERSION=$(python3 --version | awk '{print $2}')
           PYINSTALLER_VERSION=$(pyinstaller --version 2>&1)
           BUILDER_OS="ubuntu-latest"
 
-          # Write JSON header using literal HEREDOC (indentation allowed)
           cat > artifacts/metadata.json <<'EOF'
-{
-  "meta_version": 2,
-  "build": {
-    "date": "__DATE__",
-    "commit": "__COMMIT__",
-    "version": "__VERSION__",
-    "branch": "nightly",
-    "workflow_run_id": __RUN_ID__
-  },
-  "toolchain": {
-    "python": "__PYTHON__",
-    "pyinstaller": "__PYINSTALLER__",
-    "builder_os": "ubuntu-latest"
-  },
-  "binary_license": {
-    "name": "NMS_Tools Binary License",
-    "file": "LICENSE_BINARY.txt",
-    "url": "https://github.com/linktech-engineering-llc/NMS_Tools/blob/nightly/LICENSE_BINARY.txt"
-  },
-  "artifacts": [
-EOF
+          {
+            "meta_version": 2,
+            "build": {
+              "date": "__DATE__",
+              "commit": "__COMMIT__",
+              "version": "__VERSION__",
+              "branch": "nightly",
+              "workflow_run_id": __RUN_ID__
+            },
+            "toolchain": {
+              "python": "__PYTHON__",
+              "pyinstaller": "__PYINSTALLER__",
+              "builder_os": "ubuntu-latest"
+            },
+            "binary_license": {
+              "name": "NMS_Tools Binary License",
+              "file": "LICENSE_BINARY.txt",
+              "url": "https://github.com/linktech-engineering-llc/NMS_Tools/blob/nightly/LICENSE_BINARY.txt"
+            },
+            "artifacts": [
+          EOF
 
-          # Replace placeholders
           sed -i "s/__DATE__/$BUILD_DATE/" artifacts/metadata.json
           sed -i "s/__COMMIT__/$COMMIT/" artifacts/metadata.json
           sed -i "s/__VERSION__/$VERSION/" artifacts/metadata.json
@@ -109,7 +108,6 @@ EOF
           sed -i "s/__PYTHON__/$PYTHON_VERSION/" artifacts/metadata.json
           sed -i "s/__PYINSTALLER__/$PYINSTALLER_VERSION/" artifacts/metadata.json
 
-          # Append artifacts
           FIRST=1
           for f in artifacts/nms-tools*; do
             NAME=$(basename "$f")
@@ -131,26 +129,26 @@ EOF
             FIRST=0
 
             cat >> artifacts/metadata.json <<EOF
-    {
-      "name": "$NAME",
-      "type": "$TYPE",
-      "os": "$OS",
-      "arch": "$ARCH",
-      "size": $SIZE,
-      "sha256": "$SHA",
-      "crc32": "$CRC"
-    }
-EOF
+          {
+            "name": "$NAME",
+            "type": "$TYPE",
+            "os": "$OS",
+            "arch": "$ARCH",
+            "size": $SIZE,
+            "sha256": "$SHA",
+            "crc32": "$CRC"
+          }
+          EOF
           done
 
-          # Close JSON
           cat >> artifacts/metadata.json <<'EOF'
-  ]
-}
-EOF
+            ]
+          }
+          EOF
 
       - name: Validate metadata.json
-        run: python3 packaging/metadata/validate.py artifacts/metadata.json
+        run: |
+          python3 packaging/metadata/validate.py artifacts/metadata.json
 
       - name: Upload nightly artifacts
         uses: actions/upload-artifact@v4
@@ -194,11 +192,6 @@ EOF
         with:
           ref: gh-pages
 
-      - name: Preserve existing dashboard files
-        run: |
-          mkdir -p dashboard
-          cp dashboard.js dashboard.js.bak 2>/dev/null || true
-
       - name: Download nightly artifacts
         uses: actions/download-artifact@v4
         with:
@@ -206,7 +199,8 @@ EOF
           path: artifacts
 
       - name: Copy metadata.json to dashboard root
-        run: cp artifacts/metadata.json .
+        run: |
+          cp artifacts/metadata.json .
 
       - name: Checkout main branch into subfolder
         uses: actions/checkout@v4
