@@ -31,10 +31,6 @@ for md in "$MAN_SRC_DIR"/*.md; do
     pandoc -s -t man "$md" -o "$out"
 done
 
-# Install binary license
-mkdir -p "$STAGE/usr/share/doc/nms-tools"
-install -m 0644 "$ROOT_DIR/LICENSE_BINARY.txt" "$STAGE/usr/share/doc/nms-tools/"
-
 # ------------------------------------------------------------
 # Discover frozen binaries (dist/)
 # ------------------------------------------------------------
@@ -55,6 +51,10 @@ mkdir -p "$STAGE/DEBIAN"
 mkdir -p "$STAGE/usr/local/bin"
 mkdir -p "$STAGE/usr/share/man/man1"
 mkdir -p "$STAGE/usr/share/man/man7"
+
+# Install binary license
+mkdir -p "$STAGE/usr/share/doc/nms-tools"
+install -m 0644 "$ROOT_DIR/LICENSE_BINARY.txt" "$STAGE/usr/share/doc/nms-tools/"
 
 # Copy control file template
 cp "$DEBIAN_DIR/control" "$STAGE/DEBIAN/control"
