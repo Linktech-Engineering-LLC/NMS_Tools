@@ -104,27 +104,60 @@ jobs:
             "artifacts": [
           EOF
 
-              FIRST=1
-              for f in artifacts/nms-tools*; do
-                NAME=$(basename "$f")
-                SIZE=$(stat -c%s "$f")
-                SHA=$(sha256sum "$f" | awk '{print $1}')
-                CRC=$(crc32 "$f")
+          FIRST=1
+          for f in artifacts/nms-tools*; do
+            NAME=$(basename "$f")
+            SIZE=$(stat -c%s "$f")
+            SHA=$(sha256sum "$f" | awk '{print $1}')
+            CRC=$(crc32 "$f")
 
-                if [ $FIRST -eq 0 ]; then
-                  echo "," >> artifacts/metadata.json
-                fi
-                FIRST=0
+            # Detect type, OS, arch
+            case "$NAME" in
+              *.deb)
+                TYPE="deb"
+                OS="linux"
+                ARCH="amd64"
+                ;;
+              *.rpm)
+                TYPE="rpm"
+                OS="linux"
+                ARCH="x86_64"
+                ;;
+              *.zip)
+                TYPE="zip"
+                OS="windows"
+                ARCH="x86_64"
+                ;;
+              *.tgz|*.tar.gz)
+                TYPE="tgz"
+                OS="linux"
+                ARCH="amd64"
+                ;;
+              *)
+                TYPE="unknown"
+                OS="unknown"
+                ARCH="unknown"
+                ;;
+            esac
 
-                cat >> artifacts/metadata.json <<EOF
+            if [ $FIRST -eq 0 ]; then
+              echo "," >> artifacts/metadata.json
+            fi
+            FIRST=0
+
+            cat >> artifacts/metadata.json <<EOF
               {
                 "name": "$NAME",
+                "type": "$TYPE",
+                "os": "$OS",
+                "arch": "$ARCH",
                 "size": $SIZE,
                 "sha256": "$SHA",
                 "crc32": "$CRC"
               }
           EOF
-              done
+
+          done
 
               cat >> artifacts/metadata.json <<EOF
             ]
