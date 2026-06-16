@@ -1,11 +1,11 @@
 {
   "meta_version": 2,
   "build": {
-    "date": "2026-06-16T20:47:39Z",
-    "commit": "00059e1",
+    "date": "2026-06-16T21:05:50Z",
+    "commit": "233f712",
     "version": "1.0.0",
     "branch": "nightly",
-    "workflow_run_id": 27647004365
+    "workflow_run_id": 27647989357
   },
   "toolchain": {
     "python": "3.12.13",
@@ -23,9 +23,9 @@
       "type": "deb",
       "os": "linux",
       "arch": "amd64",
-      "size": 101673530,
-      "sha256": "4f31a0af0d930a9dbd0e67219c9ae62a8277387002b2229f0347e7bcf8eec521",
-      "crc32": "e861d02b"
+      "size": 101674644,
+      "sha256": "7e3844a9b1704c4b194e9043a2b6eb17ce1f837098d1e682fdcab649d9994139",
+      "crc32": "0f42c87c"
     }
   ]
 }
