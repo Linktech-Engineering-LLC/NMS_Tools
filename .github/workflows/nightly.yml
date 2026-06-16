@@ -70,17 +70,14 @@ jobs:
         run: |
           mkdir -p artifacts
 
-          # Capture GitHub outputs into shell variables
           VERSION="${{ steps.capture.outputs.version }}"
           COMMIT="${{ steps.capture.outputs.commit }}"
           BUILD_DATE="${{ steps.capture.outputs.build_date }}"
 
-          # Detect toolchain versions
           PYTHON_VERSION=$(python3 --version | awk '{print $2}')
           PYINSTALLER_VERSION=$(pyinstaller --version 2>/dev/null || echo "unknown")
           BUILDER_OS="ubuntu-latest"
 
-          # Start metadata.json  (NOTE: indentation matches RunUpdates)
           cat > artifacts/metadata.json <<EOF
           {
             "meta_version": 2,
@@ -111,7 +108,6 @@ jobs:
             SHA=$(sha256sum "$f" | awk '{print $1}')
             CRC=$(crc32 "$f")
 
-            # Detect type, OS, arch
             case "$NAME" in
               *.deb)
                 TYPE="deb"
@@ -159,7 +155,6 @@ jobs:
 
           done
 
-          # Close JSON
           cat >> artifacts/metadata.json <<EOF
             ]
           }
