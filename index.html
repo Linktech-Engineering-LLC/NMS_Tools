@@ -5,28 +5,28 @@
   <title>NMS_Tools Nightly Dashboard</title>
   <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
+  <h1>NMS_Tools Nightly Dashboard</h1>
 
-<h1>NMS_Tools Nightly Dashboard</h1>
+  <div class="badge-row">
+    <img id="version-badge">
+    <img id="date-badge">
+    <img id="python-badge">
+    <img id="pyi-badge">
+  </div>
 
-<div class="badge-row">
-  <img id="version-badge">
-  <img id="date-badge">
-  <img id="python-badge">
-  <img id="pyi-badge">
-</div>
+  <h2>Build Metadata</h2>
+  <div id="build-info"></div>
 
-<h2>Build Metadata</h2>
-<div id="build-info"></div>
+  <h2>Artifacts</h2>
+  <div id="artifact-table"></div>
 
-<h2>Artifacts</h2>
-<div id="artifact-table"></div>
+  <div class="qr">
+    <h2>QR Code</h2>
+    <img id="qr-code" src="qr.png" alt="QR Code">
+  </div>
 
-<div class="qr">
-  <h2>QR Code</h2>
-  <img id="qr-code" src="qr.png" alt="QR Code">
-</div>
-
-<script src="dashboard.js"></script>
+  <script src="dashboard.js"></script>
 </body>
 </html>
