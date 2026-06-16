@@ -2,7 +2,7 @@ name: Nightly Build
 
 on:
   schedule:
-    - cron: "0 6 * * *"   # 06:00 UTC nightly
+    - cron: "0 6 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -20,6 +20,7 @@ jobs:
       build_date: ${{ steps.capture.outputs.build_date }}
 
     steps:
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -38,7 +39,7 @@ jobs:
       - name: Install Python build dependencies
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install pyinstaller
+          python3 -m pip install pyinstaller jsonschema
 
       - name: Make scripts executable
         run: chmod +x scripts/*.sh packaging/*.sh
@@ -54,7 +55,6 @@ jobs:
           cp packaging/output/*.deb artifacts/ || true
           cp packaging/output/*.rpm artifacts/ || true
 
-      # ⭐ THIS IS THE IMPORTANT PART ⭐
       - name: Capture version + commit + date
         id: capture
         run: |
@@ -65,16 +65,122 @@ jobs:
           echo "commit=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
           echo "build_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
 
-      - name: Upload nightly artifacts to release
+      - name: Generate metadata.json
+        run: |
+          mkdir -p artifacts
+
+          # Detect toolchain versions
+          PYTHON_VERSION=$(python3 --version | awk '{print $2}')
+          PYINSTALLER_VERSION=$(pyinstaller --version 2>/dev/null || echo "unknown")
+          BUILDER_OS="ubuntu-latest"
+
+          # Start metadata.json
+          cat > artifacts/metadata.json <<EOF
+          {
+            "meta_version": 2,
+            "build": {
+              "date": "${{ steps.capture.outputs.build_date }}",
+              "commit": "${{ steps.capture.outputs.commit }}",
+              "version": "${{ steps.capture.outputs.version }}",
+              "branch": "nightly",
+              "workflow_run_id": $GITHUB_RUN_ID
+            },
+            "toolchain": {
+              "python": "$PYTHON_VERSION",
+              "pyinstaller": "$PYINSTALLER_VERSION",
+              "builder_os": "$BUILDER_OS"
+            },
+            "artifacts": [
+          EOF
+
+          FIRST=1
+          for f in artifacts/nms-tools_*; do
+            NAME=$(basename "$f")
+            SIZE=$(stat -c%s "$f")
+            SHA=$(sha256sum "$f" | awk '{print $1}')
+            CRC=$(crc32 "$f")
+
+            # Detect type, OS, arch
+            case "$NAME" in
+              *.deb)
+                TYPE="deb"
+                OS="linux"
+                ARCH="amd64"
+                ;;
+              *.rpm)
+                TYPE="rpm"
+                OS="linux"
+                ARCH="x86_64"
+                ;;
+              *.zip)
+                TYPE="zip"
+                OS="windows"
+                ARCH="x86_64"
+                ;;
+              *.tgz|*.tar.gz)
+                TYPE="tgz"
+                OS="linux"
+                ARCH="amd64"
+                ;;
+              *)
+                TYPE="unknown"
+                OS="unknown"
+                ARCH="unknown"
+                ;;
+            esac
+
+            if [ $FIRST -eq 0 ]; then
+              echo "," >> artifacts/metadata.json
+            fi
+            FIRST=0
+
+            cat >> artifacts/metadata.json <<EOF
+              {
+                "name": "$NAME",
+                "type": "$TYPE",
+                "os": "$OS",
+                "arch": "$ARCH",
+                "size": $SIZE,
+                "sha256": "$SHA",
+                "crc32": "$CRC"
+              }
+          EOF
+
+          done
+
+          # Close JSON
+          cat >> artifacts/metadata.json <<EOF
+            ]
+          }
+          EOF
+
+      - name: Validate metadata.json
+        run: |
+          python3 packaging/metadata/validate.py artifacts/metadata.json
+
+      - name: Upload nightly artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-nms-tools
+          path: artifacts
+
+      - name: Remove existing nightly assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ASSETS=$(gh release view nightly --json assets --jq '.assets[].name')
+          for asset in $ASSETS; do
+            if [[ "$asset" == nms-tools* ]]; then
+              echo "Deleting asset: $asset"
+              gh release delete-asset nightly "$asset" --yes
+            fi
+          done
+
+      - name: Upload artifacts to nightly release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: nightly
-          prerelease: true
-          files: |
-            packaging/output/*.zip
-            packaging/output/*.tgz
-            packaging/output/*.deb
-            packaging/output/*.rpm
+          files: packaging/output/*
 
       - name: Update nightly tag
         run: |
@@ -89,31 +195,26 @@ jobs:
     needs: nightly-build
 
     steps:
-      - name: Download nightly release artifacts
-        run: |
-          mkdir -p artifacts
-          RELEASE_URL="https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/nightly"
-
-          # Fetch asset list
-          ASSETS=$(curl -sL "$RELEASE_URL" | jq -r '.assets[] | .browser_download_url')
-
-          # Download each asset
-          for URL in $ASSETS; do
-            echo "Downloading $URL"
-            curl -L "$URL" -o "artifacts/$(basename "$URL")"
-          done
-
-      - name: Install dashboard dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libarchive-zip-perl
-          python3 -m pip install pyinstaller
 
       - name: Checkout gh-pages branch
         uses: actions/checkout@v4
         with:
           ref: gh-pages
           submodules: false
+
+      - name: Preserve existing dashboard files
+        run: |
+          mkdir -p dashboard
+          cp dashboard.js dashboard.js.bak 2>/dev/null || true
+
+      - name: Download nightly artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nightly-nms-tools
+          path: artifacts
+
+      - name: Copy metadata.json to dashboard root
+        run: cp artifacts/metadata.json .
 
       - name: Checkout main branch into subfolder
         uses: actions/checkout@v4
@@ -122,97 +223,11 @@ jobs:
           path: source
           submodules: false
 
-      - name: Copy dashboard assets from main
+      - name: Copy dashboard assets
         run: |
-          mkdir -p dashboard
-          cp source/packaging/dashboard/index.html dashboard/
-          cp source/packaging/dashboard/styles.css dashboard/
-          cp source/packaging/dashboard/dashboard.js dashboard/
-
-      - name: Compute checksums and sizes
-        id: sums
-        run: |
-          for f in artifacts/*; do
-            NAME=$(basename "$f")
-            SIZE=$(stat -c%s "$f")
-            SHA=$(sha256sum "$f" | awk '{print $1}')
-            echo "${NAME}_size=$SIZE" >> $GITHUB_OUTPUT
-            echo "${NAME}_sha256=$SHA" >> $GITHUB_OUTPUT
-          done
-
-      - name: Generate QR code
-        run: |
-          mkdir -p dashboard
-          curl -s -o dashboard/qr.png \
-            "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://linktech-engineering-llc.github.io/NMS_Tools/"
-
-      - name: Generate metadata.json
-        run: |
-          VERSION="${{ needs.nightly-build.outputs.version }}"
-          COMMIT="${{ needs.nightly-build.outputs.commit }}"
-          DATESTAMP="${{ needs.nightly-build.outputs.build_date }}"
-          RUN_ID="${{ github.run_id }}"
-          PYI_VERSION=$(pyinstaller --version)
-
-          mkdir -p dashboard
-
-          cat > dashboard/metadata.json <<EOF
-          {
-            "meta_version": 2,
-            "build": {
-              "date": "${DATESTAMP}",
-              "commit": "${COMMIT}",
-              "version": "${VERSION}",
-              "branch": "nightly",
-              "workflow_run_id": "${RUN_ID}"
-            },
-            "toolchain": {
-              "python": "$(python3 --version | awk '{print $2}')",
-              "pyinstaller": "${PYI_VERSION}"
-            },
-            "artifacts": [
-          EOF
-
-          FIRST=true
-          for f in artifacts/*; do
-            [ -f "$f" ] || continue
-            NAME=$(basename "$f")
-            SIZE=$(stat -c%s "$f")
-            SHA256=$(sha256sum "$f" | awk '{print $1}')
-            CRC32=$(crc32 "$f")
-
-            TYPE="unknown"
-            OS="unknown"
-            ARCH="unknown"
-
-            case "$NAME" in
-              *.zip) TYPE="zip"; OS="any"; ARCH="any" ;;
-              *.tgz) TYPE="tgz"; OS="any"; ARCH="any" ;;
-              *.deb) TYPE="deb"; OS="linux"; ARCH="amd64" ;;
-              *.rpm) TYPE="rpm"; OS="linux"; ARCH="x86_64" ;;
-            esac
-
-            if [ "$FIRST" = true ]; then
-              FIRST=false
-            else
-              echo "," >> dashboard/metadata.json
-            fi
-
-            cat >> dashboard/metadata.json <<EOF
-          {
-            "name": "${NAME}",
-            "size": ${SIZE},
-            "sha256": "${SHA256}",
-            "crc32": "${CRC32}",
-            "type": "${TYPE}",
-            "os": "${OS}",
-            "arch": "${ARCH}"
-          }
-          EOF
-          done
-
-          echo "  ]" >> dashboard/metadata.json
-          echo "}" >> dashboard/metadata.json
+          cp source/packaging/dashboard/index.html .
+          cp source/packaging/dashboard/styles.css .
+          cp source/packaging/dashboard/dashboard.js .
 
       - name: Publish dashboard to gh-pages
         env:
@@ -220,7 +235,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          cp -r dashboard/* .
           git add .
           git commit -m "Update nightly dashboard" || echo "No changes"
           git push origin gh-pages
