@@ -87,16 +87,16 @@ jobs:
     needs: nightly-build
 
     steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
       - name: Install dashboard dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libarchive-zip-perl
           python3 -m pip install pyinstaller
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
 
       - name: Checkout gh-pages branch
         uses: actions/checkout@v4
