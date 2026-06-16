@@ -10,13 +10,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+
   nightly-build:
     runs-on: ubuntu-latest
+
     outputs:
+      version: ${{ steps.capture.outputs.version }}
+      commit: ${{ steps.capture.outputs.commit }}
       build_date: ${{ steps.capture.outputs.build_date }}
-      version: ${{ steps.meta.outputs.version }}
-      hash: ${{ steps.meta.outputs.hash }}
-      pyinstaller: ${{ steps.meta.outputs.pyinstaller }}
 
     steps:
       - name: Checkout repository
@@ -30,12 +31,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            pandoc \
-            rpm \
-            dpkg-dev \
-            zip \
-            libarchive-zip-perl
+          sudo apt-get install -y pandoc rpm dpkg-dev zip libarchive-zip-perl
 
       - name: Install Python build dependencies
         run: |
@@ -56,16 +52,15 @@ jobs:
           cp packaging/output/*.deb artifacts/ || true
           cp packaging/output/*.rpm artifacts/ || true
 
-      - name: Export version and commit
-        id: meta
+      # ⭐ THIS IS THE IMPORTANT PART ⭐
+      - name: Capture version + commit + date
+        id: capture
         run: |
           DEB_FILE=$(ls -t packaging/output/nms-tools_* | head -n 1)
           BASENAME=$(basename "$DEB_FILE")
           VERSION=$(echo "$BASENAME" | sed -E 's/nms-tools[-_]?([0-9]+\.[0-9]+\.[0-9]+).*$/\1/')
-          PYI_VERSION=$(pyinstaller --version)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "git_hash=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
-          echo "pyinstaller=$PYI_VERSION" >> $GITHUB_OUTPUT
+          echo "commit=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
           echo "build_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
 
       - name: Upload nightly artifacts to release
@@ -86,9 +81,6 @@ jobs:
           git tag -f nightly
           git push -f origin nightly
 
-      - name: Export commit hash
-        id: commit
-        run: echo "hash=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
   publish-dashboard:
     runs-on: ubuntu-latest
@@ -111,19 +103,13 @@ jobs:
         with:
           ref: main
           path: source
+
       - name: Copy dashboard assets from main
         run: |
+          mkdir -p dashboard
           cp source/packaging/dashboard/index.html dashboard/
           cp source/packaging/dashboard/styles.css dashboard/
           cp source/packaging/dashboard/dashboard.js dashboard/
-
-      - name: Extract version metadata
-        id: meta
-        run: |
-          DEB_FILE=$(ls -t artifacts/nms-tools_* | head -n 1)
-          BASENAME=$(basename "$DEB_FILE")
-          VERSION=$(echo "$BASENAME" | sed -E 's/nms-tools[-_]?([0-9]+\.[0-9]+\.[0-9]+).*$/\1/')
-          DATESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
       - name: Compute checksums and sizes
         id: sums
@@ -142,55 +128,13 @@ jobs:
           curl -s -o dashboard/qr.png \
             "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://linktech-engineering-llc.github.io/NMS_Tools/"
 
-      - name: Generate dashboard HTML
-        run: |
-          mkdir -p dashboard
-          RELEASE_URL="https://github.com/Linktech-Engineering-LLC/NMS_Tools/releases/download/nightly"
-          rm -f dashboard/*
-
-          cat > dashboard/index.html <<EOF
-          <!DOCTYPE html>
-          <html lang="en">
-          <head>
-            <meta charset="UTF-8">
-            <title>NMS_Tools Nightly Dashboard</title>
-            <link rel="stylesheet" href="styles.css">
-          </head>
-          <body>
-
-          <h1>NMS_Tools Nightly Dashboard</h1>
-
-          <div class="badge-row">
-            <img id="version-badge">
-            <img id="date-badge">
-            <img id="python-badge">
-            <img id="pyi-badge">
-          </div>
-
-          <h2>Build Metadata</h2>
-          <div id="build-info"></div>
-
-          <h2>Artifacts</h2>
-          <div id="artifact-table"></div>
-
-          <div class="qr">
-            <h2>QR Code</h2>
-            <img id="qr-code" src="qr.png" alt="QR Code">
-          </div>
-
-          <script src="dashboard.js"></script>
-          </body>
-          </html>
-          EOF
-
       - name: Generate metadata.json
         run: |
           VERSION="${{ needs.nightly-build.outputs.version }}"
+          COMMIT="${{ needs.nightly-build.outputs.commit }}"
           DATESTAMP="${{ needs.nightly-build.outputs.build_date }}"
-          GIT_HASH="${{ needs.nightly-build.outputs.gig-hash }}"
           RUN_ID="${{ github.run_id }}"
-          PYTHON_VERSION=$(python3 --version | awk '{print $2}')
-          PYINSTALLER_VERSION="${{ needs.nightly-build.outputs.pyinstaller }}"
+          PYI_VERSION=$(pyinstaller --version)
 
           mkdir -p dashboard
 
@@ -214,7 +158,6 @@ jobs:
           FIRST=true
           for f in artifacts/*; do
             [ -f "$f" ] || continue
-
             NAME=$(basename "$f")
             SIZE=$(stat -c%s "$f")
             SHA256=$(sha256sum "$f" | awk '{print $1}')
@@ -238,19 +181,19 @@ jobs:
             fi
 
             cat >> dashboard/metadata.json <<EOF
-              {
-                "name": "${NAME}",
-                "size": ${SIZE},
-                "sha256": "${SHA256}",
-                "crc32": "${CRC32}",
-                "type": "${TYPE}",
-                "os": "${OS}",
-                "arch": "${ARCH}"
-              }
+          {
+            "name": "${NAME}",
+            "size": ${SIZE},
+            "sha256": "${SHA256}",
+            "crc32": "${CRC32}",
+            "type": "${TYPE}",
+            "os": "${OS}",
+            "arch": "${ARCH}"
+          }
           EOF
           done
 
-          echo "      ]" >> dashboard/metadata.json
+          echo "  ]" >> dashboard/metadata.json
           echo "}" >> dashboard/metadata.json
 
       - name: Publish dashboard to gh-pages
@@ -259,9 +202,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
           cp -r dashboard/* .
-
           git add .
           git commit -m "Update nightly dashboard" || echo "No changes"
           git push origin gh-pages
