@@ -1,11 +1,11 @@
 {
   "meta_version": 2,
   "build": {
-    "date": "2026-06-17T01:03:01Z",
-    "commit": "af00aac",
+    "date": "2026-06-17T01:48:31Z",
+    "commit": "afafa68",
     "version": "1.0.0",
     "branch": "nightly",
-    "workflow_run_id": 27658571703
+    "workflow_run_id": 27660231086
 },
   "toolchain": {
     "python": "3.12.13",
@@ -19,13 +19,43 @@
 },
   "artifacts": [
     {
+      "name": "nms-tools_1.0.0-1.x86_64.rpm",
+      "type": "rpm",
+      "os": "linux",
+      "arch": "x86_64",
+      "size": 102278891,
+      "sha256": "c275807ec20fccaf0257c48b70961a3522a0bb20e97dbff2cba3053510209a82",
+      "crc32": "cae26151"
+    }
+,
+    {
       "name": "nms-tools_1.0.0.deb",
       "type": "deb",
       "os": "linux",
       "arch": "amd64",
-      "size": 101675126,
-      "sha256": "1e66c3e695e271ed1ea1460bfd13ebe1622a7f0170aa56514a29f27e3b9b6ba3",
-      "crc32": "0d4bf87a"
+      "size": 101672698,
+      "sha256": "8ec87351606ab944bbc2613739dd428c8ed495efa14d9d1f9709a70a8eac4b52",
+      "crc32": "f8dce4b6"
+    }
+,
+    {
+      "name": "nms-tools_1.0.0.tgz",
+      "type": "tgz",
+      "os": "linux",
+      "arch": "amd64",
+      "size": 102229787,
+      "sha256": "d79cb2980fb24547d5f1ac1956903ccacc08a3aedad96eeec1df7a8547d9459f",
+      "crc32": "9ce2559f"
+    }
+,
+    {
+      "name": "nms-tools_1.0.0.zip",
+      "type": "zip",
+      "os": "windows",
+      "arch": "x86_64",
+      "size": 102228781,
+      "sha256": "cbf610457c7a26972d36b033e40bf32589bf3c08804bcf04b2b3d428d02ecf3c",
+      "crc32": "1819d58a"
     }
   ]
 }
