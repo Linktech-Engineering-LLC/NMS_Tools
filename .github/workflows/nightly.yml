@@ -216,11 +216,16 @@ jobs:
         run: |
           cp artifacts/metadata.json .
 
-      - name: Checkout main branch into subfolder
+      - name: Checkout main branch
         uses: actions/checkout@v4
         with:
           ref: main
-          path: main_src
+
+      - name: Move main branch into subfolder
+        run: |
+          mkdir main_src
+          shopt -s dotglob
+          mv * main_src/
 
       - name: Copy dashboard assets
         run: |
