@@ -5,7 +5,7 @@ Summary:        Deterministic operator-grade monitoring tools
 
 License:        MIT
 URL:            https://www.linktechengineering.net/projects/nms-tools/
-Source0:        %{name}-%{version}.tar.gz
+Source0:        %{name}_%{version}.tar.gz
 
 %description
 NMS_Tools is a suite of deterministic, operator-grade monitoring tools for
