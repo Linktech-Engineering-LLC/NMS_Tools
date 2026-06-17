@@ -9,13 +9,13 @@ SPEC_FILE="$ROOT_DIR/packaging/rpm/nms-tools.spec"
 cd "$ROOT_DIR"
 
 # ------------------------------------------------------------
-# Set up rpmbuild directory structure (single, unified block)
+# Set up rpmbuild directory structure
 # ------------------------------------------------------------
 RPMBUILD_DIR="$HOME/rpmbuild"
 mkdir -p "$RPMBUILD_DIR"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
 # ------------------------------------------------------------
-# Generate man pages (Markdown → groff)
+# Generate man pages
 # ------------------------------------------------------------
 echo "[NMS_Tools] Generating man pages..."
 
@@ -29,21 +29,16 @@ for md in "$MAN_SRC_DIR"/*.md; do
     base=$(basename "$md" .md)
     section="${base##*.}"
     name="${base%.*}"
-
     out="$MAN_OUT_DIR/$name.$section"
-
     echo "  $md → $out"
     pandoc -s -t man "$md" -o "$out"
 done
 
 # ------------------------------------------------------------
-# Discover built tools (binaries in dist/)
+# Discover built tools
 # ------------------------------------------------------------
 echo "[NMS_Tools] Discovering tools..."
-
 TOOLS=$(find "$ROOT_DIR/dist" -maxdepth 1 -type f -name "check_*" -printf "%f\n")
-
-echo "Tools detected:"
 echo "$TOOLS"
 
 # ------------------------------------------------------------
@@ -61,7 +56,6 @@ fi
 
 echo "[NMS_Tools] Using version: $VERSION"
 
-# Stamp version into manpage
 sed -i \
     -e "s/{{VERSION}}/${VERSION}/" \
     -e "s/{{BUILD_TYPE}}/${NIGHTLY:-0}/" \
@@ -70,7 +64,7 @@ sed -i \
     "$MAN_OUT_DIR/nms-tools.7"
 
 # ------------------------------------------------------------
-# Create source tarball (contains binaries + man pages)
+# Create source tarball (hyphens, matching spec)
 # ------------------------------------------------------------
 echo "[NMS_Tools] Creating source tarball..."
 
@@ -80,6 +74,8 @@ TOP="$STAGING_DIR/nms-tools-$VERSION"
 mkdir -p "$TOP"
 
 cp "$ROOT_DIR/LICENSE_BINARY.txt" "$TOP/"
+cp "$ROOT_DIR/README.md" "$TOP/"
+cp "$ROOT_DIR/LICENSE" "$TOP/"
 
 # Copy binaries
 for tool in $TOOLS; do
@@ -89,10 +85,6 @@ done
 # Copy man pages
 mkdir -p "$TOP/man/generated"
 cp -r "$MAN_OUT_DIR"/* "$TOP/man/generated/"
-
-# Copy metadata files
-cp "$ROOT_DIR/README.md" "$TOP/"
-cp "$ROOT_DIR/LICENSE" "$TOP/"
 
 # Create tarball
 TARBALL="$RPMBUILD_DIR/SOURCES/nms-tools-$VERSION.tar.gz"
@@ -104,8 +96,6 @@ rm -rf "$STAGING_DIR"
 # Prepare rpmbuild tree
 # ------------------------------------------------------------
 cp "$SPEC_FILE" "$RPMBUILD_DIR/SPECS/"
-
-# Inject version into spec file copy
 sed -i "s/^Version:.*/Version: ${VERSION}/" "$RPMBUILD_DIR/SPECS/nms-tools.spec"
 
 # ------------------------------------------------------------
@@ -114,14 +104,17 @@ sed -i "s/^Version:.*/Version: ${VERSION}/" "$RPMBUILD_DIR/SPECS/nms-tools.spec"
 echo "[NMS_Tools] Running rpmbuild..."
 rpmbuild -ba "$RPMBUILD_DIR/SPECS/nms-tools.spec"
 
-for f in "$RPMBUILD_DIR"/RPMS/*/nms-tools-*.rpm; do
-    base=$(basename "$f")
-    new=$(echo "$base" | sed 's/nms-tools-/nms-tools_/')
-    mv "$f" "$RPMBUILD_DIR/RPMS/$(uname -m)/$new"
-done
-
 mkdir -p "$ROOT_DIR/packaging/output"
 find "$RPMBUILD_DIR/RPMS" -name "*.rpm" -exec cp {} "$ROOT_DIR/packaging/output/" \;
 
+# ------------------------------------------------------------
+# Optional: rename RPM to underscore format
+# ------------------------------------------------------------
+for f in "$ROOT_DIR/packaging/output"/nms-tools-*.rpm; do
+    base=$(basename "$f")
+    new=$(echo "$base" | sed 's/nms-tools-/nms-tools_/')
+    mv "$f" "$ROOT_DIR/packaging/output/$new"
+done
+
 echo "[NMS_Tools] RPM build complete."
-echo "Packages located in: $RPMBUILD_DIR/RPMS/"
+echo "Packages located in: $ROOT_DIR/packaging/output/"
