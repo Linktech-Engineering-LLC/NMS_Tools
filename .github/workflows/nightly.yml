@@ -222,20 +222,14 @@ jobs:
           ref: main
           path: main_checkout
 
-      - name: Move main branch into subfolder
+      - name: Copy dashboard assets
         run: |
-          mkdir main_src
-          shopt -s dotglob
-          mv main_checkout/* main_src/
+          cp main_checkout/packaging/dashboard/index.html .
+          cp main_checkout/packaging/dashboard/styles.css .
+          cp main_checkout/packaging/dashboard/dashboard.js .
 
       - name: Cleanup temp checkout
         run: rm -rf main_checkout
-
-      - name: Copy dashboard assets
-        run: |
-          cp main_src/packaging/dashboard/index.html .
-          cp main_src/packaging/dashboard/styles.css .
-          cp main_src/packaging/dashboard/dashboard.js .
 
       - name: Remove artifacts folder so it is NOT committed
         run: |
