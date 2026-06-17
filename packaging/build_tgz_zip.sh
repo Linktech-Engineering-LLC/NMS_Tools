@@ -41,17 +41,17 @@ cp "$BIN_SRC"/* "$STAGING_DIR/bin/"
 echo "[NMS_Tools] Creating TGZ package..."
 (
     cd "$SCRIPT_DIR/staging"
-    tar -czf "$OUTPUT_DIR/nms-tools-${VERSION}.tgz" nms-tools
+    tar -czf "$OUTPUT_DIR/nms-tools_${VERSION}.tgz" nms-tools
 )
 
 echo "[NMS_Tools] Creating ZIP package..."
 (
     cd "$SCRIPT_DIR/staging"
-    zip -r "$OUTPUT_DIR/nms-tools-${VERSION}.zip" nms-tools >/dev/null
+    zip -r "$OUTPUT_DIR/nms-tools_${VERSION}.zip" nms-tools >/dev/null
 )
 
 echo "[NMS_Tools] TGZ/ZIP packages created:"
-echo " - $OUTPUT_DIR/nms-tools-${VERSION}.tgz"
-echo " - $OUTPUT_DIR/nms-tools-${VERSION}.zip"
+echo " - $OUTPUT_DIR/nms-tools_${VERSION}.tgz"
+echo " - $OUTPUT_DIR/nms-tools_${VERSION}.zip"
 
 echo "[NMS_Tools] TGZ/ZIP build complete."

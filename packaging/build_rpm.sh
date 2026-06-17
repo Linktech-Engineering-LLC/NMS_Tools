@@ -95,8 +95,8 @@ cp "$ROOT_DIR/README.md" "$TOP/"
 cp "$ROOT_DIR/LICENSE" "$TOP/"
 
 # Create tarball
-TARBALL="$RPMBUILD_DIR/SOURCES/nms-tools-$VERSION.tar.gz"
-tar -czf "$TARBALL" -C "$STAGING_DIR" "nms-tools-$VERSION"
+TARBALL="$RPMBUILD_DIR/SOURCES/nms-tools_$VERSION.tar.gz"
+tar -czf "$TARBALL" -C "$STAGING_DIR" "nms-tools_$VERSION"
 
 rm -rf "$STAGING_DIR"
 
