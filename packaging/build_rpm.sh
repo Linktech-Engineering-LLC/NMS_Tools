@@ -75,7 +75,7 @@ sed -i \
 echo "[NMS_Tools] Creating source tarball..."
 
 STAGING_DIR="$(mktemp -d)"
-TOP="$STAGING_DIR/nms-tools-$VERSION"
+TOP="$STAGING_DIR/nms-tools_$VERSION"
 
 mkdir -p "$TOP"
 
