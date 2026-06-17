@@ -220,13 +220,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
-
-      - name: Prepare dashboard source
-        run: |
-          rm -rf main_src
-          mkdir main_src
-          shopt -s dotglob
-          mv * main_src/
+          path: main_src
+          submodule: false
 
       - name: Copy dashboard assets
         run: |
