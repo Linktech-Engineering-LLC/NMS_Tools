@@ -221,7 +221,7 @@ jobs:
         with:
           ref: main
           path: main_src
-          submodule: false
+          submodules: false
 
       - name: Copy dashboard assets
         run: |
