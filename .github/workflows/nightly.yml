@@ -220,12 +220,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
+          path: main_checkout
 
       - name: Move main branch into subfolder
         run: |
           mkdir main_src
           shopt -s dotglob
-          mv * main_src/
+          mv main_checkout/* main_src/
+
+      - name: Cleanup temp checkout
+        run: rm -rf main_checkout
 
       - name: Copy dashboard assets
         run: |
