@@ -176,7 +176,7 @@ jobs:
         run: |
           ASSETS=$(gh release view nightly --json assets --jq '.assets[].name')
           for asset in $ASSETS; do
-            if [[ "$asset" == nms-tools* ]]; then
+            if [[ "$asset" == nms* ]]; then
               gh release delete-asset nightly "$asset" --yes
             fi
           done
