@@ -229,7 +229,9 @@ jobs:
           cp main_checkout/packaging/dashboard/dashboard.js .
 
       - name: Cleanup temp checkout
-        run: rm -rf main_checkout
+        run: |
+          rm -rf main_checkout
+          rm -rf main_src
 
       - name: Remove artifacts folder so it is NOT committed
         run: |
