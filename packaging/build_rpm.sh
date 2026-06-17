@@ -75,7 +75,7 @@ sed -i \
 echo "[NMS_Tools] Creating source tarball..."
 
 STAGING_DIR="$(mktemp -d)"
-TOP="$STAGING_DIR/nms-tools_$VERSION"
+TOP="$STAGING_DIR/nms-tools-$VERSION"
 
 mkdir -p "$TOP"
 
@@ -95,8 +95,8 @@ cp "$ROOT_DIR/README.md" "$TOP/"
 cp "$ROOT_DIR/LICENSE" "$TOP/"
 
 # Create tarball
-TARBALL="$RPMBUILD_DIR/SOURCES/nms-tools_$VERSION.tar.gz"
-tar -czf "$TARBALL" -C "$STAGING_DIR" "nms-tools_$VERSION"
+TARBALL="$RPMBUILD_DIR/SOURCES/nms-tools-$VERSION.tar.gz"
+tar -czf "$TARBALL" -C "$STAGING_DIR" "nms-tools-$VERSION"
 
 rm -rf "$STAGING_DIR"
 
@@ -113,6 +113,12 @@ sed -i "s/^Version:.*/Version: ${VERSION}/" "$RPMBUILD_DIR/SPECS/nms-tools.spec"
 # ------------------------------------------------------------
 echo "[NMS_Tools] Running rpmbuild..."
 rpmbuild -ba "$RPMBUILD_DIR/SPECS/nms-tools.spec"
+
+for f in "$RPMBUILD_DIR"/RPMS/*/nms-tools-*.rpm; do
+    base=$(basename "$f")
+    new=$(echo "$base" | sed 's/nms-tools-/nms-tools_/')
+    mv "$f" "$RPMBUILD_DIR/RPMS/$(uname -m)/$new"
+done
 
 mkdir -p "$ROOT_DIR/packaging/output"
 find "$RPMBUILD_DIR/RPMS" -name "*.rpm" -exec cp {} "$ROOT_DIR/packaging/output/" \;
