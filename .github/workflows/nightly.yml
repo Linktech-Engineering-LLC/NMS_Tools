@@ -220,13 +220,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
-          path: source
+          path: main_src
 
       - name: Copy dashboard assets
         run: |
-          cp source/packaging/dashboard/index.html .
-          cp source/packaging/dashboard/styles.css .
-          cp source/packaging/dashboard/dashboard.js .
+          cp main_src/packaging/dashboard/index.html .
+          cp main_src/packaging/dashboard/styles.css .
+          cp main_src/packaging/dashboard/dashboard.js .
+
+      - name: Remove artifacts folder so it is NOT committed
+        run: |
+          rm -rf artifacts
 
       - name: Publish dashboard to gh-pages
         env:
