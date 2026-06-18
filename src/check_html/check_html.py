@@ -16,10 +16,6 @@ Description:
     content-type validation, quiet/verbose modes, and JSON output.
 """
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "libs"))
-
 import argparse
 import http.client
 import ipaddress
@@ -29,10 +25,12 @@ import os
 import shutil
 import ssl
 import socket
+import sys
 import time
 import zipfile
 
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 

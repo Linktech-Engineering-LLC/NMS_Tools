@@ -15,10 +15,6 @@ Description:
     Deterministic weather checker with ZIP/city/lat-long support.
 """
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "libs"))
-
 import argparse
 import hashlib
 import json
@@ -28,13 +24,15 @@ import pwd
 import re
 import requests
 import shutil
+import sys
 import time
 import urllib.parse
 import urllib.request
 import zipfile
-from typing import Any, Dict, Optional, Tuple
 from datetime import datetime, timedelta, date
 from enum import IntEnum, auto
+from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
 
 # Root of the suite (two levels up from the tool script)
 SUITE_ROOT = Path(__file__).resolve().parent.parent

@@ -17,9 +17,6 @@ Description:
         and configuration information about each interface.
 """
 import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "libs"))
-
 import argparse
 import platform
 import os
@@ -33,6 +30,7 @@ import zipfile
 
 from datetime import datetime
 from easysnmp import Session
+from pathlib import Path
 
 # Root of the suite (two levels up from the tool script)
 SUITE_ROOT = Path(__file__).resolve().parent.parent

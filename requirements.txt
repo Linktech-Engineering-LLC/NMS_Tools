@@ -9,3 +9,4 @@ urllib3
 idna
 charset-normalizer
 certifi
+pysnmp

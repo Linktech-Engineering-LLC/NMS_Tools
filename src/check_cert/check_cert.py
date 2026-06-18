@@ -15,10 +15,6 @@ Description:
     Certificate checker with SAN, issuer, signature algorithm, wildcard detection,
     perfdata, quiet/verbose modes, and JSON output.
 """
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "libs"))
-
 import argparse
 import ipaddress
 import json
@@ -27,6 +23,7 @@ import platform
 import shutil
 import socket
 import ssl
+import sys
 import urllib.request
 import urllib.error
 import zipfile
@@ -38,6 +35,7 @@ from cryptography.x509.oid import ExtensionOID, NameOID, AuthorityInformationAcc
 from cryptography.x509.ocsp import load_der_ocsp_response  # optional, see OCSP stub
 from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Tuple, Optional, List, Union, cast, Dict
 from typing_extensions import TypedDict
 
