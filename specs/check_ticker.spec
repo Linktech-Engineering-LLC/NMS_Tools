@@ -9,7 +9,10 @@ a = Analysis(
     [os.path.join(repo_root, 'src/check_ports/check_ticker.py')],
     pathex=[os.path.join(repo_root, 'src/check_ticker')],
     binaries=[],
-    datas=[],
+    datas=[
+        # Include PythonTools VERSION file for __version__ loader
+        ("/home/doug/projects/Python/PythonTools/VERSION", "PythonTools"),
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
