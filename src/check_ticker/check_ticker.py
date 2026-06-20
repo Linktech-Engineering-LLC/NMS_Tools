@@ -41,7 +41,7 @@ from PythonTools.nagios import (
 )
 from PythonTools.nagios.helpers import should_output
 from PythonTools.nagios.parser import BaseNagiosParser
-from PythonTools.utils.common import normalize_path
+from PythonTools.utils.common import normalize_path, json_output
 
 # -------------------------------------------------------------------
 # Suite metadata
@@ -222,17 +222,7 @@ def get_apikeys(args) -> dict:
         resolved[provider] = key
 
     return resolved
-
-# -------------------------------------------------------------------
-# Main
-# -------------------------------------------------------------------
-def main() -> int:
-    parser = build_parser()
-    args, flags, mode = parser.parse()
-    api_keys = get_apikeys(args)
-    ticker = args.ticker.upper()
-
-    # Initialize logger only if not in Nagios mode and log-dir is provided
+def initialize_logger(args, mode):
     logger = None
     if mode != "nagios" and args.log_dir:
         try:
@@ -244,22 +234,34 @@ def main() -> int:
                 "log_max_mb": args.log_max_mb,
                 "archive_mode": "zip",
                 "backup_count": 7,
+                "console_stream": sys.stderr,
 
                 # Quiet mode suppresses console logging
                 "console_enabled": not args.quiet,
 
                 # Nagios checks should not use color
-                "color": False,
+                "color": False if mode == "nagios" else args.color,
             }
 
             logger_factory = LoggerFactory(log_cfg, "check_ticker")
             logger = logger_factory.get_logger("main")
             logger.info(f"LoggerFactory initialized (mode={mode})")
+            return logger
 
         except Exception as e:
             if should_output(mode):
                 print(nagios_summary(UNKNOWN, f"Failed to initialize LoggerFactory: {e}"))
             return UNKNOWN
+    
+# -------------------------------------------------------------------
+# Main
+# -------------------------------------------------------------------
+def main() -> int:
+    parser = build_parser()
+    args, flags, mode = parser.parse()
+    api_keys = get_apikeys(args)
+    ticker = args.ticker.upper()
+    logger = initialize_logger(args, mode)
 
     meta = {
         "ticker": ticker,
@@ -285,21 +287,28 @@ def main() -> int:
         if should_output(mode):
             print(nagios_summary(UNKNOWN, msg))
         return UNKNOWN
-
-    price = result.price
-    pct = result.pct * 100
-    trend = getattr(result, "trend", "unknown")
+    payload = {
+        "ticker": ticker,
+        "provider": result.provider,
+        "timestamp": result.timestamp,
+        "price": result.price,
+        "pct": result.pct * 100,
+        "trend": getattr(result, "trend", "unknown"),
+        "raw": result.raw
+    }
+    if args.json:
+        print(json_output(payload, args.color))
 
     if logger:
         logger.info(
-            f"[TICKER] ticker={ticker} price={price} pct={pct:.2f} trend={trend}"
+            f"[TICKER] ticker={ticker} price={payload["price"]} pct={payload["pct"]:.2f} trend={payload["trend"]}"
         )
 
     # TODO: apply require_up/require_flat/require_down once trend semantics are finalized
     state = OK
-    message = f"{ticker} ${price:.2f} ({pct:+.2f}%) trend={trend}"
+    message = f"{ticker} ${payload["price"]:.2f} ({payload["pct"]:+.2f}%) trend={payload["trend"]}"
 
-    if should_output(mode):
+    if mode == "nagios":
         print(nagios_summary(state, message))
 
     if logger:
