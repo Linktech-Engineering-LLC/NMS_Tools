@@ -10,23 +10,30 @@ Modified: 2026-06-17
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
-
 Description:
-    Nagios-compatible check for market tickers.
-    Uses PythonTools.market.MarketObjectEngine to retrieve price, percent
-    change, and trend for a given ticker symbol.
+            Command‑line interface for querying market data and producing Nagios‑compatible
+            output, verbose diagnostic output, or structured JSON. Integrates with
+            MarketObjectEngine to retrieve provider data, compute trend and history
+            information, and emit logs containing full provider payloads. Designed for use
+            in monitoring environments and automated dashboards.
 """
 
 import os
 import sys
 import yaml
 from pathlib import Path
-from typing import Optional
 
 from PythonTools.ansible.vault import VaultLoader, VaultError
 from PythonTools.finance.api_keys import resolve_api_key, ApiKeyError, resolve_apikey_file
 from PythonTools.log_helpers.factory import LoggerFactory
 from PythonTools.market.router import MarketObjectEngine
+from PythonTools.market.trend import (
+    compute_trend_and_slope,
+    compute_volatility,
+    compute_trend_strength,
+    detect_reversal,
+    compute_multi_window_trend
+)
 from PythonTools.nagios import (
     OK,
     WARNING,
@@ -35,9 +42,6 @@ from PythonTools.nagios import (
     nagios_summary,
     start_banner,
     end_banner,
-    Flags,
-    FlagNames,
-    detect_mode,
 )
 from PythonTools.nagios.helpers import should_output
 from PythonTools.nagios.parser import BaseNagiosParser
@@ -49,17 +53,16 @@ from PythonTools.utils.common import normalize_path, json_output
 SUITE_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_NAME = Path(sys.argv[0]).stem
 SCRIPT_VERSION = "1.0.0"
+
 def load_version() -> str:
-    """
-    Load the suite VERSION file if present.
-    If missing, return a fallback string indicating external execution.
-    """
     version_file = SUITE_ROOT.parent / "VERSION"
     try:
         return version_file.read_text(encoding="utf-8").strip()
     except Exception:
         return "External to NMS_TOOLS Suite"
+
 VERSION = load_version()
+
 # -------------------------------------------------------------------
 # Argument parser
 # -------------------------------------------------------------------
@@ -68,129 +71,61 @@ def build_parser() -> BaseNagiosParser:
         prog=SCRIPT_NAME,
         description=(
             "Checks history, prices, and trends on Market Objects. "
-            "Market Objects include Stocks, Bonds, Crypto, and Commodities. "
-            "Supports verbose, JSON, and Nagios-compatible output."
+            "Supports verbose, JSON, quiet, and Nagios-compatible output."
         ),
-        script_version = SCRIPT_VERSION,
-        suite_version = VERSION
+        script_version=SCRIPT_VERSION,
+        suite_version=VERSION,
     )
 
-    # Core options
     parser.add_argument(
         "ticker",
         help="Ticker symbol (e.g., AAPL, BTC, GOLD, US10Y)",
     )
 
     core = parser.add_group("Core Options")
-    core.add_argument(
-        "--history",
-        type=int,
-        metavar="DAYS",
-        help="Fetch N days of historical data (if supported by provider)",
-    )
-    core.add_argument(
-        "--trend",
-        action="store_true",
-        help="Perform trend analysis on historical data (if supported)",
-    )
+    core.add_argument("--history", type=int, metavar="DAYS", help="Fetch N days of historical data")
+    core.add_argument("--trend", action="store_true", help="Enable trend analysis (direction + slope)")
+    core.add_argument("--trend-volatility", action="store_true",help="Include volatility (standard deviation of history)")
+    core.add_argument("--trend-strength", action="store_true", help="Include trend strength (slope normalized by volatility)")
+    core.add_argument("--trend-reversal", action="store_true", help="Detect mid‑window trend reversals")
+    core.add_argument("--trend-windows", action="store_true", help="Compute short/medium/long window trends")
 
-    # Nagios behavior filters (reserved for future logic)
     filt = parser.add_group("Nagios Behavior Filters")
-    filt.add_argument(
-        "--require-up",
-        action="store_true",
-        help="Require the ticker to be trending upward; otherwise return CRITICAL.",
-    )
-    filt.add_argument(
-        "--require-flat",
-        action="store_true",
-        help="Require the ticker to be stable/flat; otherwise return WARNING.",
-    )
-    filt.add_argument(
-        "--require-down",
-        action="store_true",
-        help="Require the ticker to be trending downward; otherwise return CRITICAL.",
-    )
-    # --------------------------------------------------------
-    # Vault Options
-    # --------------------------------------------------------
+    filt.add_argument("--require-up", action="store_true", help="Require upward trend → CRITICAL if not")
+    filt.add_argument("--require-flat", action="store_true", help="Require flat trend → WARNING if not")
+    filt.add_argument("--require-down", action="store_true", help="Require downward trend → CRITICAL if not")
+
     vault = parser.add_group("Vault Options")
+    vault.add_argument("--vault-path", dest="vault_path", help="Path to vault file")
+    vault.add_argument("--vault-password-file", dest="vault_password_file", help="Path to vault password file")
 
-    vault.add_argument(
-        "--vault-path",
-        dest="vault_path",
-        required=False,
-        help="Path to vault file containing credentials"
-    )
-
-    vault.add_argument(
-        "--vault-password-file",
-        dest="vault_password_file",
-        required=False,
-        help="Path to file containing vault password"
-    )
-    # --------------------------------------------------------
-    # API Key Options
-    # --------------------------------------------------------
     apikeys = parser.add_group("API Key Options")
-
-    # Unified YAML file containing all provider keys
-    apikeys.add_argument(
-        "--apikey-file",
-        dest="apikey_file",
-        required=False,
-        help="Path to YAML file containing provider API keys"
-    )
-
-    # Individual provider keys (override everything else)
-    apikeys.add_argument(
-        "--coingecko-key",
-        dest="coingecko_key",
-        required=False,
-        help="Coingecko API key (overrides vault/config/env)"
-    )
-
-    apikeys.add_argument(
-        "--alphavantage-key",
-        dest="alphavantage_key",
-        required=False,
-        help="AlphaVantage API key (overrides vault/config/env)"
-    )
-
-    apikeys.add_argument(
-        "--finnhub-key",
-        dest="finnhub_key",
-        required=False,
-        help="Finnhub key (overrides vault/config/env)"
-    )
+    apikeys.add_argument("--apikey-file", dest="apikey_file", help="YAML file containing provider API keys")
+    apikeys.add_argument("--coingecko-key", dest="coingecko_key", help="Override Coingecko key")
+    apikeys.add_argument("--finnhub-key", dest="finnhub_key", help="Override Finnhub key")
 
     return parser
-def get_apikeys(args) -> dict:
-    """
-    Resolve all provider API keys using the priority chain:
-    CLI > Vault > Config > Environment
-    Raises ApiKeyError on failure.
-    """
 
-    # Normalize paths
+# -------------------------------------------------------------------
+# API key resolution
+# -------------------------------------------------------------------
+def get_apikeys(args) -> dict:
     vault_path = normalize_path(args.vault_path or os.getenv("CT_VAULT_PATH"))
     vault_password_file = normalize_path(args.vault_password_file or os.getenv("CT_VAULT_PASSWORD_FILE"))
     apikey_file = normalize_path(args.apikey_file or os.getenv("CT_APIKEY_FILE"))
 
-    # CLI overrides
     cli_keys = {
         "coingecko": args.coingecko_key,
-        "alphavantage": args.alphavantage_key,
         "finnhub": args.finnhub_key,
     }
 
-    # Vault (optional)
+    # Vault
     if vault_path and vault_password_file:
         try:
             loader = VaultLoader(
                 vault_file=vault_path,
                 password_source=vault_password_file,
-                program_name="check_ticker"
+                program_name="check_ticker",
             )
             vault_data = loader.decrypt_yaml()
         except VaultError as exc:
@@ -198,7 +133,7 @@ def get_apikeys(args) -> dict:
     else:
         vault_data = None
 
-    # Config file (optional)
+    # Config file
     if apikey_file:
         apikey_file = resolve_apikey_file(apikey_file, SCRIPT_NAME)
         try:
@@ -209,57 +144,58 @@ def get_apikeys(args) -> dict:
     else:
         config_data = None
 
-    # Resolve each provider independently
     resolved = {}
-    required_providers = ("coingecko", "alphavantage", "finnhub")
+    required = ("coingecko", "finnhub")
 
-    for provider in required_providers:
+    for provider in required:
         key = resolve_api_key(provider, cli_keys, vault_data, config_data)
-
         if key is None:
             raise ApiKeyError(f"Missing API key for provider '{provider}'")
-
         resolved[provider] = key
 
     return resolved
+
+# -------------------------------------------------------------------
+# Logger
+# -------------------------------------------------------------------
 def initialize_logger(args, mode):
-    logger = None
-    if mode != "nagios" and args.log_dir:
-        try:
-            os.makedirs(args.log_dir, exist_ok=True)
+    if mode == "nagios" or not args.log_dir:
+        return None
 
-            log_cfg = {
-                "path": os.path.join(args.log_dir, "check_ticker.log"),
-                "log_level": "INFO",
-                "log_max_mb": args.log_max_mb,
-                "archive_mode": "zip",
-                "backup_count": 7,
-                "console_stream": sys.stderr,
+    try:
+        os.makedirs(args.log_dir, exist_ok=True)
+        log_cfg = {
+            "path": os.path.join(args.log_dir, "check_ticker.log"),
+            "log_level": "INFO",
+            "log_max_mb": args.log_max_mb,
+            "archive_mode": "zip",
+            "backup_count": 7,
+            "console_stream": sys.stderr,
+            "console_enabled": not args.quiet,
+            "color": False if mode == "nagios" else args.color,
+        }
+        logger_factory = LoggerFactory(log_cfg, "check_ticker")
+        return logger_factory.get_logger("main")
+    except Exception as e:
+        if should_output(mode):
+            print(nagios_summary(UNKNOWN, f"Failed to initialize LoggerFactory: {e}"))
+        return None
 
-                # Quiet mode suppresses console logging
-                "console_enabled": not args.quiet,
-
-                # Nagios checks should not use color
-                "color": False if mode == "nagios" else args.color,
-            }
-
-            logger_factory = LoggerFactory(log_cfg, "check_ticker")
-            logger = logger_factory.get_logger("main")
-            logger.info(f"LoggerFactory initialized (mode={mode})")
-            return logger
-
-        except Exception as e:
-            if should_output(mode):
-                print(nagios_summary(UNKNOWN, f"Failed to initialize LoggerFactory: {e}"))
-            return UNKNOWN
-    
 # -------------------------------------------------------------------
 # Main
 # -------------------------------------------------------------------
 def main() -> int:
     parser = build_parser()
     args, flags, mode = parser.parse()
-    api_keys = get_apikeys(args)
+
+    # Resolve API keys
+    try:
+        api_keys = get_apikeys(args)
+    except ApiKeyError as exc:
+        if should_output(mode):
+            print(nagios_summary(UNKNOWN, str(exc)))
+        return UNKNOWN
+
     ticker = args.ticker.upper()
     logger = initialize_logger(args, mode)
 
@@ -276,6 +212,7 @@ def main() -> int:
     if logger:
         logger.info(start_banner("check_ticker", meta))
 
+    # Query market engine
     engine = MarketObjectEngine(api_keys)
     result = engine.get_quote(ticker)
 
@@ -287,32 +224,81 @@ def main() -> int:
         if should_output(mode):
             print(nagios_summary(UNKNOWN, msg))
         return UNKNOWN
+
+    # Full-precision payload
     payload = {
         "ticker": ticker,
         "provider": result.provider,
         "timestamp": result.timestamp,
         "price": result.price,
         "pct": result.pct * 100,
-        "trend": getattr(result, "trend", "unknown"),
-        "raw": result.raw
+        "history": result.history,     # <-- ADD THIS
+        "raw": result.raw,
     }
-    if args.json:
+    payload.update(result.trend_result.to_json())
+    # Rounded values for human/Nagios output
+    rounded_price = round(payload["price"], 3)
+    rounded_pct = round(payload["pct"], 2)
+
+    # Perfdata (rounded)
+    perfdata = f"price={rounded_price:.3f} pct={rounded_pct:.2f}"
+    nagios_msg = f"{ticker} ${rounded_price:.3f} ({rounded_pct:+.2f}%)"
+    state = OK
+  
+    # --- Trend Analysis ---
+    tr = result.trend_result
+    if args.trend:
+        tr.trend, tr.slope = compute_trend_and_slope(result.history)
+        nagios_msg += f" trend={tr.trend} slope={tr.slope:.3f}"
+        if args.require_up and tr.slope != "up":
+            state = CRITICAL
+        if args.require_flat and tr.slope != "flat":
+            state = WARNING
+        if args.require_down and tr.slope != "down":
+            state = CRITICAL
+
+    if args.trend_volatility:
+        tr.volatility = compute_volatility(result.history)
+        nagios_msg += f" vol={tr.volatility:.3f}"
+        
+    if args.trend_strength:
+        tr.strength = compute_trend_strength(result.history)
+        nagios_msg += f" strength={tr.strength:.3f}"
+        
+    if args.trend_reversal:
+        tr.reversal = detect_reversal(result.history)
+        nagios_msg += f" reversal={tr.reversal}"
+        
+    if args.trend_windows:
+        tr.windows = compute_multi_window_trend(result.history)
+
+    # JSON mode → full precision
+    if args.json and should_output(mode):
         print(json_output(payload, args.color))
+
+    # Verbose mode → full precision
+    if args.verbose and should_output(mode):
+        print("--- VERBOSE MODE ---")
+        print(yaml.safe_dump(payload, sort_keys=False))
+
+    # Nagios output
+    if mode == "nagios" and should_output(mode):
+        print(nagios_summary(state, nagios_msg))
 
     if logger:
         logger.info(
-            f"[TICKER] ticker={ticker} price={payload["price"]} pct={payload["pct"]:.2f} trend={payload["trend"]}"
+            f"[TICKER] ticker={ticker} price={payload['price']} "
+            f"pct={payload['pct']:.6f} trend={result.trend_result.trend}"
         )
 
-    # TODO: apply require_up/require_flat/require_down once trend semantics are finalized
-    state = OK
-    message = f"{ticker} ${payload["price"]:.2f} ({payload["pct"]:+.2f}%) trend={payload["trend"]}"
-
-    if mode == "nagios":
-        print(nagios_summary(state, message))
-
-    if logger:
-        logger.info(end_banner("check_ticker", "OK"))
+        # NEW: log full raw provider payload
+        try:
+            import json
+            raw_json = json.dumps(payload["raw"], indent=2, sort_keys=True)
+            logger.info(f"[RAW] provider={payload['provider']} data=\n{raw_json}")
+        except Exception as exc:
+            logger.error(f"[RAW] failed to serialize raw provider data: {exc}")
+        logger.info(end_banner("check_ticker", state))
 
     return state
 
