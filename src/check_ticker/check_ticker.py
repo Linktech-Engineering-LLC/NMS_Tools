@@ -25,6 +25,7 @@ from pathlib import Path
 
 from PythonTools.ansible.vault import VaultLoader, VaultError
 from PythonTools.finance.api_keys import resolve_api_key, ApiKeyError, resolve_apikey_file
+from PythonTools.finance.providers.registry import ProviderRegistry
 from PythonTools.log_helpers.factory import LoggerFactory
 from PythonTools.market.router import MarketObjectEngine
 from PythonTools.market.trend import (
@@ -115,43 +116,32 @@ def get_apikeys(args) -> dict:
     apikey_file = normalize_path(args.apikey_file or os.getenv("CT_APIKEY_FILE"))
 
     cli_keys = {
-        "coingecko": args.coingecko_key,
-        "finnhub": args.finnhub_key,
+        name: getattr(args, f"{name}_key", None)
+        for name in ProviderRegistry.provider_names()
     }
 
-    # Vault
+    vault_data = None
     if vault_path and vault_password_file:
-        try:
-            loader = VaultLoader(
-                vault_file=vault_path,
-                password_source=vault_password_file,
-                program_name="check_ticker",
-            )
-            vault_data = loader.decrypt_yaml()
-        except VaultError as exc:
-            raise ApiKeyError(f"Vault error: {exc}") from exc
-    else:
-        vault_data = None
+        loader = VaultLoader(
+            vault_file=vault_path,
+            password_source=vault_password_file,
+            program_name="check_ticker",
+        )
+        vault_data = loader.decrypt_yaml()
 
-    # Config file
+    config_data = None
     if apikey_file:
         apikey_file = resolve_apikey_file(apikey_file, SCRIPT_NAME)
-        try:
-            with open(apikey_file, "r", encoding="utf-8") as f:
-                config_data = yaml.safe_load(f) or {}
-        except Exception as exc:
-            raise ApiKeyError(f"Failed to load API key file: {exc}") from exc
-    else:
-        config_data = None
+        with open(apikey_file, "r", encoding="utf-8") as f:
+            config_data = yaml.safe_load(f) or {}
 
     resolved = {}
-    required = ("coingecko", "finnhub")
 
-    for provider in required:
-        key = resolve_api_key(provider, cli_keys, vault_data, config_data)
-        if key is None:
-            raise ApiKeyError(f"Missing API key for provider '{provider}'")
-        resolved[provider] = key
+    for provider in ProviderRegistry.providers:
+        if provider.accepts_key or provider.requires_key:
+            key = resolve_api_key(provider.name, cli_keys, vault_data, config_data)
+            if key:
+                resolved[provider.name] = key
 
     return resolved
 
@@ -171,7 +161,7 @@ def initialize_logger(args, mode):
             "archive_mode": "zip",
             "backup_count": 7,
             "console_stream": sys.stderr,
-            "console_enabled": not args.quiet,
+            "console_enabled": not args.quiet and args.verbose,
             "color": False if mode == "nagios" else args.color,
         }
         logger_factory = LoggerFactory(log_cfg, "check_ticker")
@@ -187,6 +177,14 @@ def initialize_logger(args, mode):
 def main() -> int:
     parser = build_parser()
     args, flags, mode = parser.parse()
+    prefer_history = (
+        args.history or
+        args.trend or
+        args.trend_volatility or
+        args.trend_strength or
+        args.trend_reversal or
+        args.trend_windows
+    )
 
     # Resolve API keys
     try:
@@ -214,7 +212,7 @@ def main() -> int:
 
     # Query market engine
     engine = MarketObjectEngine(api_keys)
-    result = engine.get_quote(ticker)
+    result = engine.get_quote(ticker, prefer_history)
 
     if result.is_error():
         msg = result.error
@@ -232,10 +230,10 @@ def main() -> int:
         "timestamp": result.timestamp,
         "price": result.price,
         "pct": result.pct * 100,
-        "history": result.history,     # <-- ADD THIS
-        "raw": result.raw,
+        "history": result.history,
+        "trend": result.trend_result.to_json(),
+        "raw": result.raw,   # optional
     }
-    payload.update(result.trend_result.to_json())
     # Rounded values for human/Nagios output
     rounded_price = round(payload["price"], 3)
     rounded_pct = round(payload["pct"], 2)
@@ -272,17 +270,21 @@ def main() -> int:
     if args.trend_windows:
         tr.windows = compute_multi_window_trend(result.history)
 
+    # Quiet mode suppresses ALL console output
+    if args.quiet:
+        pass
+
     # JSON mode → full precision
-    if args.json and should_output(mode):
+    elif args.json and should_output(mode):
         print(json_output(payload, args.color))
 
     # Verbose mode → full precision
-    if args.verbose and should_output(mode):
+    elif args.verbose and should_output(mode):
         print("--- VERBOSE MODE ---")
         print(yaml.safe_dump(payload, sort_keys=False))
 
     # Nagios output
-    if mode == "nagios" and should_output(mode):
+    elif mode == "nagios" and should_output(mode):
         print(nagios_summary(state, nagios_msg))
 
     if logger:
