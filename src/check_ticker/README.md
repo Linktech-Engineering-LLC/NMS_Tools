@@ -87,12 +87,6 @@ Logged fields include:
 | ``1`` | Provider error |
 | ``2`` | Trend requirement not met |
 | ``3`` | Invalid symbol or unsupported provider |
-| Code | Meaning |
-| --- | --- |
-| ``0`` | Success |
-| ``1`` | Provider error |
-| ``2`` | Trend requirement not met |
-| ``3`` | Invalid symbol or unsupported provider |
 
 ## Provider Architecture
 
@@ -108,3 +102,42 @@ The registry selects the appropriate provider based on symbol type.
 ## Raw Payload
 
 Raw provider data is logged (not printed) to assist with debugging and trend analysis.
+
+## Runtime Requirements and Frozen Mode
+
+`check_ticker.py` is fully operational and ready for use in development environments.
+However, it currently **depends on the PythonTools package** for:
+
+* unified market data providers
+* symbol normalization
+* trend analysis
+* shared market object models
+
+### Runtime Requirement
+
+To run check_ticker.py directly from source, you must have:
+
+```Code
+PythonTools (main branch)
+```
+
+installed or available in your environment.
+
+### Frozen Mode (Standalone Executable)
+
+Although `check_ticker.py` supports frozen operation via PyInstaller,
+**frozen mode is not yet enabled.** It will be activated only after:
+
+* the remaining NMS_Tools modules are migrated to PythonTools
+* the provider registry is fully stable
+* the shared market object model is finalized
+
+This ensures the frozen build contains the correct provider architecture and avoids breaking changes during the migration phase.
+
+### Current Status
+
+* ✔ Ready for use in development
+* ✔ Fully compatible with PythonTools
+* ✔ Output modes finalized (JSON, verbose, quiet, Nagios)
+* ✔ Logging architecture stable
+* ✖ Frozen mode disabled until migration is complete
