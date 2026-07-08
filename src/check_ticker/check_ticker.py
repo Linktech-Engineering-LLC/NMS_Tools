@@ -23,7 +23,7 @@ import sys
 import yaml
 from pathlib import Path
 
-from PythonTools.ansible.vault import VaultLoader, VaultError
+from PythonTools.ansible.vault import VaultLoader
 from PythonTools.finance.api_keys import resolve_api_key, ApiKeyError, resolve_apikey_file
 from PythonTools.finance.providers.registry import ProviderRegistry
 from PythonTools.log_helpers.factory import LoggerFactory

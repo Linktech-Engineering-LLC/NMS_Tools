@@ -1,0 +1,7 @@
+# Relative path so GitHub Actions and local builds both work
+PythonTools = "./PythonTools"
+
+# Directory layout
+src_dir = "src"
+build_dir = "build"
+dist_dir = "dist"

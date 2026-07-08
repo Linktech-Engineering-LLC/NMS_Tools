@@ -20,13 +20,11 @@ import ipaddress
 import json
 import os
 import platform
-import shutil
 import socket
 import ssl
 import sys
 import urllib.request
 import urllib.error
-import zipfile
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -38,6 +36,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Tuple, Optional, List, Union, cast, Dict
 from typing_extensions import TypedDict
+
+from PythonTools.log_helpers.factory import LoggerFactory
+from PythonTools.nagios.parser import BaseNagiosParser
+from PythonTools.nagios import (
+    OK,
+    WARNING,
+    CRITICAL,
+    UNKNOWN,
+    nagios_summary,
+    start_banner,
+    end_banner,
+    cert_banner,
+    result_banner,
+    should_output,
+)
 
 # Root of the suite (two levels up from the tool script)
 SUITE_ROOT = Path(__file__).resolve().parent.parent
@@ -57,13 +70,6 @@ def load_version() -> str:
 VERSION = load_version()
 MIN_MAJOR = 3
 MIN_MINOR = 8
-# -----------------------------
-#  Nagios Exit Codes
-# -----------------------------
-OK = 0
-WARNING = 1
-CRITICAL = 2
-UNKNOWN = 3
 # Other Constants
 SCRIPT_NAME = Path(sys.argv[0]).stem
 SCRIPT_VERSION = "3.1.0"
@@ -110,36 +116,8 @@ class EnforcementResults(TypedDict):
 # -----------------------------
 # ArgParse Custom Formatter & CLI Parser
 # -----------------------------
-class CustomFormatter(
-    argparse.ArgumentDefaultsHelpFormatter,
-    argparse.RawDescriptionHelpFormatter
-):
-    """Help formatter that removes argparse's default '(default: ...)' noise
-    only when the default is None or False."""
-
-    def _get_help_string(self, action):
-        help_text = action.help or ""
-
-        # If the help text already contains %(default), leave it alone
-        if "%(default)" in help_text:
-            return help_text
-
-        # If argparse would append a default of None or False, suppress it
-        if action.default in (None, False):
-            return help_text
-
-        # Otherwise, append the meaningful default
-        return f"{help_text} (default: {action.default})"
-class CheckArgError(Exception):
-    """Raised when CLI arguments are invalid."""
-    pass
-class CheckArgumentParser(argparse.ArgumentParser):
-    def error(self, message):
-        print(f"ERROR: {message}\n")
-        self.print_help()
-        sys.exit(UNKNOWN)
 def build_parser():
-    parser = CheckArgumentParser(
+    nag = BaseNagiosParser(
         prog="check_cert.py",
         description=(
             "TLS Certificate Inspection Tool\n\n"
@@ -147,180 +125,75 @@ def build_parser():
             "evaluates TLS version and cipher, and applies optional enforcement rules.\n"
             "Supports verbose, JSON, and Nagios-compatible output modes."
         ),
-        formatter_class=CustomFormatter,
-        add_help=True
+        script_version=SCRIPT_VERSION,
+        suite_version=VERSION,
     )
 
-    # -----------------------------
     # Usage line
-    # -----------------------------
-    parser.usage = "%(prog)s -H <host> [options]"
+    nag.parser.usage = "%(prog)s -H <host> [options]"
 
     # -----------------------------
     # Connection Options
     # -----------------------------
-    core = parser.add_argument_group("Core Options")
-    core.add_argument("-H", "--host", required=True,
-                      help="Target hostname or IP")
-    core.add_argument("-p", "--port", type=int, default=443,
-                      help="Port to connect to")
-    core.add_argument("--sni",
-                      help="Override SNI value (default: host)")
-    core.add_argument("--timeout", type=int, default=5,
-                      help="Connection timeout in seconds")
-    core.add_argument("--insecure", action="store_true",
-                      help="Skip certificate validation during handshake")
-    core.add_argument(
-        "--log-dir",
-        dest="log_dir",
-        metavar="DIR",
-        default=None,
-        help="Directory to store logs (optional). If omitted, logging is disabled."
-    )
-    core.add_argument(
-        "--log-max-mb",
-        dest="log_max_mb",
-        metavar="MB",
-        type=int,
-        default=50,
-        help="Maximum log size in MB before rotation."
-    )
-    # -----------------------------
-    # Output Modes
-    # -----------------------------
-    out = parser.add_argument_group("Output Modes")
-    out.add_argument("-v", "--verbose", action="store_true",
-                     help="Detailed certificate output")
-    out.add_argument("-j", "--json", action="store_true",
-                     help="JSON output for automation")
-    out.add_argument("-q", "--quiet", action="store_true",
-                     help="Quiet mode: exit code only")
-    out.add_argument(
-        "-V", "--version",
-        action="version",
-        version=(
-            f"NMS_TOOLS Suite Version: {VERSION}\n"
-            f"{SCRIPT_NAME}: {SCRIPT_VERSION}\n"
-            f"Python: {platform.python_version()}"
-        ),
-        help="Show script and Python version"
-    )
+    core = nag.add_group("Core Options")
+    core.add_argument("-H", "--host", required=True, help="Target hostname or IP")
+    core.add_argument("-p", "--port", type=int, default=443, help="Port to connect to")
+    core.add_argument("--sni", help="Override SNI value (default: host)")
+    core.add_argument("--timeout", type=int, default=5, help="Connection timeout in seconds")
+    core.add_argument("--insecure", action="store_true", help="Skip certificate validation during handshake")
+
     # -----------------------------
     # TLS Requirements
     # -----------------------------
-    tls = parser.add_argument_group("TLS Requirements")
-    tls.add_argument("--min-tls", choices=TLS_VERSIONS,
-                     help="Minimum allowed TLS version")
-    tls.add_argument("--require-tls", choices=TLS_VERSIONS,
-                     help="Require exact TLS version")
-    tls.add_argument("--require-cipher",
-                     help="Require exact cipher suite")
-    tls.add_argument("--forbid-cipher",
-                     help="Forbid exact cipher suite")
-    tls.add_argument("--require-aead", action="store_true",
-                     help="Require AEAD cipher")
-    tls.add_argument("--forbid-cbc", action="store_true",
-                     help="Forbid CBC-mode ciphers")
-    tls.add_argument("--forbid-rc4", action="store_true",
-                     help="Forbid RC4 ciphers")
+    tls = nag.add_group("TLS Requirements")
+    tls.add_argument("--min-tls", choices=TLS_VERSIONS, help="Minimum allowed TLS version")
+    tls.add_argument("--require-tls", choices=TLS_VERSIONS, help="Require exact TLS version")
+    tls.add_argument("--require-cipher", help="Require exact cipher suite")
+    tls.add_argument("--forbid-cipher", help="Forbid exact cipher suite")
+    tls.add_argument("--require-aead", action="store_true", help="Require AEAD cipher")
+    tls.add_argument("--forbid-cbc", action="store_true", help="Forbid CBC-mode ciphers")
+    tls.add_argument("--forbid-rc4", action="store_true", help="Forbid RC4 ciphers")
 
     # -----------------------------
     # Certificate Requirements
     # -----------------------------
-    cert = parser.add_argument_group("Certificate Requirements")
-    cert.add_argument("-E", "--enforce-san", action="store_true",
-                      help="Require host to appear in SAN list")
-    cert.add_argument("-I", "--issuer",
-                      help="Require issuer CN to contain substring")
-    cert.add_argument("-A", "--sigalg",
-                      help="Require signature algorithm")
-    cert.add_argument("--min-rsa", type=int,
-                      help="Minimum RSA key size in bits")
-    cert.add_argument("--require-curve",
-                      help="Require ECC curve name")
-    cert.add_argument("--require-wildcard", action="store_true",
-                      help="Require wildcard certificate")
-    cert.add_argument("--forbid-wildcard", action="store_true",
-                      help="Forbid wildcard certificate")
-    # ---------------------------
-    # Monitoring Switches
-    # ---------------------------
-    monitoring = parser.add_argument_group("Monitoring Checks")
+    cert = nag.add_group("Certificate Requirements")
+    cert.add_argument("-E", "--enforce-san", action="store_true", help="Require host to appear in SAN list")
+    cert.add_argument("-I", "--issuer", help="Require issuer CN to contain substring")
+    cert.add_argument("-A", "--sigalg", help="Require signature algorithm")
+    cert.add_argument("--min-rsa", type=int, help="Minimum RSA key size in bits")
+    cert.add_argument("--require-curve", help="Require ECC curve name")
+    cert.add_argument("--require-wildcard", action="store_true", help="Require wildcard certificate")
+    cert.add_argument("--forbid-wildcard", action="store_true", help="Forbid wildcard certificate")
 
-    monitoring.add_argument(
-        "--no-check-expiration",
-        dest="check_expiration",
-        action="store_false",
-        default=True,
-        help="Disable expiration enforcement (default: enabled)"
-    )
+    # -----------------------------
+    # Monitoring Checks
+    # -----------------------------
+    monitoring = nag.add_group("Monitoring Checks")
+    monitoring.add_argument("--no-check-expiration", dest="check_expiration", action="store_false", default=True)
+    monitoring.add_argument("--no-check-chain", dest="check_chain", action="store_false", default=True)
+    monitoring.add_argument("--no-check-hostname", dest="check_hostname", action="store_false", default=True)
+    monitoring.add_argument("--no-check-san", dest="check_san", action="store_false", default=True)
+    monitoring.add_argument("--no-check-self-signed", dest="check_self_signed", action="store_false", default=True)
+    monitoring.add_argument("--check-ocsp", dest="check_ocsp", action="store_true", default=False)
 
-    monitoring.add_argument(
-        "--no-check-chain",
-        dest="check_chain",
-        action="store_false",
-        default=True,
-        help="Disable chain validation enforcement (default: enabled)"
-    )
-
-    monitoring.add_argument(
-        "--no-check-hostname",
-        dest="check_hostname",
-        action="store_false",
-        default=True,
-        help="Disable hostname enforcement (default: enabled)"
-    )
-
-    monitoring.add_argument(
-        "--no-check-san",
-        dest="check_san",
-        action="store_false",
-        default=True,
-        help="Disable SAN presence enforcement (default: enabled)"
-    )
-
-    monitoring.add_argument(
-        "--no-check-self-signed",
-        dest="check_self_signed",
-        action="store_false",
-        default=True,
-        help="Allow self-signed certificates (default: treat as CRITICAL)"
-    )
-
-    monitoring.add_argument(
-        "--check-ocsp",
-        dest="check_ocsp",
-        action="store_true",
-        default=False,
-        help="Enable OCSP reachability enforcement (default: disabled)"
-    )
-
-
-    # ----------------------------
-    # Nagios Options
-    # ----------------------------
-    nagios = parser.add_argument_group("Nagios Thresholds")
-    nagios.add_argument("-w", "--warning", type=int, default=30,
-                        help="Warning threshold in days")
-    nagios.add_argument("-c", "--critical", type=int, default=15,
-                        help="Critical threshold in days")
+    # -----------------------------
+    # Nagios Thresholds
+    # -----------------------------
+    nagios = nag.add_group("Nagios Thresholds")
+    nagios.add_argument("-w", "--warning", type=int, default=30, help="Warning threshold in days")
+    nagios.add_argument("-c", "--critical", type=int, default=15, help="Critical threshold in days")
 
     # -----------------------------
     # OCSP Options
     # -----------------------------
-    ocsp = parser.add_argument_group("OCSP Options")
-    ocsp.add_argument("--require-ocsp", action="store_true",
-                      help="OCSP responder must be reachable")
-    ocsp.add_argument("--forbid-ocsp", action="store_true",
-                      help="OCSP responder must NOT be reachable")
-    ocsp.add_argument("--ocsp-status",
-                      choices=["good", "revoked", "unknown", "invalid"],
-                      help="Require specific OCSP status")
+    ocsp = nag.add_group("OCSP Options")
+    ocsp.add_argument("--require-ocsp", action="store_true", help="OCSP responder must be reachable")
+    ocsp.add_argument("--forbid-ocsp", action="store_true", help="OCSP responder must NOT be reachable")
+    ocsp.add_argument("--ocsp-status", choices=["good", "revoked", "unknown", "invalid"], help="Require specific OCSP status")
 
-    # -----------------------------
-    # Examples Section
-    # -----------------------------
-    parser.epilog = (
+    # Examples
+    nag.parser.epilog = (
         "Examples:\n"
         "  %(prog)s -H example.com -v\n"
         "  %(prog)s -H example.com --json\n"
@@ -328,7 +201,7 @@ def build_parser():
         "  %(prog)s -H example.com --require-aead --require-curve secp256r1\n"
     )
 
-    return parser.parse_args()
+    return nag.parse()
 # -----------------------------
 #  Certificate Fetch/Parse
 # -----------------------------
@@ -452,7 +325,7 @@ def parse_intermediate_cert(url, raw_bytes):
 #  Extractors
 # -----------------------------
 def get_cert_expiry(cert):
-    return cert.not_valid_after
+    return cert.not_valid_after_utc
 def get_cn(cert_obj):
     try:
         return cert_obj.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
@@ -1022,7 +895,6 @@ def hostname_matches(host: str, cn: str, san: List[str]) -> bool:
 
     # fallback to CN
     return cn.lower() == host
-
 # -----------------------------
 #  Status Dispatcher + Perfdata
 # -----------------------------
@@ -1464,17 +1336,27 @@ def compute_nagios_code(enf):
     if warnings:
         return WARNING
     return OK
-def early_exit(meta, message, code):
-    # Quiet mode suppresses stdout
-    if meta["mode"] != "quiet":
+def early_exit(meta, logger, message, code):
+    """
+    Unified early-exit handler for check_cert.
+    - Quiet mode suppresses stdout
+    - Nagios mode prints Nagios summary
+    - LoggerFactory handles log output if available
+    """
+
+    mode = meta.get("mode", "normal")
+
+    # 1. STDOUT (Nagios or normal)
+    if mode == "nagios":
+        print(nagios_summary(code, message))
+    elif mode != "quiet":
         print(message)
 
-    # Logging always happens if log_dir exists
-    if meta.get("log_dir"):
-        write_log(meta, f"[ERROR] {message}")
+    # 2. Logging (if logger exists AND logging is enabled)
+    if logger:
+        logger.error(f"[ERROR] {message}")
 
     sys.exit(code)
-
 # -----------------------------
 # Host Validation & Meta Builders
 # -----------------------------
@@ -1562,7 +1444,7 @@ def build_certificate_meta(cert, chain, args):
     # ------------------------------------------------------------
     # 1. Expiration metadata
     # ------------------------------------------------------------
-    not_after = cert.not_valid_after
+    not_after = cert.not_valid_after_utc
     # Ensure not_after is timezone-aware
     if not_after.tzinfo is None:
         not_after = not_after.replace(tzinfo=timezone.utc)
@@ -1751,128 +1633,44 @@ def fetch_tls_session_info(hostname: str, port: int, timeout: int, insecure: boo
 
     except Exception as e:
         raise RuntimeError(f"TLS session info retrieval failed: {e}")
-
 # --------------------------------------
 # Logging Functions
 # --------------------------------------
-def ts():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-def write_log(meta, message):
-    log_dir = meta.get("log_dir")
-
-    try:
-        os.makedirs(log_dir, exist_ok=True)
-        logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
-        with open(logfile, "a") as f:
-            f.write(f"{ts()}; {message}\n")
-    except Exception as e:
-        if not meta.get("_log_warn_emitted"):
-            meta["_log_warn_emitted"] = True
-            warning = f"[WARN] Unable to write to log directory: {log_dir} — {e}"
-            if meta["mode"] == "verbose":
-                print(f"[WARN] {warning}")
-            meta.setdefault("warnings", []).append(warning)
-def rotate_log_if_needed(meta):
-    log_dir = meta["log_dir"]
-    logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
-
-    if not os.path.exists(logfile):
-        return
-
-    max_mb = meta.get("log_max_mb", 50)
-    max_bytes = max_mb * 1024 * 1024
-
-    try:
-        if os.path.getsize(logfile) < max_bytes:
-            return
-
-        archive_path = build_archive_path(meta)
-        shutil.move(logfile, archive_path)
-        compress_file(archive_path)
-
-        with open(logfile, "w", encoding="utf-8") as f:
-            f.write(f"{ts()}; [INFO] log rotated to {os.path.basename(archive_path)}.zip\n")
-
-    except Exception as e:
-        if not meta.get("_log_warn_emitted"):
-            meta["_log_warn_emitted"] = True
-            warn = f"[WARN] Unable to rotate log file '{logfile}': {e}"
-            if meta.get("mode") == "verbose":
-                print(warn)
-            meta.setdefault("warnings", []).append(warn)
-def build_archive_path(meta):
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(meta["log_dir"], f"{SCRIPT_NAME}_{ts}.log")
-def compress_file(path):
-    zip_path = path + ".zip"
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
-        z.write(path, os.path.basename(path))
-    os.remove(path)
-def start_banner(meta):
-    return (
-        f"[START] {SCRIPT_NAME}"
-        f" host={meta['host']}"
-        f" port={meta['port']}"
-        f" sni={meta['sni']}"
-        f" timeout={meta['timeout']}"
-        f" insecure={meta['insecure']}"
-        f" warn_days={meta['warning_days']}"
-        f" crit_days={meta['critical_days']}"
-        f" mode={meta['mode']}"
-    )
-def log_certificate(meta, enf):
+def initialize_logger(args, mode):
     """
-    Canonical CERT banner for log files.
-    Matches JSON/verbose naming and excludes enforcement fields.
+    Unified LoggerFactory initialization for check_cert.
+    Matches the model used by check_ticker.
     """
 
-    parts = [
-        f"host={meta['host']}",
-        f"port={meta['port']}",
-        f"sni={meta['sni']}",
+    # Nagios mode never writes logs
+    if mode == "nagios" or not args.log_dir:
+        return None
 
-        # TLS
-        f"tls_version={meta['tls_version']}",
-        f"cipher={meta['cipher']}",
-        f"aead={meta['cipher_is_aead']}",
-        f"cbc={meta['cipher_is_cbc']}",
-        f"rc4={meta['cipher_is_rc4']}",
+    try:
+        os.makedirs(args.log_dir, exist_ok=True)
 
-        # Certificate
-        f"subject_cn={meta['subject_cn']}",
-        f"issuer_cn={meta['issuer_cn']}",
-        f"sigalg={meta['signature_algorithm']}",
-        f"wildcard={meta['wildcard']}",
-        f"self_signed={meta['self_signed']}",
-        f"hostname_matches={meta['hostname_matches']}",
-        f"expires={meta['expires']}",
-        f"expiration_days={meta['expiration_days']}",
+        log_cfg = {
+            "path": os.path.join(args.log_dir, "check_cert.log"),
+            "log_level": "INFO",
+            "log_max_mb": args.log_max_mb,
+            "archive_mode": "zip",
+            "backup_count": 7,
 
-        # Key
-        f"key_type={meta['key_type']}",
-        f"rsa_bits={meta['rsa_bits']}",
-        f"ecc_curve={meta['ecc_curve']}",
+            # Console output only when verbose AND not quiet
+            "console_stream": sys.stderr,
+            "console_enabled": not args.quiet and args.verbose,
 
-        # OCSP
-        f"ocsp_status={meta['ocsp_status']}",
-        f"ocsp_reachable={meta['ocsp_reachable']}",
+            # Nagios mode never uses color
+            "color": False if mode == "nagios" else args.color,
+        }
 
-        # Chain
-        f"chain_server_sent={meta['chain_present']}",
-        f"chain_reconstructed={meta['chain_reconstructed']}",
-        f"chain_valid={meta['chain_valid']}",
-        f"chain_errors={len(meta['chain_errors'])}",
-    ]
+        logger_factory = LoggerFactory(log_cfg, "check_cert")
+        return logger_factory.get_logger("main")
 
-    return "[CERT] " + " ".join(parts)
-def log_summary(state, failures):
-    return (
-        f"[RESULT] state={state}"
-        f" failed={len(failures)}"
-        f" failures={failures}"
-    )
-def end_banner():
-    return "[END]"
+    except Exception as e:
+        if should_output(mode):
+            print(nagios_summary(UNKNOWN, f"Failed to initialize LoggerFactory: {e}"))
+        return None
 
 # -----------------------------
 #  Main Orchestrator
@@ -1881,26 +1679,23 @@ def main():
     # ------------------------------------------------------------
     # 1. Parse arguments
     # ------------------------------------------------------------
-    args = build_parser()
+    args, flags, mode = build_parser()
 
     # Base metadata (script name, mode, log_dir)
     meta = {
         "host": args.host,
         "log_dir": str(Path(args.log_dir).expanduser()) if args.log_dir else None,
-        "mode": (
-            "json" if args.json else
-            "verbose" if args.verbose else
-            "quiet" if args.quiet else
-            "nagios"
-        ),
+        "flags": flags,
+        "mode": mode,
     }
+    logger = initialize_logger(args, meta["mode"])
 
     # ------------------------------------------------------------
     # 2. Basic hostname validation (suite-wide deterministic rule)
     # ------------------------------------------------------------
     rc = validate_host_basic(args.host)
     if not rc["ok"]:
-        early_exit(meta, f"UNKNOWN - {rc['error']}", UNKNOWN)
+        early_exit(meta, f"UNKNOWN - {rc['error']}", UNKNOWN, logger)
 
     # ------------------------------------------------------------
     # 3. Fetch certificate + chain + TLS session
@@ -1913,7 +1708,7 @@ def main():
             args.insecure
         )
     except Exception as e:
-        early_exit(meta, f"UNKNOWN - failed to retrieve certificate: {e}", UNKNOWN)
+        early_exit(meta, f"UNKNOWN - failed to retrieve certificate: {e}", UNKNOWN, logger)
 
     # ------------------------------------------------------------
     # 4. Build full deterministic metadata
@@ -1935,8 +1730,7 @@ def main():
     # ------------------------------------------------------------
     # 5. Determine Nagios mode + logging
     # ------------------------------------------------------------
-    nagios_mode = not args.json and not args.verbose and not args.quiet
-    logging_enabled = not nagios_mode and meta["log_dir"]
+    logging_enabled = mode != "nagios" and meta["log_dir"]
 
     # ------------------------------------------------------------
     # 6. Enforcement (policy + monitoring)
@@ -1948,13 +1742,11 @@ def main():
     # ------------------------------------------------------------
     # 7. Logging (if enabled)
     # ------------------------------------------------------------
-    if logging_enabled:
-        rotate_log_if_needed(meta)
-        write_log(meta, start_banner(meta))
-        write_log(meta, log_certificate(meta, enf))
-        write_log(meta, log_summary(compute_nagios_code(enf), enf["failed"]))
-        write_log(meta, end_banner())
-
+    if logger and logging_enabled:
+        logger.info(start_banner("check_cert", meta))
+        logger.info(cert_banner(meta))
+        logger.info(result_banner(compute_nagios_code(enf), enf["failed"]))
+        logger.info(end_banner(SCRIPT_NAME, compute_nagios_code(enf)))
     # ------------------------------------------------------------
     # 8. Verbose mode
     # ------------------------------------------------------------

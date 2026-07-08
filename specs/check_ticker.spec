@@ -6,14 +6,27 @@ block_cipher = None
 repo_root = os.getcwd()
 
 a = Analysis(
-    [os.path.join(repo_root, 'src/check_ports/check_ticker.py')],
+    [os.path.join(repo_root, 'src/check_ticker/check_ticker.py')],
     pathex=[os.path.join(repo_root, 'src/check_ticker')],
     binaries=[],
     datas=[
-        # Include PythonTools VERSION file for __version__ loader
+        # VERSION file
         ("/home/doug/projects/Python/PythonTools/VERSION", "PythonTools"),
+
+        # PythonTools package
+        ("/home/doug/projects/Python/PythonTools/PythonTools", "PythonTools/PythonTools"),
+
+        # Subpackages
+        ("/home/doug/projects/Python/PythonTools/PythonTools/ansible", "PythonTools/PythonTools/ansible"),
+        ("/home/doug/projects/Python/PythonTools/PythonTools/core", "PythonTools/PythonTools/core"),
+        ("/home/doug/projects/Python/PythonTools/PythonTools/utils", "PythonTools/PythonTools/utils"),
     ],
-    hiddenimports=[],
+    hiddenimports=[
+        "PythonTools",
+        "PythonTools.ansible",
+        "PythonTools.core",
+        "PythonTools.utils",
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
