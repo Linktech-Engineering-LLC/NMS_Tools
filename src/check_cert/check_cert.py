@@ -38,7 +38,6 @@ from typing import Tuple, Optional, List, Union, cast, Dict
 from typing_extensions import TypedDict
 
 from PythonTools.log_helpers.factory import LoggerFactory
-from PythonTools.nagios.parser import BaseNagiosParser
 from PythonTools.nagios import (
     OK,
     WARNING,
@@ -50,6 +49,7 @@ from PythonTools.nagios import (
     cert_banner,
     result_banner,
     should_output,
+    BaseNagiosParser,
 )
 
 # Root of the suite (two levels up from the tool script)
@@ -504,6 +504,175 @@ def is_wildcard_cert(cert):
 # --------------------------------------
 #  Classification/Enforcement/Validation
 # --------------------------------------
+def classify_tls_version(tls_version: str) -> Tuple[str, str]:
+    """
+    Returns (state, message) based on TLS version strength.
+    """
+    if tls_version == "tlsv1.3":
+        return ("OK", "TLS 1.3 negotiated")
+    if tls_version == "tlsv1.2":
+        return ("WARNING", "TLS 1.2 negotiated (consider upgrading)")
+    if tls_version in ("tlsv1.1", "tlsv1"):
+        return ("CRITICAL", f"Weak TLS version negotiated: {tls_version}")
+    return ("UNKNOWN", f"Unknown or unsupported TLS version: {tls_version}")
+def classify_cipher(cipher: Optional[str]) -> Tuple[str, str]:
+    if cipher is None:
+        return ("UNKNOWN", "No cipher negotiated")
+
+    c = cipher.lower()
+
+    # Strong AEAD ciphers
+    if "gcm" in c or "chacha20" in c:
+        return ("OK", f"Strong cipher negotiated: {cipher}")
+
+    # CBC is acceptable but not ideal
+    if "cbc" in c:
+        return ("WARNING", f"Weak cipher mode (CBC) negotiated: {cipher}")
+
+    # Known bad ciphers
+    if any(x in c for x in ("rc4", "3des", "null", "export")):
+        return ("CRITICAL", f"Insecure cipher negotiated: {cipher}")
+
+    # Default fallback
+    return ("WARNING", f"Unclassified cipher: {cipher}")
+def evaluate_tls(tls_version: str, cipher: Optional[str]):
+    v_state, v_msg = classify_tls_version(tls_version)
+    c_state, c_msg = classify_cipher(cipher)
+
+    # Highest severity wins
+    final_state = max((v_state, c_state), key=lambda s: ["OK","WARNING","CRITICAL","UNKNOWN"].index(s))
+
+    return final_state, [v_msg, c_msg]
+def classify_signature_algorithm(sigalg: str):
+    """
+    Classify certificate signature algorithm strength.
+
+    Returns:
+        (state, message)
+        state ∈ {"OK", "WARNING", "CRITICAL", "UNKNOWN"}
+    """
+
+    if not sigalg:
+        return ("UNKNOWN", "Signature algorithm missing or unrecognized")
+
+    algo = sigalg.lower().strip()
+
+    # Strong algorithms
+    if algo in ("sha256", "sha384", "sha512"):
+        return ("OK", f"Strong signature algorithm: {algo}")
+
+    # RSA-PSS variants (strong)
+    if "pss" in algo:
+        return ("OK", f"Strong RSA-PSS signature algorithm: {algo}")
+
+    # Weak / deprecated algorithms
+    if algo in ("sha1", "sha1withrsa", "sha1withrsaencryption"):
+        return ("CRITICAL", f"Weak signature algorithm (SHA‑1): {algo}")
+
+    if algo in ("md5", "md5withrsa", "md5withrsaencryption"):
+        return ("CRITICAL", f"Broken signature algorithm (MD5): {algo}")
+
+    # Unknown or unusual algorithms
+    return ("WARNING", f"Unrecognized signature algorithm: {algo}")
+def classify_key_strength(key_type: str, rsa_bits: int | None, ecc_curve: str | None):
+    """
+    Classify certificate key strength.
+
+    Returns:
+        (state, message)
+        state ∈ {"OK", "WARNING", "CRITICAL", "UNKNOWN"}
+    """
+
+    # Normalize
+    kt = (key_type or "").lower().strip()
+
+    # ------------------------------------------------------------
+    # RSA classification
+    # ------------------------------------------------------------
+    if kt == "rsa":
+        if rsa_bits is None:
+            return ("UNKNOWN", "RSA key size missing or unrecognized")
+
+        if rsa_bits < 2048:
+            return ("CRITICAL", f"Weak RSA key size: {rsa_bits} bits")
+
+        if rsa_bits == 2048:
+            return ("OK", "RSA 2048-bit key (minimum recommended strength)")
+
+        if rsa_bits in (3072, 4096):
+            return ("OK", f"Strong RSA key: {rsa_bits} bits")
+
+        if rsa_bits > 4096:
+            return ("OK", f"Very strong RSA key: {rsa_bits} bits")
+
+        return ("WARNING", f"Unusual RSA key size: {rsa_bits} bits")
+
+    # ------------------------------------------------------------
+    # ECDSA classification
+    # ------------------------------------------------------------
+    if kt == "ecdsa":
+        if not ecc_curve:
+            return ("UNKNOWN", "ECDSA curve missing or unrecognized")
+
+        curve = ecc_curve.lower().strip()
+
+        if curve in ("secp256r1", "prime256v1"):
+            return ("OK", "Strong ECDSA curve: secp256r1")
+
+        if curve == "secp384r1":
+            return ("OK", "Strong ECDSA curve: secp384r1")
+
+        # Other curves: not necessarily bad, but uncommon
+        return ("WARNING", f"Unrecognized or uncommon ECDSA curve: {curve}")
+
+    # ------------------------------------------------------------
+    # EdDSA classification
+    # ------------------------------------------------------------
+    if kt in ("ed25519", "ed448"):
+        return ("OK", f"Strong EdDSA key: {kt}")
+
+    # ------------------------------------------------------------
+    # Unknown key type
+    # ------------------------------------------------------------
+    if not kt:
+        return ("UNKNOWN", "Key type missing or unrecognized")
+
+    return ("WARNING", f"Unrecognized key type: {kt}")
+def classify_chain_completeness(server_sent: bool, reconstructed: bool, valid: bool, errors: list):
+    """
+    Classify certificate chain completeness and trustworthiness.
+
+    Returns:
+        (state, message)
+        state ∈ {"OK", "WARNING", "CRITICAL", "UNKNOWN"}
+    """
+
+    # Unknown / missing data
+    if valid is None:
+        return ("UNKNOWN", "Chain validation state missing or unrecognized")
+
+    # Critical failures
+    if not valid:
+        return ("CRITICAL", "Certificate chain is invalid")
+
+    if errors:
+        return ("CRITICAL", f"Chain validation errors present: {len(errors)} error(s)")
+
+    # Valid chain but server did not send intermediates
+    if valid and not server_sent and reconstructed:
+        return ("WARNING", "Chain reconstructed via AIA (server did not send intermediates)")
+
+    # Valid chain fully provided by server
+    if valid and server_sent:
+        return ("OK", "Complete certificate chain provided by server")
+
+    # Valid chain reconstructed but server_sent flag unknown
+    if valid and reconstructed:
+        return ("WARNING", "Chain reconstructed via AIA")
+
+    # Fallback
+    return ("UNKNOWN", "Chain completeness could not be determined")
+
 def empty_enforcement_results() -> EnforcementResults:
     return {
         "min_tls": None,
@@ -986,6 +1155,10 @@ def display_verbose(meta):
     print("=== TLS Session ===")
     print(f"TLS Version: {meta.get('tls_version')}")
     print(f"Cipher: {meta.get('cipher')}")
+    print(f"tls_state: {meta.get('tls_state')}")
+    print(f"tls_messages: {meta.get('tls_messages')}")
+    print(f"tls_handshake_state: {meta.get('tls_handshake_state')}")
+    print(f"tls_handshake_message: {meta.get('tls_handshake_message')}")
     print(f"  AEAD: {meta.get('cipher_is_aead')}")
     print(f"  CBC: {meta.get('cipher_is_cbc')}")
     print(f"  RC4: {meta.get('cipher_is_rc4')}")
@@ -998,6 +1171,8 @@ def display_verbose(meta):
     print(f"Subject CN: {meta.get('subject_cn')}")
     print(f"Issuer CN: {meta.get('issuer_cn')}")
     print(f"Signature Algorithm: {meta.get('signature_algorithm')}")
+    print(f"Signature Algorithm State: {meta.get('signature_algorithm_state')}")
+    print(f"Signature Algorithm Message: {meta.get('signature_algorithm_message')}")
     print(f"Wildcard: {meta.get('wildcard')}")
     print(f"Self-Signed: {meta.get('self_signed')}")
     print(f"Hostname Matches: {meta.get('hostname_matches')}")
@@ -1023,6 +1198,8 @@ def display_verbose(meta):
     print(f"Key Type: {meta.get('key_type')}")
     print(f"RSA Bits: {meta.get('rsa_bits') or '—'}")
     print(f"ECC Curve: {meta.get('ecc_curve') or '—'}")
+    print(f"Key State: {meta.get('key_state')}")
+    print(f"Key Message: {meta.get('key_message')}")
     print()
 
     # -----------------------------
@@ -1048,6 +1225,8 @@ def display_verbose(meta):
             print(f"      Key Type: {entry.get('key_type')}")
     else:
         print("  (none)")
+    print(f"Chain State: {meta.get('chain_state')}")
+    print(f"Chain Message: {meta.get('chain_message')}")
     print()
 
     # -----------------------------
@@ -1250,6 +1429,10 @@ def output_json(meta, enf):
         "tls": {
             "version": meta.get("tls_version"),
             "cipher": meta.get("cipher"),
+            "tls_state": meta.get("tls_state"),
+            "tls_messages":meta.get("tls_messages"),
+            "tls_handshake_state":meta.get("tls_handshake_state"),
+            "tls_handshake_message":meta.get("tls_handshake_message"),
             "cipher_is_aead": meta.get("cipher_is_aead"),
             "cipher_is_cbc": meta.get("cipher_is_cbc"),
             "cipher_is_rc4": meta.get("cipher_is_rc4"),
@@ -1262,6 +1445,8 @@ def output_json(meta, enf):
             "subject_cn": meta.get("subject_cn"),
             "issuer_cn": meta.get("issuer_cn"),
             "signature_algorithm": meta.get("signature_algorithm"),
+            "signature_algorithm_state": meta.get("signature_algorithm_state"),
+            "signature_algorithm_message": meta.get("signature_algorithm_message"),
             "wildcard": meta.get("wildcard"),
             "self_signed": meta.get("self_signed"),
             "hostname_matches": meta.get("hostname_matches"),
@@ -1279,6 +1464,8 @@ def output_json(meta, enf):
             "type": meta.get("key_type"),
             "rsa_bits": meta.get("rsa_bits"),
             "ecc_curve": meta.get("ecc_curve"),
+            "key_state": meta.get("key_state"),
+            "key_message": meta.get("key_message")
         },
 
         # -----------------------------
@@ -1306,6 +1493,8 @@ def output_json(meta, enf):
             "reconstructed": meta.get("chain_reconstructed"),
             "valid": meta.get("chain_valid"),
             "errors": meta.get("chain_errors", []),
+            "chain_state": meta.get("chain_state"),
+            "chain_message": meta.get("chain_message"),
         },
 
         # -----------------------------
@@ -1467,23 +1656,29 @@ def build_certificate_meta(cert, chain, args):
     # 4. Key metadata
     # ------------------------------------------------------------
     key_type, key_bits, curve = get_key_info(cert)
+    key_state, key_msg = classify_key_strength(key_type, key_bits, curve)
 
     # ------------------------------------------------------------
     # 5. Signature algorithm + wildcard
     # ------------------------------------------------------------
     sigalg = get_signature_algorithm(cert)
+    sigalg_state, sigalg_msg = classify_signature_algorithm(sigalg)
+    
     wildcard = is_wildcard_cert(cert)
 
     # ------------------------------------------------------------
     # 6. TLS session metadata
     # ------------------------------------------------------------
     # These are fetched during socket negotiation
-    tls_version, cipher = fetch_tls_session_info(
+    tls_state, tls_version, cipher, tls_msg = fetch_tls_session_info(
         args.sni or args.host,
         args.port,
         args.timeout,
         args.insecure
     )
+    v_state, v_msg = classify_tls_version(tls_version)
+    c_state, c_msg = classify_cipher(cipher)
+    final_tls_state, tls_messages = evaluate_tls(tls_version, cipher)
 
     # ------------------------------------------------------------
     # 7. OCSP metadata
@@ -1518,6 +1713,12 @@ def build_certificate_meta(cert, chain, args):
     # 9. Chain validation
     # ------------------------------------------------------------
     chain_ok, chain_warnings = validate_chain(cert, aia_chain_raw)
+    chain_state, chain_msg = classify_chain_completeness(
+        server_sent=len(chain) > 0,
+        reconstructed=chain_ok,
+        valid=chain_ok,
+        errors=chain_warnings
+    )
 
     # ------------------------------------------------------------
     # 10. Warnings / Errors
@@ -1534,7 +1735,9 @@ def build_certificate_meta(cert, chain, args):
         "key_type": key_type,
         "rsa_bits": key_bits,
         "signature_algorithm": sigalg,
+        "tls_state": tls_state,
         "tls_version": tls_version,
+        "tls_msg": tls_msg,
         "cipher": cipher,
         "subject_cn": subject_cn,
         "issuer_cn": issuer_cn,
@@ -1557,6 +1760,10 @@ def build_certificate_meta(cert, chain, args):
         # TLS
         "tls_version": tls_version,
         "cipher": cipher,
+        "tls_state": final_tls_state,
+        "tls_messages": tls_messages,
+        "tls_handshake_state": tls_state,
+        "tls_handshake_message": tls_msg,
         "cipher_is_aead": is_aead_cipher(cipher),
         "cipher_is_cbc": is_cbc_cipher(cipher),
         "cipher_is_rc4": is_rc4_cipher(cipher),
@@ -1565,6 +1772,8 @@ def build_certificate_meta(cert, chain, args):
         "subject_cn": subject_cn,
         "issuer_cn": issuer_cn,
         "signature_algorithm": sigalg,
+        "signature_algorithm_state": sigalg_state,
+        "signature_algorithm_message": sigalg_msg,
         "wildcard": wildcard,
         "san": san_list,
         "warning_days": warning_days,
@@ -1579,6 +1788,8 @@ def build_certificate_meta(cert, chain, args):
         "key_type": key_type,
         "rsa_bits": key_bits,
         "ecc_curve": curve,
+        "key_state": key_state,
+        "key_message": key_msg,
 
         # AIA
         "aia_issuer_urls": aia_urls,
@@ -1594,6 +1805,8 @@ def build_certificate_meta(cert, chain, args):
         "chain_reconstructed": chain_ok,
         "chain_valid": chain_ok,
         "chain_errors": chain_warnings,
+        "chain_state": chain_state,
+        "chain_message": chain_msg,
 
         # Warnings / Errors
         "warnings": warnings,
@@ -1601,38 +1814,43 @@ def build_certificate_meta(cert, chain, args):
     }
 def fetch_tls_session_info(hostname: str, port: int, timeout: int, insecure: bool):
     """
-    Perform a minimal TLS handshake to extract:
-      - TLS version (string)
-      - cipher suite (string)
-    Does NOT retrieve certificates (that is handled elsewhere).
+    Enhanced TLS handshake:
+      - Returns (state, tls_version, cipher, message)
+      - Classifies handshake failures
+      - Does NOT retrieve certificates
     """
 
     try:
         ctx = ssl.create_default_context()
 
-        # Insecure mode disables verification
         if insecure:
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
 
-        # Create TCP socket
         sock = socket.create_connection((hostname, port), timeout)
 
-        # Wrap with TLS
         ssock = ctx.wrap_socket(sock, server_hostname=hostname)
 
-        # Extract TLS version
-        tls_version = ssock.version()  # e.g. 'TLSv1.3'
+        tls_version = ssock.version() or "unknown"
 
-        # Extract cipher suite
         cipher_info = ssock.cipher()
         cipher = cipher_info[0] if cipher_info else None
 
         ssock.close()
-        return tls_version, cipher
+
+        return ("OK", tls_version.lower(), cipher, "TLS handshake succeeded")
+
+    except ssl.SSLError as e:
+        return ("CRITICAL", "unknown", None, f"TLS handshake failed: {e}")
+
+    except socket.timeout:
+        return ("CRITICAL", "unknown", None, "TCP timeout during handshake")
+
+    except ConnectionRefusedError:
+        return ("CRITICAL", "unknown", None, "TCP connection refused")
 
     except Exception as e:
-        raise RuntimeError(f"TLS session info retrieval failed: {e}")
+        return ("UNKNOWN", "unknown", None, f"Unexpected error during handshake: {e}")
 # --------------------------------------
 # Logging Functions
 # --------------------------------------
@@ -1738,6 +1956,16 @@ def main():
     policy = run_enforcement_checks(args, meta)
     monitoring = run_monitoring_checks(args, meta)
     enf = merge_enforcement(policy, monitoring)
+    for field, rule in [
+        ("sigalg_state", "signature_algorithm"),
+        ("key_state", "key_strength"),
+        ("chain_state", "chain_completeness"),
+    ]:
+        state = meta.get(field)
+        if state == "CRITICAL":
+            enf["failed"].append(rule)
+        elif state == "WARNING":
+            enf["failed"].append(f"{rule}_warning")
 
     # ------------------------------------------------------------
     # 7. Logging (if enabled)
@@ -1747,29 +1975,27 @@ def main():
         logger.info(cert_banner(meta))
         logger.info(result_banner(compute_nagios_code(enf), enf["failed"]))
         logger.info(end_banner(SCRIPT_NAME, compute_nagios_code(enf)))
-    # ------------------------------------------------------------
-    # 8. Verbose mode
-    # ------------------------------------------------------------
-    if args.verbose:
-        display_verbose(meta)
-        display_chain_summary(meta)
-        display_enforcement_summary(enf)
-        sys.exit(compute_nagios_code(enf))
 
-    # ------------------------------------------------------------
-    # 9. JSON mode
-    # ------------------------------------------------------------
-    if args.json:
-        output_json(meta, enf)
-        sys.exit(compute_nagios_code(enf))
+    match mode:
+        case "verbose":
+            display_verbose(meta)
+            display_chain_summary(meta)
+            display_enforcement_summary(enf)
+            sys.exit(compute_nagios_code(enf))
 
-    # ------------------------------------------------------------
-    # 10. Nagios mode (default)
-    # ------------------------------------------------------------
-    if not args.quiet:
-        nagios_exit(enf, meta)
-    else:
-        sys.exit(compute_nagios_code(enf))
+        case "json":
+            output_json(meta, enf)
+            sys.exit(compute_nagios_code(enf))
+
+        case "nagios":
+            nagios_exit(enf, meta)
+
+        case "quiet":
+            sys.exit(compute_nagios_code(enf))
+
+        case _:
+            # Fallback for unexpected modes
+            nagios_exit(enf, meta)
 
 
 if __name__ == "__main__":

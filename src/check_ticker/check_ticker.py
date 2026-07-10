@@ -43,9 +43,9 @@ from PythonTools.nagios import (
     nagios_summary,
     start_banner,
     end_banner,
+    BaseNagiosParser,
+    should_output,
 )
-from PythonTools.nagios.helpers import should_output
-from PythonTools.nagios.parser import BaseNagiosParser
 from PythonTools.utils.common import normalize_path, json_output
 
 # -------------------------------------------------------------------

@@ -14,13 +14,21 @@ License: MIT (see LICENSE for details)
 Description: Description of this module
 
 """
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Leon McClatchey, Linktech Engineering LLC
+
 import os
+import sys
 import toml
 import subprocess
+import ast
 from pathlib import Path
 
-# build.py lives in NMS_Tools/scripts, so ROOT is one directory up
 ROOT = Path(__file__).resolve().parents[1]
+PYTOOLS_DIR = ROOT / "PythonTools"
+SCRIPT_NAME = Path(sys.argv[0]).stem
+SCRIPT_VERSION = "1.0.0"
 
 def discover_tools(src_dir="src"):
     tools = []
@@ -30,12 +38,76 @@ def discover_tools(src_dir="src"):
         if os.path.isdir(tool_dir) and os.path.isfile(tool_script):
             tools.append(entry)
     return tools
-
 def load_config():
     return toml.load(ROOT / "build.toml")
+# -------------------------------
+# AST‑based PythonTools dependency scanner
+# -------------------------------
+def scan_imports(pyfile: Path):
+    """Return all PythonTools.* imports found in a Python file."""
+    deps = set()
+    tree = ast.parse(pyfile.read_text())
 
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            if node.module and node.module.startswith("PythonTools"):
+                deps.add(node.module)
+
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.startswith("PythonTools"):
+                    deps.add(alias.name)
+
+    return deps
+def collect_python_tools_dependencies(tools, cfg):
+    """Scan all tools and collect PythonTools.* dependencies."""
+    src_root = ROOT / cfg["src_dir"]
+    deps = set()
+
+    for tool in tools:
+        tool_dir = src_root / tool
+        for pyfile in tool_dir.glob("*.py"):
+            deps.update(scan_imports(pyfile))
+
+    return deps
+# -------------------------------
+# PythonTools sync + verification
+# -------------------------------
+def sync_python_tools():
+    """Ensure PythonTools repo exists and is up to date."""
+    if not PYTOOLS_DIR.exists():
+        print("[+] Cloning PythonTools...")
+        subprocess.run([
+            "git", "clone",
+            "https://github.com/LinktechEngineering/PythonTools.git",
+            str(PYTOOLS_DIR)
+        ], check=True)
+    else:
+        print("[+] Pulling PythonTools updates...")
+        subprocess.run(["git", "-C", str(PYTOOLS_DIR), "pull"], check=True)
+def verify_python_tools_modules(deps, log=None):
+    """Verify that required PythonTools modules exist."""
+    missing = []
+
+    for module in deps:
+        parts = module.split(".")
+        rel_path = PYTOOLS_DIR / "/".join(parts)  # e.g. PythonTools/market/trend
+        module_file = rel_path.with_suffix(".py")
+        package_init = rel_path / "__init__.py"
+
+        if not module_file.exists() and not package_init.exists():
+            missing.append(str(rel_path))
+
+    if missing:
+        msg = "[!] Missing PythonTools modules:"
+        for m in missing:
+            msg += f"\n\t-{m}"
+        log.error(msg) if log else print(msg)
+        raise RuntimeError("PythonTools sync failed: missing modules remain.")
+# -------------------------------
+# Asset collector + spec generator
+# -------------------------------
 def collect_assets(src_dir):
-    """Collect all asset files under src/<tool>/assets."""
     assets_dir = src_dir / "assets"
     datas = []
 
@@ -46,33 +118,21 @@ def collect_assets(src_dir):
                 rel_path = full_path.relative_to(src_dir)
                 datas.append((str(full_path), str(rel_path)))
     return datas
-
-def generate_spec(tool_name, cfg):
+def generate_spec(tool_name, cfg, log=None):
     src_dir = ROOT / cfg["src_dir"] / tool_name
     script_path = src_dir / f"{tool_name}.py"
-
     spec_path = ROOT / f"{tool_name}.spec"
 
-    python_tools = ROOT / cfg["PythonTools"]
+    python_tools = PYTOOLS_DIR
 
-    # Base datas: PythonTools injection
     datas = [
         (str(python_tools / "VERSION"), "PythonTools"),
         (str(python_tools / "PythonTools"), "PythonTools/PythonTools"),
-        (str(python_tools / "PythonTools" / "ansible"), "PythonTools/PythonTools/ansible"),
-        (str(python_tools / "PythonTools" / "core"), "PythonTools/PythonTools/core"),
-        (str(python_tools / "PythonTools" / "utils"), "PythonTools/PythonTools/utils"),
     ]
 
-    # Add assets if present (check_weather, future tools)
     datas.extend(collect_assets(src_dir))
 
-    hiddenimports = [
-        "PythonTools",
-        "PythonTools.ansible",
-        "PythonTools.core",
-        "PythonTools.utils",
-    ]
+    hiddenimports = ["PythonTools"]
 
     spec_content = f"""
 # -*- mode: python ; coding: utf-8 -*-
@@ -111,24 +171,50 @@ exe = EXE(
     workpath='{cfg["build_dir"]}/temp',
 )
 """
-
     spec_path.write_text(spec_content)
-    print(f"[+] Generated spec for {tool_name}")
-
-def freeze_tool(tool_name):
-    print(f"[+] Freezing {tool_name}...")
+    msg = f"[+] Generated spec for {tool_name}"
+    log.info(msg) if log else print(msg)
+def freeze_tool(tool_name, log=None):
+    msg = f"[+] Freezing {tool_name}..."
+    log.info(msg) if log else print(msg)
     subprocess.run(["pyinstaller", f"{tool_name}.spec"], check=True)
-
+def init_log():
+    log_cfg = {
+        "path": os.path.expanduser(f"~/logs/{SCRIPT_NAME}.log"),
+        "log_level": "INFO",
+        "log_max_mb": 5,
+        "max_age_days": 30,
+        "backup_count": 5,
+        "archive_mode": "zip",
+        "console_enabled": True,
+        "color": False,
+    }
+    from PythonTools.log_helpers.factory import LoggerFactory
+    logger_factory = LoggerFactory(log_cfg, "build")
+    return logger_factory.get_logger("main")
+# -------------------------------
+# Main build flow
+# -------------------------------
 def main():
     cfg = load_config()
+    tools = discover_tools()
+    print("[+] Syncing PythonTools...")
+    sync_python_tools()
+    log = init_log()
 
-    TOOLS = discover_tools()
+    log.info("[+] Scanning PythonTools dependencies...")
+    deps = collect_python_tools_dependencies(tools, cfg)
 
-    for tool in TOOLS:
-        generate_spec(tool, cfg)
-        freeze_tool(tool)
+    
+    log.info("[+] Verifying PythonTools modules...")
+    verify_python_tools_modules(deps, log)
 
-    print("[+] All tools frozen successfully.")
+    log.info("[+] Building tools...")
+    for tool in tools:
+        generate_spec(tool, cfg, log)
+        freeze_tool(tool, log)
+
+    log.info("[+] All tools frozen successfully.")
 
 if __name__ == "__main__":
     main()
