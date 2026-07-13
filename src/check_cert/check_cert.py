@@ -44,6 +44,7 @@ from PythonTools.nagios import (
     result_banner,
     should_output,
     BaseNagiosParser,
+    early_exit,
 )
 
 # Root of the suite (two levels up from the tool script)
@@ -550,27 +551,6 @@ def compute_nagios_code(enf):
     if warnings:
         return WARNING
     return OK
-def early_exit(meta, logger, message, code):
-    """
-    Unified early-exit handler for check_cert.
-    - Quiet mode suppresses stdout
-    - Nagios mode prints Nagios summary
-    - LoggerFactory handles log output if available
-    """
-
-    mode = meta.get("mode", "normal")
-
-    # 1. STDOUT (Nagios or normal)
-    if mode == "nagios":
-        print(nagios_summary(code, message))
-    elif mode != "quiet":
-        print(message)
-
-    # 2. Logging (if logger exists AND logging is enabled)
-    if logger:
-        logger.error(f"[ERROR] {message}")
-
-    os._exit(code)
 # --------------------------------------
 # Logging Functions
 # --------------------------------------
@@ -588,7 +568,7 @@ def initialize_logger(args, mode):
         os.makedirs(args.log_dir, exist_ok=True)
 
         log_cfg = {
-            "path": os.path.join(args.log_dir, "check_cert.log"),
+            "path": os.path.join(args.log_dir, f"{SCRIPT_NAME}.log"),
             "log_level": "INFO",
             "log_max_mb": args.log_max_mb,
             "archive_mode": "zip",
@@ -602,7 +582,7 @@ def initialize_logger(args, mode):
             "color": False if mode == "nagios" else args.color,
         }
 
-        logger_factory = LoggerFactory(log_cfg, "check_cert")
+        logger_factory = LoggerFactory(log_cfg, SCRIPT_NAME)
         return logger_factory.get_logger("main")
 
     except Exception as e:
@@ -691,7 +671,7 @@ def main():
     # 7. Logging (if enabled)
     # ------------------------------------------------------------
     if logger and logging_enabled:
-        logger.info(start_banner("check_cert", meta))
+        logger.info(start_banner(SCRIPT_NAME, meta))
         logger.info(cert_banner(meta))
         logger.info(result_banner(compute_nagios_code(enf), enf["failed"]))
         logger.info(end_banner(SCRIPT_NAME, compute_nagios_code(enf)))
