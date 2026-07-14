@@ -43,7 +43,7 @@ jobs:
         run: |
           if [ ! -d PythonToolls ]; then
             git clone https://github.com/linktech-engineering-llc/PythonTools.git
-          files:
+          fi
           python3 -m pip install PythonTools/
 
       - name: Make scripts executable
