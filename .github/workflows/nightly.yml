@@ -37,7 +37,7 @@ jobs:
       - name: Install Python build dependencies
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install pyinstaller jsonschema toml
+          python3 -m pip install pyinstaller jsonschema toml easysnmp
 
       - name: Install PythonTools
         run: |
