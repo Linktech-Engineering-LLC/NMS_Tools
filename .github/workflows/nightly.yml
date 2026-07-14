@@ -44,6 +44,10 @@ jobs:
           chmod +x scripts/*.sh
           chmod +x packaging/*.sh
 
+      - name: Add PythonTools to PYTHONPATH
+        run: |
+          echo "PYTHONPATH=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+
       - name: Run full packaging pipeline
         run: |
           packaging/build_all.sh
