@@ -30,7 +30,7 @@ mkdir -p "$OUTPUT_DIR"
 # 1. Freeze all tools
 # ------------------------------------------------------------
 echo "[NMS_Tools] Freezing all tools..."
-"$REPO_ROOT/scripts/build_all.sh"
+"$REPO_ROOT/scripts/build.py"
 
 # Validate freeze output
 if [ ! -d "$DIST_DIR" ] || [ -z "$(ls -A "$DIST_DIR")" ]; then

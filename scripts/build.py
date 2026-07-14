@@ -59,6 +59,16 @@ def scan_imports(pyfile: Path):
                     deps.add(alias.name)
 
     return deps
+def collect_python_tools(python_tools):
+    assets = []
+    root_dir = python_tools / "PythonTools"
+    for root, dirs, files in os.walk(root_dir):
+        for f in files:
+            if f.endswith(".py"):
+                full = os.path.join(root, f)
+                rel = os.path.relpath(root, python_tools)
+                assets.append((full, f"PythonTools/{rel}"))
+    return assets
 def collect_python_tools_dependencies(tools, cfg):
     """Scan all tools and collect PythonTools.* dependencies."""
     src_root = ROOT / cfg["src_dir"]
@@ -107,17 +117,14 @@ def verify_python_tools_modules(deps, log=None):
 # -------------------------------
 # Asset collector + spec generator
 # -------------------------------
-def collect_assets(src_dir):
-    assets_dir = src_dir / "assets"
-    datas = []
-
-    if assets_dir.exists():
-        for root, dirs, files in os.walk(assets_dir):
-            for f in files:
-                full_path = Path(root) / f
-                rel_path = full_path.relative_to(src_dir)
-                datas.append((str(full_path), str(rel_path)))
-    return datas
+def collect_assets(tool_dir):
+    assets = []
+    for root, dirs, files in os.walk(tool_dir):
+        for f in files:
+            # Only include Python source files
+            if f.endswith(".py"):
+                assets.append((os.path.join(root, f), os.path.relpath(root, tool_dir)))
+    return assets
 def generate_spec(tool_name, cfg, log=None):
     src_dir = ROOT / cfg["src_dir"] / tool_name
     script_path = src_dir / f"{tool_name}.py"
@@ -127,12 +134,24 @@ def generate_spec(tool_name, cfg, log=None):
 
     datas = [
         (str(python_tools / "VERSION"), "PythonTools"),
-        (str(python_tools / "PythonTools"), "PythonTools/PythonTools"),
     ]
-
+    datas.extend(collect_python_tools(python_tools))
     datas.extend(collect_assets(src_dir))
 
     hiddenimports = ["PythonTools"]
+
+    binaries = []
+
+    # ------------------------------------------------------------
+    # Special case: check_interfaces requires easysnmp C-extension
+    # ------------------------------------------------------------
+    if tool_name == "check_interfaces":
+        import easysnmp
+        import os
+
+        easysnmp_dir = Path(easysnmp.__file__).parent
+        for f in easysnmp_dir.glob("*.so"):
+            binaries.append((str(f), "easysnmp"))
 
     spec_content = f"""
 # -*- mode: python ; coding: utf-8 -*-
@@ -144,7 +163,7 @@ repo_root = os.getcwd()
 a = Analysis(
     ['{script_path}'],
     pathex=['{src_dir}', '{python_tools}'],
-    binaries=[],
+    binaries={binaries},
     datas={datas},
     hiddenimports={hiddenimports},
     hookspath=[],

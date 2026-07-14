@@ -21,15 +21,14 @@ import sys
 
 from pathlib import Path
 
-from PythonTools.certs.fetch_certs import (
+from PythonTools.certs import (
     fetch_certificate_and_socket,
-)
-from PythonTools.certs.models import TLS_VERSIONS
-from PythonTools.certs.orchestrate import validate_host_basic, build_certificate_meta
-from PythonTools.certs.enforce_certs import (
+    TLS_VERSIONS,
+    validate_host_basic,
+    build_certificate_meta,
     run_enforcement_checks,
     run_monitoring_checks,
-    merge_enforcement
+    merge_enforcement,
 )
 from PythonTools.log_helpers.factory import LoggerFactory
 from PythonTools.nagios import (

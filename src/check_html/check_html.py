@@ -309,6 +309,7 @@ def fetch_http(url, protocol, args):
         # ------------------------------------------------------------
         status = resp.status
         headers = {k.lower(): v for k, v in resp.getheaders()}
+        content_type = headers.get("content-type")
         body = resp.read().decode(errors="replace")
 
         # ------------------------------------------------------------
@@ -347,6 +348,7 @@ def fetch_http(url, protocol, args):
     return {
         "status": status,
         "headers": headers,
+        "content_type": content_type,
         "body": body,
         "response_time": response_time,
         "final_url": f"{protocol}://{host}:{port}{path}",
