@@ -33,6 +33,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y pandoc rpm dpkg-dev libarchive-zip-perl
+          sudo apt-get install -y libsnmp-dev snmp-mibs-downloader
 
       - name: Install Python build dependencies
         run: |
