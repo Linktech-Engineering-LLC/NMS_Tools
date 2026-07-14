@@ -39,14 +39,17 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install pyinstaller jsonschema toml
 
+      - name: Install PythonTools
+        run: |
+          if [ ! -d PythonToolls ]; then
+            git clone https://github.com/linktech-engineering-llc/PythonTools.git
+          files:
+          python3 -m pip install PythonTools/
+
       - name: Make scripts executable
         run: |
           chmod +x scripts/*.sh
           chmod +x packaging/*.sh
-
-      - name: Add PythonTools to PYTHONPATH
-        run: |
-          echo "PYTHONPATH=$GITHUB_WORKSPACE" >> $GITHUB_ENV
 
       - name: Run full packaging pipeline
         run: |
