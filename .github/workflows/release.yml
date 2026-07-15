@@ -47,7 +47,7 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install -r requirements.txt
           python3 -m pip install git+https://github.com/linktech-engineering-llc/PythonTools.git
-          python3 -m pip install pyinstaller toml
+          python3 -m pip install pyinstaller toml jsonschema
           python3 -m pip install flake8 black isort yamllint
 
       - name: Run lint checks (non-blocking)
