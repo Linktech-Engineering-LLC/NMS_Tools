@@ -28,7 +28,6 @@ import re
 import shutil
 import zipfile
 
-from datetime import datetime
 from easysnmp import Session
 from pathlib import Path
 

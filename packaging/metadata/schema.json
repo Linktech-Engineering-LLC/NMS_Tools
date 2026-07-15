@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "NMS_Tools Metadata Schema v2",
+  "type": "object",
+  "required": ["meta_version", "build", "toolchain", "binary_license", "artifacts"],
+
+  "properties": {
+    "meta_version": {
+      "type": "integer",
+      "enum": [2]
+    },
+
+    "build": {
+      "type": "object",
+      "required": ["date", "commit", "branch", "workflow_run_id", "version"],
+      "properties": {
+        "date": { "type": "string", "format": "date-time" },
+        "commit": { "type": "string", "pattern": "^[0-9a-fA-F]{7,40}$" },
+        "branch": { "type": "string" },
+        "workflow_run_id": { "type": "integer", "minimum": 1 },
+        "version": { "type": "string" }
+      }
+    },
+
+    "toolchain": {
+      "type": "object",
+      "required": ["python", "pyinstaller", "builder_os"],
+      "properties": {
+        "python": { "type": "string" },
+        "pyinstaller": { "type": "string" },
+        "builder_os": { "type": "string" }
+      }
+    },
+
+    "binary_license": {
+      "type": "object",
+      "required": ["name", "file", "url"],
+      "properties": {
+        "name": { "type": "string" },
+        "file": { "type": "string" },
+        "url": { "type": "string", "format": "uri" }
+      }
+    },
+
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type", "os", "arch", "size", "sha256", "crc32"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": {
+            "type": "string",
+            "enum": ["rpm", "deb", "tgz", "zip"]
+          },
+          "os": { "type": "string" },
+          "arch": { "type": "string" },
+          "size": { "type": "integer", "minimum": 1 },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "crc32": { "type": "string", "pattern": "^[0-9a-f]{8}$" }
+        }
+      }
+    }
+  }
+}
