@@ -32,6 +32,21 @@ from datetime import datetime
 from easysnmp import Session
 from pathlib import Path
 
+from PythonTools.log_helpers.factory import LoggerFactory
+from PythonTools.nagios import (
+    OK,
+    WARNING,
+    CRITICAL,
+    UNKNOWN,
+    BaseNagiosParser,
+    nagios_summary,
+    should_output,
+    start_banner,
+    result_banner,
+    log_interface,
+    end_banner,
+)
+
 # Root of the suite (two levels up from the tool script)
 SUITE_ROOT = Path(__file__).resolve().parent.parent
 
@@ -51,11 +66,6 @@ VERSION = load_version()
 MIN_MAJOR = 3
 MIN_MINOR = 8
 
-# Nagios Exit Codes
-OK = 0
-WARNING = 1
-CRITICAL = 2
-UNKNOWN = 3
 # Other Global Constants
 SCRIPT_NAME = Path(sys.argv[0]).stem
 SCRIPT_VERSION = "1.1.0"
@@ -67,121 +77,74 @@ SPEED_UNITS = {
     "M": 1,
 }
 # -----------------------------
-# Custom Formatter
-# -----------------------------
-class CustomFormatter(
-    argparse.ArgumentDefaultsHelpFormatter,
-    argparse.RawDescriptionHelpFormatter
-):
-    def _get_help_string(self, action):
-        help_text = action.help or ""
-        if "%(default)" in help_text:
-            return help_text
-        if action.default in (None, False):
-            return help_text
-        return f"{help_text} (default: {action.default})"
-class CheckArgError(Exception):
-    pass
-class CheckArgumentParser(argparse.ArgumentParser):
-    def error(self, message):
-        print(f"ERROR: {message}\n")
-        self.print_help()
-        sys.exit(UNKNOWN)
-# -----------------------------
-# CLI Parser
+# ArgParse Custom Formatter & CLI Parser (Migrated)
 # -----------------------------
 def build_parser():
-    parser = CheckArgumentParser(
+    nag = BaseNagiosParser(
         prog=SCRIPT_NAME,
         description=(
             "Interface Inspection Tool\n\n"
             "Determines whether the target host is local or remote. "
             "Local hosts are inspected using kernel interface data. "
-            "Remote hosts require SNMPv2c and are inspected using IF-MIB. "
-            "Supports verbose, JSON, and Nagios output."
+            "Remote hosts require SNMPv2c or SNMPv3 and are inspected using IF-MIB. "
+            "Supports verbose, JSON, quiet, and Nagios-compatible output modes."
         ),
-        formatter_class=CustomFormatter,
-        add_help=True
+        script_version=SCRIPT_VERSION,
+        suite_version=VERSION,
     )
-    parser.usage = "%(prog)s -H <host> [options]"
-    # ------------------------------------------------------------
-    # Core Options
-    # ------------------------------------------------------------
-    core = parser.add_argument_group("Core Options")
-    core.add_argument(
-        "-H", "--host",
-        required=True,
-        help="Target hostname or IP address"
-    )
-    core.add_argument(
-        "-t", "--timeout",
-        type=int,
-        default=5,
-        help="Connection timeout in seconds"
-    )
-    core.add_argument(
-        "--log-dir",
-        dest="log_dir",
-        metavar="DIR",
-        default=None,
-        help="Directory to store logs (optional). If omitted, logging is disabled."
-    )
-    core.add_argument(
-        "--log-max-mb",
-        dest="log_max_mb",
-        metavar="MB",
-        type=int,
-        default=50,
-        help="Maximum log size in MB before rotation."
-    )
-    # ------------------------------------------------------------
-    # SNMP Options
-    # ------------------------------------------------------------
-    snmp = parser.add_argument_group("SNMP Options")
 
-    snmp.add_argument(
-        "-C", "--community",
-        help="SNMPv2c community string (required for remote hosts)"
-    )
-    snmp.add_argument(
-        "-p", "--snmp-port", type=int, default=161,
-        help="SNMP port"
-    )
-    snmp.add_argument(
-        "-T", "--snmp-timeout",
-        type=int,
-        help="SNMP timeout in seconds (defaults to global --timeout if not set; ignored in local mode)"
-    )
-    # -------------------------------------------------------------
+    nag.parser.usage = "%(prog)s -H <host> [options]"
+
+    # -----------------------------
+    # Core Options
+    # -----------------------------
+    core = nag.add_group("Core Options")
+    core.add_argument("-H", "--host", required=True,
+                      help="Target hostname or IP address")
+    core.add_argument("-t", "--timeout", type=int, default=5,
+                      help="Connection timeout in seconds")
+
+    # -----------------------------
+    # SNMP Options (v2c)
+    # -----------------------------
+    snmp = nag.add_group("SNMP Options")
+    snmp.add_argument("-C", "--community",
+                      help="SNMPv2c community string (required for remote hosts)")
+    snmp.add_argument("-p", "--snmp-port", type=int, default=161,
+                      help="SNMP port")
+    snmp.add_argument("-T", "--snmp-timeout", type=int,
+                      help="SNMP timeout in seconds (defaults to --timeout if not set; ignored in local mode)")
+
+    # -----------------------------
+    # SNMPv3 Options (future-proofing)
+    # -----------------------------
+    v3 = nag.add_group("SNMPv3 Options")
+    v3.add_argument("--v3-user", help="SNMPv3 security name")
+    v3.add_argument("--v3-auth", choices=["MD5", "SHA"], help="SNMPv3 authentication protocol")
+    v3.add_argument("--v3-auth-pass", help="SNMPv3 authentication password")
+    v3.add_argument("--v3-priv", choices=["DES", "AES"], help="SNMPv3 privacy protocol")
+    v3.add_argument("--v3-priv-pass", help="SNMPv3 privacy password")
+
+    # -----------------------------
     # Interface Filtering Options
-    # -------------------------------------------------------------
-    filtering = parser.add_argument_group("Interface Filtering Options")
-    filtering.add_argument(
-        "--include-aliases",
-        action="store_true",
-        help="Include alias interfaces (e.g., eth0:1, br0:backup) in discovery and evaluation"
-    )
-    filtering.add_argument(
-        "--ignore-virtual",
-        action="store_true",
-        help="Ignore virtual interfaces (e.g., vnet*, virbr*, docker0) during discovery and evaluation"
-    )
-    filtering.add_argument(
-        "--exclude-local",
-        action="store_true",
-        help="Exclude local-only interfaces such as 'lo' from discovery and evaluation"
-    )
-    filtering.add_argument(
-        "--ignore",
-        action="append",
-        metavar="PATTERN",
-        help="Ignore interfaces matching this pattern (supports substring or regex). Can be used multiple times."
-    )
-    # -------------------------------------------------------------
+    # -----------------------------
+    filtering = nag.add_group("Interface Filtering Options")
+    filtering.add_argument("--include-aliases", action="store_true",
+                           help="Include alias interfaces (e.g., eth0:1, br0:backup)")
+    filtering.add_argument("--ignore-virtual", action="store_true",
+                           help="Ignore virtual interfaces (e.g., vnet*, virbr*, docker0)")
+    filtering.add_argument("--exclude-local", action="store_true",
+                           help="Exclude local-only interfaces such as 'lo'")
+    filtering.add_argument("--ignore", action="append", metavar="PATTERN",
+                           help="Ignore interfaces matching this pattern (substring or regex). Repeatable.")
+
+    # -----------------------------
     # Targeting Options
-    # -------------------------------------------------------------
-    targeting = parser.add_argument_group("Targeting Options")
-    targeting.add_argument(
+    # -----------------------------
+    targeting = nag.add_group("Targeting Options")
+
+    group = targeting.add_mutually_exclusive_group()
+    group.add_argument(
         "--status",
         choices=[
             "oper-status",
@@ -193,9 +156,11 @@ def build_parser():
             "flags",
             "iftype"
         ],
-        help="Interface attribute to evaluate. Defaults to 'oper-status'."
+        default="oper-status",
+        help="Interface attribute to evaluate."
     )
-    targeting.add_argument(
+
+    group.add_argument(
         "--perfdata",
         choices=[
             "in_octets",
@@ -211,49 +176,26 @@ def build_parser():
             "in_broadcast",
             "out_broadcast"
         ],
-        help="Select a perfdata metric to output. Only one may be chosen."
+        help="Select a perfdata metric to output."
     )
+
     targeting.add_argument(
         "--ifaces",
         metavar="LIST",
         help="Comma-delimited list or regex pattern of interfaces to evaluate."
     )
-    # ------------------------------------------------------------
-    # Output Modes
-    # ------------------------------------------------------------
-    out = parser.add_argument_group("Output Modes")
-    out.add_argument(
-        "-v", "--verbose", action="store_true",
-        help="Detailed output"
-    )
-    out.add_argument(
-        "-j", "--json", action="store_true",
-        help="JSON output for automation"
-    )
-    out.add_argument(
-        "-q", "--quiet", action="store_true",
-        help="Quiet mode: exit code only"
-    )
-    out.add_argument(
-        "-V", "--version",
-        action="version",
-        version=(
-            f"NMS_TOOLS Suite Version: {VERSION}\n"
-            f"{SCRIPT_NAME}: {SCRIPT_VERSION}\n"
-            f"Python: {platform.python_version()}"
-        ),
-        help="Show script and Python version"
-    )
-    # ------------------------------------------------------------
+
+    # -----------------------------
     # Examples
-    # ------------------------------------------------------------
-    parser.epilog = (
+    # -----------------------------
+    nag.parser.epilog = (
         "Examples:\n"
         "  %(prog)s -H localhost -v\n"
         "  %(prog)s -H 192.168.1.1 --community public\n"
         "  %(prog)s -H router --community mystring --json\n"
     )
-    return parser.parse_args()
+
+    return nag.parse()
 # -----------------------------
 # Host Validation
 # -----------------------------
@@ -1015,97 +957,74 @@ def output_single_line(meta, interfaces, result, primary_mode, perfdata_metric):
     }.get(state, 3)
 
     return line, exit_code
+# --------------------------------------
+# Logging Initialization (PythonTools Unified)
+# --------------------------------------
+def build_start_meta(args, mode):
+    """
+    Build the metadata dictionary passed to PythonTools start_banner().
+    SAFE_START_KEYS will be applied automatically.
+    Additional safe keys may be included.
+    """
+    meta = {
+        "host": args.host,
+        "timeout": args.timeout,
+        "mode": mode,
 
-# --------------------------------------
-# Logging Functions
-# --------------------------------------
-def ts():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-def write_log(meta, message):
-    log_dir = meta.get("log_dir")
+        # Interface‑specific safe keys
+        "status_target": args.status,
+        "include_aliases": args.include_aliases,
+        "exclude_local": args.exclude_local,
+        "ignore": args.ignore,
+    }
+
+    return meta
+def initialize_logger(args, mode):
+    """
+    Unified LoggerFactory initialization for check_interfaces.
+    Matches the model used by check_html, check_cert, and check_ticker.
+    """
+
+    # Nagios mode never writes logs
+    if mode == "nagios" or not args.log_dir:
+        return None
 
     try:
-        os.makedirs(log_dir, exist_ok=True)
-        logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
-        with open(logfile, "a") as f:
-            f.write(f"{ts()}; {message}\n")
-    except Exception as e:
-        if not meta.get("_log_warn_emitted"):
-            meta["_log_warn_emitted"] = True
-            warning = f"[WARN] Unable to write to log directory: {log_dir} — {e}"
-            if meta["mode"] == "verbose":
-                print(f"[WARN] {warning}")
-            meta.setdefault("warnings", []).append(warning)
-def rotate_log_if_needed(meta):
-    log_dir = meta["log_dir"]
-    logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
+        os.makedirs(args.log_dir, exist_ok=True)
 
-    if not os.path.exists(logfile):
-        return
+        log_cfg = {
+            "path": os.path.join(args.log_dir, f"{SCRIPT_NAME}.log"),
+            "log_level": "INFO",
+            "log_max_mb": args.log_max_mb,
+            "archive_mode": "zip",
+            "backup_count": 7,
 
-    max_mb = meta.get("log_max_mb", 50)
-    max_bytes = max_mb * 1024 * 1024
+            # Console output only when verbose AND not quiet
+            "console_stream": sys.stderr,
+            "console_enabled": not args.quiet and args.verbose,
 
-    try:
-        if os.path.getsize(logfile) < max_bytes:
-            return
+            # Nagios mode never uses color
+            "color": False if mode == "nagios" else args.color,
+        }
 
-        archive_path = build_archive_path(meta)
-        shutil.move(logfile, archive_path)
-        compress_file(archive_path)
-
-        with open(logfile, "w", encoding="utf-8") as f:
-            f.write(f"{ts()}; [INFO] log rotated to {os.path.basename(archive_path)}.zip\n")
+        logger_factory = LoggerFactory(log_cfg, SCRIPT_NAME)
+        return logger_factory.get_logger("main")
 
     except Exception as e:
-        if not meta.get("_log_warn_emitted"):
-            meta["_log_warn_emitted"] = True
-            warn = f"[WARN] Unable to rotate log file '{logfile}': {e}"
-            if meta.get("mode") == "verbose":
-                print(warn)
-            meta.setdefault("warnings", []).append(warn)
-def build_archive_path(meta):
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(meta["log_dir"], f"{SCRIPT_NAME}_{ts}.log")
-def compress_file(path):
-    zip_path = path + ".zip"
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
-        z.write(path, os.path.basename(path))
-    os.remove(path)
-def start_banner(meta):
-    return (
-        f"[START] {meta['script_name']}.py"
-        f" host={meta['host']}"
-        f" status={meta.get('status_target')}"
-        f" ignore={meta['ignore']}"
-        f" exclude_local={meta['exclude_local']}"
-        f" include_aliases={meta['include_aliases']}"
-    )
-def log_interface(iface_name, iface_meta, iface_result):
-    fields = [f"{k}={v}" for k, v in iface_meta.items()]
-    fields.append(f"ok={iface_result.get('ok')}")
-    fields.append(f"value={iface_result.get('value')}")
-    return f"[IFACE] {iface_name} " + " ".join(fields)
-def log_summary(state, failures):
-    return f"[RESULT] state={state} failures={failures}"
-def end_banner():
-    return "[END]"
+        if should_output(mode):
+            print(nagios_summary(UNKNOWN, f"Failed to initialize LoggerFactory: {e}"))
+        return None
 
 # --------------------------------------
 # Main Entry Point
 # --------------------------------------
 def main():
-    args = build_parser()
-    if args.perfdata and args.status:
-        # allowed, but perfdata becomes the primary message
-        primary_mode = "perfdata"
-    elif args.perfdata:
-        primary_mode = "perfdata"
-    elif args.status:
-        primary_mode = "status"
-    else:
-        primary_mode = "status"
-        args.status = "oper-status"
+    args, flags, mode = build_parser()
+    # Base metadata (script name, mode, log_dir)
+    meta = build_start_meta(args, mode)
+    logger = initialize_logger(args, meta["mode"])
+
+    primary_mode = "perfdata" if args.perfdata else "status"
 
     # ------------------------------------------------------------
     # Host validation (local vs remote)
@@ -1113,12 +1032,7 @@ def main():
     rc = validate_host_local(args.host)
     if not rc["ok"]:
         print(f"UNKNOWN - {rc['error']}")
-        sys.exit(UNKNOWN)
-
-    # ------------------------------------------------------------
-    # Determine Nagios mode
-    # ------------------------------------------------------------
-    nagios_mode = not args.json and not args.verbose and not args.quiet
+        os._exit(UNKNOWN)
 
     # ------------------------------------------------------------
     # Build initial metadata BEFORE logging
@@ -1134,7 +1048,7 @@ def main():
         "log_max_mb": args.log_max_mb,
     }
 
-    logging_enabled = not nagios_mode and meta["log_dir"]
+    logging_enabled = mode != "nagios" and meta["log_dir"]
     # ------------------------------------------------------------
     # Determine effective timeout
     # ------------------------------------------------------------
@@ -1151,7 +1065,7 @@ def main():
     else:
         if not args.community:
             print("CRITICAL - remote host requires SNMP community string")
-            sys.exit(CRITICAL)
+            os._exit(CRITICAL)
 
         raw = gather_snmp_interfaces(
             rc["ip"],
@@ -1184,9 +1098,8 @@ def main():
     # ------------------------------------------------------------
     # Logging lifecycle (only if not Nagios)
     # ------------------------------------------------------------
-    if logging_enabled:
-        rotate_log_if_needed(meta)
-        write_log(meta, start_banner(meta))
+    if logger and logging_enabled:
+        logger.info(start_banner(SCRIPT_NAME, meta))
 
     # ------------------------------------------------------------
     # Status evaluation (--status)
@@ -1195,33 +1108,33 @@ def main():
     # ------------------------------------------------------------
     # Per-interface logging
     # ------------------------------------------------------------
-    if logging_enabled:
+    if logger and logging_enabled:
         for iface_name in selected:
             iface_meta = data[iface_name]          # full metadata dict
             iface_result = result["results"][iface_name] # ok/value dict
-            write_log(meta, log_interface(iface_name, iface_meta, iface_result))
+            logger.info(log_interface(iface_name, iface_meta, iface_result))
 
         # Log unmatched --ifaces as missing interfaces
         for name in unmatched:
             iface_result = result["results"][name]
-            write_log(meta, log_interface(name, {"name": name}, iface_result))
+            logger.info(log_interface(name, {"name": name}, iface_result))
 
-        write_log(meta, log_summary(result["state"], result["failures"]))
-        write_log(meta, end_banner())
+        logger.info(result_banner(result["state"], result["failures"]))
+        logger.info(end_banner(SCRIPT_NAME,result["state"]))
 
     # ------------------------------------------------------------
     # JSON output
     # ------------------------------------------------------------
     if args.json:
         output_json(meta, selected, result)
-        sys.exit(0 if result["state"] == "OK" else 2)
+        os._exit(0 if result["state"] == "OK" else 2)
 
     # ------------------------------------------------------------
     # Verbose output
     # ------------------------------------------------------------
     elif args.verbose:
         output_verbose(meta, selected, result)
-        sys.exit(0 if result["state"] == "OK" else 2)
+        os._exit(0 if result["state"] == "OK" else 2)
 
     # ------------------------------------------------------------
     # Single-line Nagios output
@@ -1235,11 +1148,11 @@ def main():
         )
     if not args.quiet:
         print(msg)
-    sys.exit(code)
+    os._exit(code)
 
 if __name__ == "__main__":
     if sys.version_info < (MIN_MAJOR, MIN_MINOR):
         print(f"CRITICAL: Python {MIN_MAJOR}.{MIN_MINOR}+ required, "
             f"but running on {sys.version_info.major}.{sys.version_info.minor}")
-        sys.exit(2)
+        os._exit(2)
     main()

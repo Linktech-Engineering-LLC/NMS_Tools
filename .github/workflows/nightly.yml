@@ -38,14 +38,9 @@ jobs:
       - name: Install Python build dependencies
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install pyinstaller jsonschema toml easysnmp
-
-      - name: Install PythonTools
-        run: |
-          if [ ! -d PythonToolls ]; then
-            git clone https://github.com/linktech-engineering-llc/PythonTools.git
-          fi
-          python3 -m pip install PythonTools/
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install pyinstaller
+          python3 -m pip install git+https://github.com/linktech-engineering-llc/PythonTools.git
 
       - name: Make scripts executable
         run: |

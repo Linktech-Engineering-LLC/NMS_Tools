@@ -31,7 +31,7 @@ echo "[NMS_Tools] Staging frozen executables from: $BIN_SRC"
 # Validate freeze output
 if [ ! -d "$BIN_SRC" ]; then
     echo "ERROR: Frozen binaries not found in $BIN_SRC"
-    echo "Run scripts/build_all.sh first."
+    echo "Run scripts/build.py first."
     exit 1
 fi
 
