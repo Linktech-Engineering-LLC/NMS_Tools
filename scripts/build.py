@@ -18,7 +18,6 @@ Description: Description of this module
 import os
 import sys
 import sysconfig
-import toml
 import subprocess
 from pathlib import Path
 
@@ -38,9 +37,6 @@ def discover_tools(src_dir="src"):
             tools.append(entry)
     return tools
 
-def load_config():
-    return toml.load(ROOT / "build.toml")
-
 # ------------------------------------------------------------
 # Asset collector (only NMS_Tools assets)
 # ------------------------------------------------------------
@@ -52,8 +48,8 @@ def collect_assets(tool_dir):
                 assets.append((os.path.join(root, f), os.path.relpath(root, tool_dir)))
     return assets
 
-def generate_spec(tool_name, cfg, log=None):
-    src_dir = ROOT / cfg["src_dir"] / tool_name
+def generate_spec(tool_name, log=None):
+    src_dir = ROOT / "src" / tool_name
     script_path = src_dir / f"{tool_name}.py"
     spec_path = ROOT / f"{tool_name}.spec"
     python_tools_src = Path(os.path.expanduser("~/projects/Python/PythonTools"))
@@ -69,6 +65,8 @@ def generate_spec(tool_name, cfg, log=None):
 
     # Convert list → Python literal for spec file
     pathex_literal = "[" + ", ".join(f"'{p}'" for p in pathex) + "]"
+    dist_dir = ROOT / "build" / "linux-x86_64"
+    temp_dir = ROOT / "build" / "temp"
 
     datas = collect_assets(src_dir)
     binaries = []
@@ -111,8 +109,8 @@ exe = EXE(
     strip=False,
     upx=False,
     console=True,
-    distpath='{cfg["build_dir"]}/linux-x86_64',
-    workpath='{cfg["build_dir"]}/temp',
+    distpath='{dist_dir}',
+    workpath='{temp_dir}',
 )
 """
     spec_path.write_text(spec_content)
@@ -149,14 +147,13 @@ def init_log():
 # Main
 # ------------------------------------------------------------
 def main():
-    cfg = load_config()
     tools = discover_tools()
 
     log = init_log()
     log.info("[+] Building tools...")
 
     for tool in tools:
-        generate_spec(tool, cfg, log)
+        generate_spec(tool, log)
         freeze_tool(tool, log)
 
     log.info("[+] All tools frozen successfully.")
