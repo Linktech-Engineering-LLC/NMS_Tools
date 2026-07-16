@@ -17,18 +17,10 @@ Description:
         and configuration information about each interface.
 """
 import sys
-import argparse
-import platform
 import os
-import socket
-import ipaddress
-import psutil
 import json
 import re
-import shutil
-import zipfile
 
-from easysnmp import Session
 from pathlib import Path
 
 from PythonTools.log_helpers.factory import LoggerFactory
@@ -45,7 +37,22 @@ from PythonTools.nagios import (
     log_interface,
     end_banner,
 )
-
+from PythonTools.net import (
+    apply_iface_selection,
+    evaluate_status,
+    fmt_flags,
+    fmt_speed,
+    gather_local_interfaces,
+    gather_snmp_interfaces,
+    is_alias,
+    is_local,
+    is_virtual,
+    normalize_interfaces,
+    validate_host_local,
+)
+from PythonTools.utils import (
+    matches_ignore
+)
 # Root of the suite (two levels up from the tool script)
 SUITE_ROOT = Path(__file__).resolve().parent.parent
 
@@ -68,13 +75,6 @@ MIN_MINOR = 8
 # Other Global Constants
 SCRIPT_NAME = Path(sys.argv[0]).stem
 SCRIPT_VERSION = "1.1.0"
-VIRTUAL_PREFIXES = (
-    "vnet", "virbr", "docker", "br-", "tap", "tun", "veth"
-)
-SPEED_UNITS = {
-    "G": 1000,
-    "M": 1,
-}
 # -----------------------------
 # ArgParse Custom Formatter & CLI Parser (Migrated)
 # -----------------------------
@@ -196,417 +196,8 @@ def build_parser():
 
     return nag.parse()
 # -----------------------------
-# Host Validation
-# -----------------------------
-def validate_host_basic(host: str):
-    """
-    Deterministic hostname validation used by all NMS_Tools plugins.
-
-    Rules:
-      • If the user supplies an IP → treat it as authoritative (no reverse DNS).
-      • If the user supplies the system hostname → resolve it once.
-      • Otherwise → attempt forward resolution only.
-      • Never perform reverse lookups.
-      • Never replace an IP with a hostname.
-      • All failures return UNKNOWN-level errors (caller decides exit).
-
-    Returns:
-        {
-            "ok": bool,
-            "ip": str or None,
-            "error": str or None
-        }
-    """
-
-    host = host.strip()
-
-    # ------------------------------------------------------------
-    # 1. IP address case (authoritative)
-    # ------------------------------------------------------------
-    try:
-        ip_obj = ipaddress.ip_address(host)
-        return {
-            "ok": True,
-            "ip": str(ip_obj),   # return IP exactly as supplied
-            "error": None
-        }
-    except ValueError:
-        pass  # Not an IP, continue
-
-    # ------------------------------------------------------------
-    # 2. Local hostname case (special deterministic rule)
-    # ------------------------------------------------------------
-    system_hostname = socket.gethostname()
-
-    if host.lower() == system_hostname.lower():
-        try:
-            resolved = socket.gethostbyname(system_hostname)
-            return {
-                "ok": True,
-                "ip": resolved,
-                "error": None
-            }
-        except Exception:
-            return {
-                "ok": False,
-                "ip": None,
-                "error": (
-                    f"Hostname '{host}' matches local hostname but "
-                    f"cannot be resolved by the system resolver"
-                )
-            }
-
-    # ------------------------------------------------------------
-    # 3. Normal hostname → forward resolution only
-    # ------------------------------------------------------------
-    try:
-        resolved = socket.gethostbyname(host)
-        return {
-            "ok": True,
-            "ip": resolved,
-            "error": None
-        }
-    except Exception:
-        return {
-            "ok": False,
-            "ip": None,
-            "error": f"Hostname resolution failed for '{host}'"
-        }
-def validate_host_local(host: str):
-    """
-    Determines whether the supplied host is:
-      • invalid (UNKNOWN)
-      • local (local mode)
-      • remote (SNMP mode)
-
-    Returns:
-        {
-            "ok": bool,
-            "local": bool,
-            "ip": str or None,
-            "error": str or None
-        }
-    """
-
-    # Step 1: Basic validation (shared logic)
-    rc = validate_host_basic(host)
-    if not rc["ok"]:
-        return {
-            "ok": False,
-            "local": False,
-            "ip": None,
-            "error": rc["error"]
-        }
-
-    target_ip = rc["ip"]
-
-    # Step 2: Enumerate local interface IPs
-    local_ips = set()
-    for iface, addrs in psutil.net_if_addrs().items():
-        for addr in addrs:
-            if addr.family in (socket.AF_INET, socket.AF_INET6):
-                local_ips.add(addr.address)
-    # Step 3: Compare
-    if target_ip in local_ips:
-        return {
-            "ok": True,
-            "local": True,
-            "ip": target_ip,
-            "error": None
-        }
-
-    # Not local → remote SNMP mode
-    return {
-        "ok": True,
-        "local": False,
-        "ip": target_ip,
-        "error": None
-    }
-# -----------------------------
-# Local Interface Information
-# -----------------------------
-def gather_local_interfaces(timeout=None):
-    """
-    Collects local interface information using psutil.
-    Returns a deterministic structure suitable for JSON, verbose, and Nagios output.
-    """
-
-    interfaces = {}
-
-    # psutil.net_if_addrs() gives addresses
-    addrs = psutil.net_if_addrs()
-
-    # psutil.net_if_stats() gives MTU, speed, duplex, flags
-    stats = psutil.net_if_stats()
-
-    for iface in sorted(addrs.keys()):
-
-        stats_path = f"/sys/class/net/{iface}/statistics"
-        counters = {}
-        try:
-            counters = {
-                "in_octets": int(open(f"{stats_path}/rx_bytes").read()),
-                "out_octets": int(open(f"{stats_path}/tx_bytes").read()),
-                "in_ucast": int(open(f"{stats_path}/rx_packets").read()),
-                "out_ucast": int(open(f"{stats_path}/tx_packets").read()),
-                "in_multicast": int(open(f"{stats_path}/multicast").read()),
-                "out_multicast": int(open(f"{stats_path}/tx_multicast").read()) if os.path.exists(f"{stats_path}/tx_multicast") else 0,
-                "in_broadcast": int(open(f"{stats_path}/broadcast").read()) if os.path.exists(f"{stats_path}/broadcast") else 0,
-                "out_broadcast": int(open(f"{stats_path}/tx_broadcast").read()) if os.path.exists(f"{stats_path}/tx_broadcast") else 0,
-                "in_discards": int(open(f"{stats_path}/rx_dropped").read()),
-                "out_discards": int(open(f"{stats_path}/tx_dropped").read()),
-                "in_errors": int(open(f"{stats_path}/rx_errors").read()),
-                "out_errors": int(open(f"{stats_path}/tx_errors").read())
-            }
-        except Exception:
-            counters = {}
-
-        iface_info = {
-            "name": iface,
-            "mac": None,
-            "ipv4": [],
-            "ipv6": [],
-            "mtu": None,
-            "speed": None,
-            "duplex": None,
-            "oper_up": None,
-            "running": None,
-            "counters": counters,
-            "flags": []
-        }
-
-        # -----------------------------
-        # Address information
-        # -----------------------------
-        for addr in addrs[iface]:
-            if addr.family == socket.AF_INET:
-                iface_info["ipv4"].append({
-                    "address": addr.address,
-                    "netmask": addr.netmask,
-                    "broadcast": addr.broadcast
-                })
-            elif addr.family == socket.AF_INET6:
-                iface_info["ipv6"].append({
-                    "address": addr.address,
-                    "netmask": addr.netmask,
-                    "broadcast": addr.broadcast
-                })
-            elif addr.family == psutil.AF_LINK:
-                iface_info["mac"] = addr.address
-
-        # -----------------------------
-        # Stats (MTU, speed, duplex, flags)
-        # -----------------------------
-        if iface in stats:
-            st = stats[iface]
-            iface_info["mtu"] = st.mtu
-            iface_info["speed"] = st.speed  # may be 0 or None
-            iface_info["duplex"] = st.duplex  # psutil.NIC_DUPLEX_FULL, etc.
-            iface_info["oper_up"] = st.isup
-
-            # psutil doesn't expose flags directly, but we can infer:
-            if st.isup:
-                iface_info["flags"].append("UP")
-            if st.speed not in (0, None):
-                iface_info["flags"].append("RUNNING")
-        interfaces[iface] = iface_info
-
-    return interfaces
-# -----------------------------
-# SNMP Interface Information
-# -----------------------------
-
-def snmp_walk(host, community, oid, port=161, timeout=3):
-    session = Session(
-        hostname=host,
-        community=community,
-        version=2,
-        remote_port=port,
-        timeout=timeout
-    )
-
-    results = session.walk(oid)
-
-    out = {}
-    for item in results:
-        idx = int(item.oid_index)
-        out[idx] = item.value
-    return out
-def gather_snmp_interfaces(ip, community, port=161, timeout=3):
-    ifDescr       = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.2", port, timeout)
-    ifType        = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.3", port, timeout)
-    ifMtu         = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.4", port, timeout)
-    ifSpeed       = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.5", port, timeout)
-    ifPhysAddress = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.6", port, timeout)
-    ifAdminStatus = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.7", port, timeout)
-    ifOperStatus  = snmp_walk(ip, community, "1.3.6.1.2.1.2.2.1.8", port, timeout)
-    dot3Duplex    = snmp_walk(ip, community, "1.3.6.1.2.1.10.7.2.1.19", port, timeout)
-
-    interfaces = {}
-
-    for idx in sorted(ifDescr.keys()):
-        name = ifDescr[idx]
-
-        iface = {
-            "name": name,
-            "mac": ifPhysAddress.get(idx),
-            "mtu": int(ifMtu.get(idx, 0)),
-            "speed": int(ifSpeed.get(idx, 0)),
-            "duplex": dot3Duplex.get(idx),
-            "up": (str(ifOperStatus.get(idx)) == "1"),
-            "running": (str(ifOperStatus.get(idx)) == "1"),
-            "flags": []
-        }
-
-        if iface["up"]:
-            iface["flags"].append("UP")
-        if iface["speed"] > 0:
-            iface["flags"].append("RUNNING")
-
-        interfaces[name] = iface
-
-    return interfaces
-# -----------------------------
-# Normalized Interfaces
-# -----------------------------
-def normalize_interfaces(raw, source):
-    normalized = {}
-
-    for name, iface in raw.items():
-        mac = iface.get("mac")
-
-        # Normalize MAC (SNMP hex → colon format)
-        if mac and mac.startswith("0x"):
-            mac = mac[2:]
-            mac = ":".join(mac[i:i+2] for i in range(0, len(mac), 2))
-        if not mac:
-            mac = "00:00:00:00:00:00"
-
-        # Normalize admin/oper
-        admin_up = iface.get("admin_up", True)
-        oper_up = iface.get("oper_up", False)
-
-        # Normalize flags
-        flags = []
-        if admin_up:
-            flags.append("UP")
-        if oper_up:
-            flags.append("RUNNING")
-
-        normalized[name] = {
-            "name": name,
-            "mac": mac,
-            "ipv4": iface.get("ipv4", []),
-            "ipv6": iface.get("ipv6", []),
-            "mtu": iface.get("mtu"),
-            "speed": normalize_speed(iface.get("speed")),
-            "duplex": normalize_duplex(iface.get("duplex")),
-            "admin_up": admin_up,
-            "oper_up": oper_up,
-            "counters": normalize_counters(iface.get("counters",{})),
-            "flags": flags,
-            "ifType": iface.get("ifType")
-        }
-
-    return normalized
-def normalize_counters(raw):
-    """
-    Normalize interface counters from either local or SNMP collectors.
-    Ensures all fields exist, are integers, and follow the canonical schema.
-    """
-
-    def to_int(value):
-        try:
-            return int(value)
-        except Exception:
-            return 0
-
-    return {
-        "in_octets":     to_int(raw.get("in_octets")),
-        "out_octets":    to_int(raw.get("out_octets")),
-        "in_ucast":      to_int(raw.get("in_ucast")),
-        "out_ucast":     to_int(raw.get("out_ucast")),
-        "in_multicast":  to_int(raw.get("in_multicast")),
-        "out_multicast": to_int(raw.get("out_multicast")),
-        "in_broadcast":  to_int(raw.get("in_broadcast")),
-        "out_broadcast": to_int(raw.get("out_broadcast")),
-        "in_discards":   to_int(raw.get("in_discards")),
-        "out_discards":  to_int(raw.get("out_discards")),
-        "in_errors":     to_int(raw.get("in_errors")),
-        "out_errors":    to_int(raw.get("out_errors"))
-    }
-def normalize_speed(value):
-    """
-    Normalize speed to Mbps.
-    SNMP reports bits per second.
-    psutil reports Mbps.
-    """
-    try:
-        v = int(value)
-        if v in (0, None, 4294967295, 4294):
-            return None
-        if v > 100000:  # SNMP bps threshold
-            return v // 1_000_000
-        return v
-    except Exception:
-        return None
-def normalize_duplex(value):
-    """
-    Normalize duplex to 'full', 'half', or 'unknown'.
-    SNMP EtherLike-MIB uses integers.
-    psutil uses constants.
-    """
-    if value in (None, "unknown"):
-        return "unknown"
-
-    # psutil constants
-    if value == psutil.NIC_DUPLEX_FULL:
-        return "full"
-    if value == psutil.NIC_DUPLEX_HALF:
-        return "half"
-
-    # SNMP EtherLike-MIB
-    try:
-        v = int(value)
-        if v == 3:
-            return "full"
-        if v == 2:
-            return "half"
-    except Exception:
-        pass
-
-    return "unknown"
-def fmt_speed(speed):
-    if speed is None:
-        return "-"
-    for suffix, factor in SPEED_UNITS.items():
-        if speed >= factor:
-            return f"{speed // factor}{suffix}"
-    return str(speed)
-def fmt_flags(flags):
-    return ",".join(flags) if flags else "-"
-# -----------------------------
 # Filters
 # -----------------------------
-def is_alias(name):
-    return ":" in name
-def is_virtual(name):
-    return name.startswith(VIRTUAL_PREFIXES)
-def is_local(name, iface):
-    # Loopback interface
-    if name == "lo":
-        return True
-
-    # Loopback aliases (rare but possible)
-    if name.startswith("lo:"):
-        return True
-
-    # IPv4 loopback addresses
-    for ip in iface.get("ipv4", []):
-        if ip["address"].startswith("127."):
-            return True
-
-    return False
 def apply_filters(interfaces, args) -> dict:
     filtered = {}
 
@@ -633,39 +224,9 @@ def apply_filters(interfaces, args) -> dict:
         filtered[name] = iface
 
     return filtered
-def matches_ignore(name, patterns) -> bool:
-    if not patterns:
-        return False
-
-    lname = name.lower()
-
-    for p in patterns:
-        p = p.strip()
-        if not p:
-            continue
-
-        # 1. Substring match (default behavior)
-        if p.lower() in lname:
-            return True
-
-        # 2. Regex match (if pattern looks like a regex)
-        try:
-            if re.search(p, name, re.IGNORECASE):
-                return True
-        except re.error:
-            # Invalid regex → ignore and fall back to substring only
-            pass
-
-    return False
 # --------------------------------
 # Enforcement
 # --------------------------------
-def parse_speed(s):
-    s = s.strip().upper()
-    for suffix, factor in SPEED_UNITS.items():
-        if s.endswith(suffix):
-            return int(s[:-1]) * factor
-    return int(s)
 def extract_required(filtered, args):
     if not args.require:
         return filtered  # no change
@@ -675,157 +236,9 @@ def extract_required(filtered, args):
         if req in filtered:
             required_only[req] = filtered[req]
     return required_only
-def apply_iface_selection(interfaces, ifaces_arg) -> tuple:
-    """
-    Selects interfaces based on --ifaces.
-    Supports:
-      • comma-delimited lists
-      • regex patterns
-      • literal matches
-    If --ifaces is None → return all interfaces, no unmatched.
-
-    Returns:
-        (selected_dict, unmatched_list)
-    """
-
-    # No selection → return everything
-    if not ifaces_arg:
-        return interfaces, []
-
-    selected = {}
-    patterns = [p.strip() for p in ifaces_arg.split(",") if p.strip()]
-    matched_patterns = set()
-
-    for name, iface in interfaces.items():
-        lname = name.lower()
-
-        for p in patterns:
-            # Literal match
-            if lname == p.lower():
-                selected[name] = iface
-                matched_patterns.add(p)
-                break
-
-            # Substring match
-            if p.lower() in lname:
-                selected[name] = iface
-                matched_patterns.add(p)
-                break
-
-            # Regex match
-            try:
-                if re.search(p, name, re.IGNORECASE):
-                    selected[name] = iface
-                    matched_patterns.add(p)
-                    break
-            except re.error:
-                # Invalid regex → ignore and fall back to substring only
-                pass
-
-    unmatched = [p for p in patterns if p not in matched_patterns]
-    return selected, unmatched
-def evaluate_status(interfaces, status_target, unmatched=None) -> dict:
-    """
-    Evaluates the selected interfaces based on the --status target.
-    Injects unmatched --ifaces patterns as CRITICAL failures.
-    Returns a dict:
-        {
-            "state": "OK" | "WARNING" | "CRITICAL",
-            "failures": [iface names],
-            "results": { iface: { "ok": bool, "value": X } }
-        }
-    """
-
-    if not status_target:
-        status_target = "oper-status"
-
-    results = {}
-    failures = []
-
-    for name, iface in interfaces.items():
-
-        if status_target == "oper-status":
-            ok = iface.get("oper_up", False)
-            value = "up" if ok else "down"
-
-        elif status_target == "admin-status":
-            ok = iface.get("admin_up", False)
-            value = "up" if ok else "down"
-
-        elif status_target == "linkspeed":
-            speed = iface.get("speed")
-            ok = speed not in (None, 0)
-            value = speed
-
-        elif status_target == "duplex":
-            if iface.get("name").startswith("br"):
-                ok = True
-                value = "n/a"
-            else:
-                ok = iface.get("duplex") == "full"
-                value = iface.get("duplex")
-
-        elif status_target == "mtu":
-            mtu = iface.get("mtu")
-            ok = mtu is not None and mtu > 0
-            value = mtu
-
-        elif status_target == "alias":
-            ok = not is_alias(name)
-            value = "alias" if not ok else "normal"
-
-        else:
-            ok = True
-            value = None
-
-        results[name] = {
-            "ok": ok,
-            "value": value
-        }
-
-        if not ok:
-            failures.append(name)
-
-    # Inject unmatched --ifaces patterns as CRITICAL failures
-    if unmatched:
-        for name in unmatched:
-            results[name] = {"ok": False, "value": "not found"}
-            failures.append(name)
-
-    # Determine overall state
-    if failures:
-        state = "CRITICAL"
-    else:
-        state = "OK"
-
-    return {
-        "state": state,
-        "failures": failures,
-        "results": results
-    }
 # -----------------------------
 # Display the Information
 # -----------------------------
-def build_perfdata(interfaces, metric):
-    """
-    Build perfdata for a single selected metric.
-    Returns a string like:
-        'in_octets=12345c br0_in_octets=12345c eth0_in_octets=67890c'
-    """
-    parts = []
-
-    for name, iface in interfaces.items():
-        value = iface["counters"].get(metric)
-        if value is None:
-            continue
-
-        # perfdata label: iface_metric
-        label = f"{name}_{metric}"
-
-        # perfdata value: <value>c (counter)
-        parts.append(f"{label}={value}c")
-
-    return " ".join(parts)
 def output_json(meta, interfaces, exit_code):
     """
     JSON output mode.
@@ -959,25 +372,6 @@ def output_single_line(meta, interfaces, result, primary_mode, perfdata_metric):
 # --------------------------------------
 # Logging Initialization (PythonTools Unified)
 # --------------------------------------
-def build_start_meta(args, mode):
-    """
-    Build the metadata dictionary passed to PythonTools start_banner().
-    SAFE_START_KEYS will be applied automatically.
-    Additional safe keys may be included.
-    """
-    meta = {
-        "host": args.host,
-        "timeout": args.timeout,
-        "mode": mode,
-
-        # Interface‑specific safe keys
-        "status_target": args.status,
-        "include_aliases": args.include_aliases,
-        "exclude_local": args.exclude_local,
-        "ignore": args.ignore,
-    }
-
-    return meta
 def initialize_logger(args, mode):
     """
     Unified LoggerFactory initialization for check_interfaces.
@@ -1018,15 +412,14 @@ def initialize_logger(args, mode):
 # Main Entry Point
 # --------------------------------------
 def main():
+    # ------------------------------------------------------------
+    # Parse arguments and determine mode
+    # ------------------------------------------------------------
     args, flags, mode = build_parser()
-    # Base metadata (script name, mode, log_dir)
-    meta = build_start_meta(args, mode)
-    logger = initialize_logger(args, meta["mode"])
-
     primary_mode = "perfdata" if args.perfdata else "status"
 
     # ------------------------------------------------------------
-    # Host validation (local vs remote)
+    # Host validation
     # ------------------------------------------------------------
     rc = validate_host_local(args.host)
     if not rc["ok"]:
@@ -1034,7 +427,7 @@ def main():
         os._exit(UNKNOWN)
 
     # ------------------------------------------------------------
-    # Build initial metadata BEFORE logging
+    # Build metadata (single pass)
     # ------------------------------------------------------------
     meta = {
         "host": args.host,
@@ -1047,14 +440,22 @@ def main():
         "log_max_mb": args.log_max_mb,
     }
 
-    logging_enabled = mode != "nagios" and meta["log_dir"]
     # ------------------------------------------------------------
-    # Determine effective timeout
+    # Logging setup
     # ------------------------------------------------------------
-    if rc["local"]:
-        effective_timeout = args.timeout
-    else:
-        effective_timeout = args.snmp_timeout if args.snmp_timeout else args.timeout
+    logger = initialize_logger(args, meta["mode"])
+    logging_enabled = logger and mode != "nagios" and meta["log_dir"]
+
+    if logger and logging_enabled:
+        logger.info(start_banner(SCRIPT_NAME, meta))
+
+    # ------------------------------------------------------------
+    # Determine timeout
+    # ------------------------------------------------------------
+    effective_timeout = (
+        args.timeout if rc["local"]
+        else args.snmp_timeout or args.timeout
+    )
 
     # ------------------------------------------------------------
     # Interface collection
@@ -1072,81 +473,67 @@ def main():
             port=args.snmp_port,
             timeout=effective_timeout
         )
-    data = normalize_interfaces(raw, meta.get("mode"))
-    # ------------------------------------------------------------
-    # Filtering
-    # ------------------------------------------------------------
-    filtered = apply_filters(data, args)
+
+    data = normalize_interfaces(raw, meta["mode"])
 
     # ------------------------------------------------------------
-    # Interface selection (--ifaces)
+    # Filtering + selection
     # ------------------------------------------------------------
+    filtered = apply_filters(data, args)
     selected, unmatched = apply_iface_selection(filtered, args.ifaces)
 
     # ------------------------------------------------------------
-    # Status target
+    # Status evaluation
     # ------------------------------------------------------------
     status_target = args.status or "oper-status"
-
-    # ------------------------------------------------------------
-    # Update metadata BEFORE logging
-    # ------------------------------------------------------------
     meta["interface_count"] = len(selected)
     meta["status_target"] = status_target
 
-    # ------------------------------------------------------------
-    # Logging lifecycle (only if not Nagios)
-    # ------------------------------------------------------------
-    if logger and logging_enabled:
-        logger.info(start_banner(SCRIPT_NAME, meta))
+    result = evaluate_status(selected, status_target, unmatched)
 
     # ------------------------------------------------------------
-    # Status evaluation (--status)
-    # ------------------------------------------------------------
-    result = evaluate_status(selected, status_target, unmatched)
-    # ------------------------------------------------------------
-    # Per-interface logging
+    # Logging (per-interface + summary)
     # ------------------------------------------------------------
     if logger and logging_enabled:
         for iface_name in selected:
-            iface_meta = data[iface_name]          # full metadata dict
-            iface_result = result["results"][iface_name] # ok/value dict
-            logger.info(log_interface(iface_name, iface_meta, iface_result))
+            logger.info(log_interface(
+                iface_name,
+                data[iface_name],
+                result["results"][iface_name]
+            ))
 
-        # Log unmatched --ifaces as missing interfaces
         for name in unmatched:
-            iface_result = result["results"][name]
-            logger.info(log_interface(name, {"name": name}, iface_result))
+            logger.info(log_interface(
+                name,
+                {"name": name},
+                result["results"][name]
+            ))
 
         logger.info(result_banner(result["state"], result["failures"]))
-        logger.info(end_banner(SCRIPT_NAME,result["state"]))
+        logger.info(end_banner(SCRIPT_NAME, result["state"]))
 
     # ------------------------------------------------------------
-    # JSON output
+    # Output routing
     # ------------------------------------------------------------
     if args.json:
         output_json(meta, selected, result)
         os._exit(0 if result["state"] == "OK" else 2)
 
-    # ------------------------------------------------------------
-    # Verbose output
-    # ------------------------------------------------------------
-    elif args.verbose:
+    if args.verbose:
         output_verbose(meta, selected, result)
         os._exit(0 if result["state"] == "OK" else 2)
 
-    # ------------------------------------------------------------
-    # Single-line Nagios output
-    # ------------------------------------------------------------
     msg, code = output_single_line(
-        meta=meta, 
-        interfaces=selected, 
-        result=result, 
-        primary_mode=primary_mode, 
+        meta=meta,
+        interfaces=selected,
+        result=result,
+        primary_mode=primary_mode,
         perfdata_metric=args.perfdata
-        )
+    )
+
     if not args.quiet:
         print(msg)
+
     os._exit(code)
 
 if __name__ == "__main__":
