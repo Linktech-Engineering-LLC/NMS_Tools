@@ -1,16 +1,20 @@
 # check_ticker
 
-`check_ticker` is a command‑line market data tool used to retrieve price, history, and trend information for equities and cryptocurrencies. It is part of the NMS_Tools suite and uses the unified provider architecture from PythonTools.
+Deterministic market/ticker inspection tool for equities, crypto, commodities, and indices.
+
+`check_ticker` is part of the **NMS_Tools** suite and uses the unified, deterministic market provider architecture from **PythonTools**. It retrieves normalized price data, historical closing prices, and multi‑window trend analysis suitable for monitoring systems, dashboards, and automation pipelines.
 
 ## Features
 
-- Unified market data providers (Yahoo, Finnhub, Coingecko, AlphaVantage)
-- Full‑precision JSON output for automation
-- Verbose YAML output for inspection and debugging
-- Nagios‑style single‑line status output (default)
-- Quiet mode for monitoring systems that only need exit codes
-- Trend analysis (short/medium/long windows)
-- Raw provider payload logging for diagnostics
+* Unified provider architecture (Yahoo, Finnhub, Coingecko, AlphaVantage)
+* Deterministic symbol normalization (equities, crypto, commodities, indices)
+* Full‑precision JSON output for automation
+* Verbose YAML output for inspection and debugging
+* Nagios‑style single‑line status output (default)
+* Quiet mode for monitoring systems that only need exit codes
+* Trend analysis (short / medium / long windows)
+* Raw provider payload logging for diagnostics
+* Frozen standalone binary (PyInstaller) for production use
 
 ## Usage
 
@@ -58,6 +62,7 @@ check_ticker.py BTC
 ```
 
 ## Logging
+
 Console logging is suppressed unless verbose mode is enabled.
 File logging is enabled when `--log-dir` is provided.
 
@@ -90,54 +95,72 @@ Logged fields include:
 
 ## Provider Architecture
 
-`check_ticker` uses the provider registry from PythonTools:
+`check_ticker` uses the provider registry from **PythonTools**:
 
 * `finance.providers.yahoo_provider`
 * `finance.providers.coingecko_provider`
 * `finance.providers.finnhub_provider`
 * `finance.providers.alphavantage_provider`
 
-The registry selects the appropriate provider based on symbol type.
+The registry selects the appropriate provider based on:
+
+* asset type (equity, crypto, commodity, index)
+* provider capability (history, OHLC, trend compatibility)
+* provider priority
+* provider availability
+
+Provider selection is deterministic and logged for diagnostics.
 
 ## Raw Payload
 
 Raw provider data is logged (not printed) to assist with debugging and trend analysis.
 
-## Runtime Requirements and Frozen Mode
+## Runtime Requirements
 
-`check_ticker.py` is fully operational and ready for use in development environments.
-However, it currently **depends on the PythonTools package** for:
+### Running from source
 
+To run check_ticker.py directly from source, the following must be installed in the active virtual environment:
+
+```text
+PythonTools (main branch)
+```
+
+PythonTools provides:
 * unified market data providers
 * symbol normalization
 * trend analysis
 * shared market object models
-
-### Runtime Requirement
-
-To run check_ticker.py directly from source, you must have:
-
-```Code
-PythonTools (main branch)
-```
-
-installed or available in your environment.
+* deterministic logging and exception modeling
 
 ### Frozen Mode (Standalone Executable)
 
-Although `check_ticker.py` supports frozen operation via PyInstaller,
-**frozen mode is not yet enabled.** It will be activated only after:
+`check_ticker` **supports frozen operation** via PyInstaller.
 
-* the remaining NMS_Tools modules are migrated to PythonTools
-* the provider registry is fully stable
-* the shared market object model is finalized
+Frozen mode is enabled through:
 
-This ensures the frozen build contains the correct provider architecture and avoids breaking changes during the migration phase.
+```bash
+./scripts/build.py
+```
 
-### Current Status
+This produces a standalone binary in:
 
-* ✔ Ready for use in development
+```bash
+dist/check_ticker
+```
+
+Frozen mode is fully operational and used by:
+
+* NMS_Tools packaging (DEB, RPM, TGZ, ZIP)
+* monitoring environments
+* automation pipelines
+* Nagios/Icinga/Sensu/Zabbix integrations
+
+## Current Status
+
 * ✔ Fully compatible with PythonTools
-* ✔ Output modes finalized (JSON, verbose, quiet, Nagios)
+* ✔ Deterministic provider routing
+* ✔ JSON / YAML / Nagios / Quiet modes finalized
 * ✔ Logging architecture stable
-* ✖ Frozen mode disabled until migration is complete
+* ✔ Frozen mode enabled via scripts/build.py
+* ✔ Included in NMS_Tools packaging
+* ✔ Suitable for production monitoring environments

@@ -29,14 +29,20 @@ Deterministic, operator‑grade monitoring tools for Linux and Nagios environmen
 
 ## Overview
 
-**NMS_Tools** is a suite of deterministic, operator‑grade monitoring and inspection utilities designed for Linux and Nagios‑based environments.  
-Each tool is built to produce predictable, machine‑readable output suitable for automation, dashboards, and monitoring pipelines.
+**NMS_Tools** is a suite of deterministic, operator‑grade monitoring and inspection utilities designed for Linux and Nagios‑based environments.
+Each tool produces predictable, machine‑readable output suitable for automation, dashboards, and monitoring pipelines.
 
-The suite currently includes certificate inspection, HTML/HTTP validation, interface inspection, port checking, and weather‑based monitoring utilities.
+The suite includes:
 
-All tools are compiled as standalone binaries using PyInstaller, requiring no Python runtime.
+* TLS certificate inspection
+* HTML/HTTP validation
+* network interface inspection
+* port/service availability checks
+* deterministic weather ingestion
+* market/ticker analysis (via PythonTools finance subsystem)
 
-The suite currently includes certificate inspection, HTML/HTTP validation, interface inspection, port checking, and weather‑based monitoring utilities.
+All tools are compiled as standalone PyInstaller binaries requiring no Python runtime.
+This ensures consistent behavior across distributions, monitoring systems, and automation pipelines.
 
 ---
 
@@ -49,17 +55,33 @@ The suite currently includes certificate inspection, HTML/HTTP validation, inter
 | **check_interfaces** | Network interface inspection and operational state reporting | [src/check_interfaces/README.md](src/check_interfaces/README.md) |
 | **check_ports** | Port and service availability inspection | [src/check_ports/README.md](src/check_ports/README.md) |
 | **check_weather** | Deterministic weather client for monitoring pipelines | [src/check_weather/README.md](src/check_weather/README.md) |
+| **check_ticker** | Deterministic market/ticker client using PythonTools finance providers | [src/check_ticker/README.md](src/check_ticker/README.md)
 
 ---
 
 ## Packaging
 
-NMS_Tools is packaged for Linux environments using native system formats:
+NMS_Tools is distributed in multiple formats to support diverse deployment environments:
 
-* **DEB** packages for Debian/Ubuntu  
-* **RPM** packages for Fedora, openSUSE, and RHEL‑based systems  
+### DEB (Debian/Ubuntu)
+Native packaging for Debian‑based systems.
 
-Packages install cleanly into standard system paths and are suitable for deployment in monitoring environments.
+### RPM (Fedora/RHEL/openSUSE)
+Native packaging for RPM‑based systems.
+
+### TGZ (Portable Archive)
+A portable, installation‑free archive containing all binaries and runtime directories.
+Ideal for embedded systems, containers, and custom deployments.
+
+### ZIP (Portable Archive)
+Windows‑friendly and cross‑platform archive format for tooling pipelines and CI/CD systems.
+
+All packaging formats include:
+* standalone PyInstaller binaries
+* deterministic directory layout
+* logging directories
+* configuration directories
+* schema bundles (where applicable)
 
 ---
 
@@ -86,6 +108,20 @@ sudo dpkg -i nms-tools_<version>.deb
 sudo rpm -i nms_tools-<version>-1.noarch.rpm
 ```
 
+### TGZ (Portable)
+
+```bash
+tar -xzf nms_tools-<version>.tgz
+./nms_tools/check_cert --help
+```
+
+### ZIP (Portable)
+
+```bash
+unzip nms_tools-<version>.zip
+./nms_tools/check_cert --help
+```
+
 --- 
 
 ## Dashboards
@@ -110,27 +146,83 @@ https://linktech-engineering-llc.github.io/NMS_Tools/
 
 ## Building From Source
 
-### Build all PyInstaller binaries
+NMS_Tools uses a two‑stage build system:
 
-```Bash
-./scripts/build_all.sh
+---
+
+### Stage 1 — Freeze all tools (PyInstaller)
+
+The freeze step is performed by the executable build script:
+
+```bash
+./scripts/build.py
 ```
 
-Outputs to:
-
-`build/linux-x86_64/`
-
-### Build DEB/RPM packages
-
-```Bash
-make packages
-```
-
-Outputs to:
+This script:
+* freezes every tool into a standalone PyInstaller binary
+* validates directory layout
+* ensures PythonTools is installed in the active venv
+* writes all binaries to:
 
 ```Code
-packaging/*.deb
-~/rpmbuild/RPMS/noarch/*.rpm
+dist/
+```
+
+**PythonTools must be installed in the current virtual environment before running this step.**
+
+Install PythonTools:
+
+```bash
+pip install PythonTools
+```
+
+or from source:
+
+```bash
+cd ../PythonTools
+pip install .
+```
+
+### Stage 2 — Full packaging (DEB, RPM, TGZ, ZIP)
+
+The full packaging pipeline is executed via:
+
+```bash
+packaging/build_all.sh
+```
+
+This script:
+
+1. **automatically** calls `./scripts/build.py` to freeze all tools
+2. assembles DEB packages
+3. assembles RPM packages
+4. creates TGZ portable archives
+5. creates ZIP portable archives
+6. copies frozen binaries into the correct packaging layout
+7. writes all final artifacts to:
+
+```Code
+packaging/output/
+```
+
+This is the same packaging model used by RunUpdates and PythonTools.
+
+#### Building a single tool (freeze only)
+
+```bash
+./scripts/build.py --tool check_cert
+```
+
+#### Building archives only (after freeze)
+
+```bash
+packaging/build_all.sh --archives
+```
+
+#### Building DEB/RPM only (after freeze)
+
+```bash
+packaging/build_all.sh --packages
 ```
 
 ---
@@ -144,12 +236,13 @@ src/
   check_interfaces/
   check_ports/
   check_weather/
+  check_ticker/
 scripts/
-  build_one.sh
-  build_all.sh
+  build.py
 packaging/
   debian/
   rpm/
+  output/
 .github/
   workflows/
 ```
@@ -191,8 +284,13 @@ check_ports --host 192.168.1.10 --port 22
 check_weather --city "Wichita, KS"
 ```
 
-All tools return Nagios‑compatible exit codes (0=OK, 1=WARNING, 2=CRITICAL, 3=UNKNOWN) and structured output suitable for automation, dashboards, and monitoring pipelines.
+### Market/ticker
 
+```bash
+check_ticker AAPL --history 5 --trend
+```
+
+All tools return Nagios‑compatible exit codes (0=OK, 1=WARNING, 2=CRITICAL, 3=UNKNOWN) and structured output suitable for automation, dashboards, and monitoring pipelines.
 
 ---
 
@@ -234,6 +332,27 @@ Output formats, exit codes, and CLI patterns integrate cleanly with:
 * custom monitoring pipelines  
 
 NMS_Tools is built for operators who need tools that behave the same way every time — no surprises, no guesswork.
+
+---
+
+## Project Ecosystem
+
+NMS_Tools is part of the **Linktech Engineering Tools Suite**, alongside:
+* **PythonTools** — deterministic foundation library
+* **RunUpdates** — update orchestration
+* **TimerDeck** — systemd automation
+* **VSCode-Updater** — editor update automation
+* **BotScanner** — security analysis
+
+NMS_Tools relies heavily on **PythonTools** for:
+* deterministic subprocess execution
+* unified logging
+* schema loading
+* finance/ticker provider architecture
+* trend analysis
+* frozen‑bundle compatibility
+
+Together, these projects form a cohesive ecosystem of operator‑grade automation tools.
 
 ---
 
