@@ -14,176 +14,90 @@ Description:
     Deterministic, multi-port TCP availability checker with Nagios-compatible
     output and optional JSON diagnostics.
 """
-import argparse
 import json
 import os
-import platform
 import shlex
-import shutil
 import socket
 import sys
-import zipfile
 
-from datetime import datetime
-from enum import IntEnum, auto
 from pathlib import Path
 
-# Nagios Exit Codes
-OK = 0
-WARNING = 1
-CRITICAL = 2
-UNKNOWN = 3
-NAGIOS_STATE_NAMES = {
-    OK: "OK",
-    WARNING: "WARNING",
-    CRITICAL: "CRITICAL",
-    UNKNOWN: "UNKNOWN",
-}
+from PythonTools.log_helpers.factory import LoggerFactory
+from PythonTools.nagios import (
+    OK,
+    WARNING,
+    CRITICAL,
+    UNKNOWN,
+    STATE_NAMES,
+    Flags,
+    MODE_MAP,
+    BaseNagiosParser,
+    CheckArgError,
+    should_output,
+    nagios_summary,
+)
+# Root of the suite (two levels up from the tool script)
+SUITE_ROOT = Path(__file__).resolve().parent.parent
+def load_version() -> str:
+    """
+    Load the suite VERSION file if present.
+    If missing, return a fallback string indicating external execution.
+    """
+    version_file = SUITE_ROOT / "VERSION"
+
+    try:
+        return version_file.read_text(encoding="utf-8").strip()
+    except Exception:
+        return "External to NMS_TOOLS Suite"
+VERSION = load_version()
 # Other Global Constants
 SCRIPT_VERSION = "1.1.0"
 SCRIPT_NAME = Path(sys.argv[0]).stem
-# Flag Classes
-class FlagNames(IntEnum):
-    VERBOSE = auto()
-    JSON = auto()
-    QUIET = auto()
-
-    REQUIRE_ALL = auto()
-    REQUIRE_ANY = auto()
-    FAIL_ONLY = auto()
-
-    # Provider override is not a boolean flag, so no bit here.
-class Flags:
-    """
-    Operator-grade flag engine for check_weather.
-    Backed by a deterministic bitmask.
-    """
-
-    def __init__(self):
-        self._mask = 0
-
-    # -----------------------------
-    # Core bit operations
-    # -----------------------------
-    def set(self, flag: FlagNames, value: bool = True):
-        if value:
-            self._mask |= (1 << flag.value)
-        else:
-            self._mask &= ~(1 << flag.value)
-
-    def get(self, flag: FlagNames) -> bool:
-        return bool(self._mask & (1 << flag.value))
-
-    # -----------------------------
-    # Convenience accessors
-    # -----------------------------
-    def __getitem__(self, flag: FlagNames) -> bool:
-        return self.get(flag)
-
-    def __setitem__(self, flag: FlagNames, value: bool):
-        self.set(flag, value)
-
-    # -----------------------------
-    # Introspection
-    # -----------------------------
-    def active_names(self):
-        return [
-            name.name
-            for name in FlagNames
-            if self.get(name)
-        ]
-
-    def to_hex(self):
-        return f"0x{self._mask:08X}"
-
-    # -----------------------------
-    # Build from argparse args
-    # -----------------------------
-    @classmethod
-    def from_args(cls, args):
-        f = cls()
-
-        # Output modes
-        f[FlagNames.VERBOSE] = args.verbose
-        f[FlagNames.JSON] = args.json
-        f[FlagNames.QUIET] = args.quiet
-
-        # Filter flags
-        f[FlagNames.REQUIRE_ALL] = args.require_all
-        f[FlagNames.REQUIRE_ANY] = args.require_any
-        f[FlagNames.FAIL_ONLY ] = args.fail_only
-
-        return f
-MODE_MAP = {
-    FlagNames.JSON:    "json",
-    FlagNames.VERBOSE: "verbose",
-    FlagNames.QUIET:   "quiet",
-}
-# -----------------------------
-# Custom Formatter
-# -----------------------------
-class CustomFormatter(
-    argparse.ArgumentDefaultsHelpFormatter,
-    argparse.RawDescriptionHelpFormatter
-):
-    def _get_help_string(self, action):
-        help_text = action.help or ""
-        if "%(default)" in help_text:
-            return help_text
-        if action.default in (None, False):
-            return help_text
-        return f"{help_text} (default: {action.default})"
-class CheckArgError(Exception):
-    pass
-class CheckArgumentParser(argparse.ArgumentParser):
-    def error(self, message):
-        print(f"ERROR: {message}\n")
-        self.print_help()
-        sys.exit(UNKNOWN)
 # -----------------------------
 # CLI Parser
 # -----------------------------
 def build_parser():
-    parser = CheckArgumentParser(
+    nag = BaseNagiosParser(
         prog=SCRIPT_NAME,
         description=(
             "Deterministic, multi-port TCP availability checker with "
-            "Nagios-compatible output and optional JSON diagnostics. "
+            "Nagios-compatible output and optional JSON diagnostics.\n\n"
             "Supports verbose, JSON, and Nagios output."
         ),
-        formatter_class=CustomFormatter,
-        add_help=True
+        script_version=SCRIPT_VERSION,
+        suite_version=VERSION,
     )
 
-    parser.usage = "%(prog)s -H <host> (--ports <ports> | --service <name>) [options]"
+    # Usage line
+    nag.parser.usage = "%(prog)s -H <host> (--ports <ports> | --service <name>) [options]"
 
     # ------------------------------------------------------------
     # Core Options
     # ------------------------------------------------------------
-    core = parser.add_argument_group("Core Options")
+    core = nag.add_group("Core Options")
     core.add_argument(
         "-H", "--host",
         required=True,
-        help="Target hostname or IP address"
+        help="Target hostname or IP address",
     )
     core.add_argument(
         "-t", "--timeout",
         type=int,
         default=5,
-        help="Connection timeout in seconds"
+        help="Connection timeout in seconds",
     )
 
     # ------------------------------------------------------------
     # Port / Service Selection
     # ------------------------------------------------------------
-    sel = parser.add_argument_group("Port / Service Selection")
+    sel = nag.add_group("Port / Service Selection")
     sel.add_argument(
         "-p", "--ports",
         help=(
             "Comma-delimited list of ports or port ranges. "
             "Examples: '22,80,443', '1-1024', or '22,80,1000-1010'. "
             "Hostnames in --ports are not allowed; use -H/--host to specify the target host."
-        )
+        ),
     )
     sel.add_argument(
         "-s", "--service",
@@ -191,61 +105,40 @@ def build_parser():
             "Comma-delimited list of service names to resolve. "
             "Examples: 'http', 'https,ssh', or 'smtp,pop3,imap'. "
             "Each service is resolved using /etc/services and socket.getservbyname()."
-        )
+        ),
     )
-
-    # ------------------------------------------------------------
-    # Logging
-    # ------------------------------------------------------------
-    log = parser.add_argument_group("Logging")
-    log.add_argument(
-        "--log-dir",
-        dest="log_dir",
-        metavar="DIR",
-        default=None,
-        help="Directory to store logs (optional). If omitted, logging is disabled."
-    )
-    log.add_argument(
-        "--log-max-mb",
-        dest="log_max_mb",
-        metavar="MB",
-        type=int,
-        default=50,
-        help="Maximum log size in MB before rotation."
-    )
-
-    # ------------------------------------------------------------
+   # ------------------------------------------------------------
     # Nagios Behavior Filters
     # ------------------------------------------------------------
-    filt = parser.add_argument_group("Nagios Behavior Filters")
-    filt.add_argument("--require-all", action="store_true",
-                      help="Require all ports to be open; if any fail, return CRITICAL.")
-    filt.add_argument("--require-any", action="store_true",
-                      help="Require at least one port to be open; if all fail, return CRITICAL.")
-    filt.add_argument("--fail-only", action="store_true",
-                      help="Only report failed ports in verbose or JSON output.")
-
-    # ------------------------------------------------------------
-    # Output Modes
-    # ------------------------------------------------------------
-    out = parser.add_argument_group("Output Modes")
-    out.add_argument("-v", "--verbose", action="store_true", help="Detailed output")
-    out.add_argument("-j", "--json", action="store_true", help="JSON output for automation")
-    out.add_argument("-q", "--quiet", action="store_true", help="Quiet mode: exit code only")
-    out.add_argument(
-        "-V", "--version",
-        action="version",
-        version=f"{SCRIPT_NAME} {SCRIPT_VERSION} (Python {platform.python_version()})",
-        help="Show script and Python version"
+    filt = nag.add_group("Nagios Behavior Filters")
+    filt.add_argument(
+        "--require-all",
+        action="store_true",
+        help="Require all ports to be open; if any fail, return CRITICAL.",
+    )
+    filt.add_argument(
+        "--require-any",
+        action="store_true",
+        help="Require at least one port to be open; if all fail, return CRITICAL.",
+    )
+    filt.add_argument(
+        "--fail-only",
+        action="store_true",
+        help="Only report failed ports in verbose or JSON output.",
+    )
+    nag.parser.epilog = (
+        "Examples:\n"
+        "  %(prog)s -H example.com --ports 22,80,443 -v\n"
+        "  %(prog)s -H example.com --service http,https --json\n"
+        "  %(prog)s -H example.com --ports 1-1024 --require-all\n"
     )
 
-    args = parser.parse_args()
-
+    args, flags, mode = nag.parse()
     # Require at least one of --ports or --service
     if not args.ports and not args.service:
-        raise CheckArgError("Either --ports or --service must be specified.")
+        nag.exit_unknown("Either --ports or --service must be specified.")
 
-    return args
+    return args, flags, mode
 # -----------------------------
 # Port Scanning 
 # -----------------------------
@@ -414,59 +307,42 @@ def compute_nagios_code(enf, args):
 # --------------------------------------
 # Logging Functions
 # --------------------------------------
-def ts():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-def write_log(meta, message):
-    log_dir = meta.get("log_dir")
+def initialize_logger(args, mode):
+    """
+    Unified LoggerFactory initialization for check_ports.
+    Matches the model used by check_cert and check_ticker.
+    """
+
+    # Nagios mode never writes logs
+    if mode == "nagios" or not args.log_dir:
+        return None
 
     try:
-        os.makedirs(log_dir, exist_ok=True)
-        logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
-        with open(logfile, "a") as f:
-            f.write(f"{ts()}; {message}\n")
-    except Exception as e:
-        if not meta.get("_log_warn_emitted"):
-            meta["_log_warn_emitted"] = True
-            warning = f"[WARN] Unable to write to log directory: {log_dir} — {e}"
-            if meta["mode"] == "verbose":
-                print(f"[WARN] {warning}")
-            meta.setdefault("warnings", []).append(warning)
-def rotate_log_if_needed(meta):
-    log_dir = meta["log_dir"]
-    logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
+        os.makedirs(args.log_dir, exist_ok=True)
 
-    if not os.path.exists(logfile):
-        return
+        log_cfg = {
+            "path": os.path.join(args.log_dir, f"{SCRIPT_NAME}.log"),
+            "log_level": "INFO",
+            "log_max_mb": args.log_max_mb,
+            "archive_mode": "zip",
+            "backup_count": 7,
 
-    max_mb = meta.get("log_max_mb", 50)
-    max_bytes = max_mb * 1024 * 1024
+            # Console output only when verbose AND not quiet
+            "console_stream": sys.stderr,
+            "console_enabled": not args.quiet and args.verbose,
 
-    try:
-        if os.path.getsize(logfile) < max_bytes:
-            return
+            # Nagios mode never uses color
+            "color": False if mode == "nagios" else args.color,
+        }
 
-        archive_path = build_archive_path(meta)
-        shutil.move(logfile, archive_path)
-        compress_file(archive_path)
-
-        with open(logfile, "w", encoding="utf-8") as f:
-            f.write(f"{ts()}; [INFO] log rotated to {os.path.basename(archive_path)}.zip\n")
+        logger_factory = LoggerFactory(log_cfg, SCRIPT_NAME)
+        return logger_factory.get_logger("main")
 
     except Exception as e:
-        if not meta.get("_log_warn_emitted"):
-            meta["_log_warn_emitted"] = True
-            warn = f"[WARN] Unable to rotate log file '{logfile}': {e}"
-            if meta.get("mode") == "verbose":
-                print(warn)
-            meta.setdefault("warnings", []).append(warn)
-def build_archive_path(meta):
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(meta["log_dir"], f"{SCRIPT_NAME}_{ts}.log")
-def compress_file(path):
-    zip_path = path + ".zip"
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
-        z.write(path, os.path.basename(path))
-    os.remove(path)
+        if should_output(mode):
+            print(nagios_summary(UNKNOWN, f"Failed to initialize LoggerFactory: {e}"))
+        return None
+
 def start_banner_ports(meta):
     return (
         f"[START]"
@@ -524,7 +400,7 @@ def detect_mode(flags):
 # Display Functions
 # -------------------------------------
 def nagios_state_string(code):
-    return NAGIOS_STATE_NAMES.get(code, "UNKNOWN")
+    return STATE_NAMES.get(code, "UNKNOWN")
 def build_nagios_message(enf, code):
     """
     Build the single-line Nagios output message.
@@ -712,7 +588,8 @@ def build_enforcement_object(args, service_ports, explicit_ports, ports, results
     }
     
 def main():
-    args = build_parser()
+    args, flags, mode = build_parser()
+    logger = initialize_logger(args, mode)
     command_string = " ".join(shlex.quote(arg) for arg in sys.argv)
     # ------------------------------------------------------------
     # Build metadata for logging
@@ -756,20 +633,18 @@ def main():
         # ------------------------------------------------------------
         # Rotate log and write start banner (NOW SAFE)
         # ------------------------------------------------------------
-        if logging_enabled:
-            rotate_log_if_needed(meta)
-            write_log(meta, start_banner_ports(meta))
+        if logger and logging_enabled:
+            logger.info(meta, start_banner_ports(meta))
 
     except CheckArgError as e:
         msg = f"UNKNOWN - {e}"
-        if logging_enabled:
+        if logger and logging_enabled:
             # No START banner was written → write a minimal START
-            rotate_log_if_needed(meta)
-            write_log(meta, f"[START] {SCRIPT_NAME}.py host={meta['host']} cmd=\"{meta['command']}\"")
-            write_log(meta, log_summary_ports("UNKNOWN", msg))
-            write_log(meta, end_banner())
+            logger.info(meta, f"[START] {SCRIPT_NAME}.py host={meta['host']} cmd=\"{meta['command']}\"")
+            logger.info(meta, log_summary_ports("UNKNOWN", msg))
+            logger.info(meta, end_banner())
         print(msg)
-        sys.exit(3)
+        os._exit(3)
 
     # ------------------------------------------------------------
     # Execute connection tests
@@ -783,11 +658,11 @@ def main():
         service_map = dict(zip(services_requested, service_ports))
         port_to_service = {str(port): svc for svc, port in service_map.items()}
 
-        if logging_enabled:
+        if logger and logging_enabled:
             # Determine service-aware label
             svc = port_to_service.get(str(port))
             label = f"{svc}({port})" if svc else port
-            write_log(meta, log_port_result(args.host, label, status))
+            logger.info(meta, log_port_result(args.host, label, status))
 
     enf = build_enforcement_object(
         args,
@@ -806,10 +681,10 @@ def main():
     # ------------------------------------------------------------
     if args.json:
         print(json.dumps(enf, indent=2))
-        if logging_enabled:
-            write_log(meta, log_summary_ports(nagios_state_string(code), "json output", enf))
-            write_log(meta, end_banner())
-        sys.exit(code)
+        if logger and logging_enabled:
+            logger.info(meta, log_summary_ports(nagios_state_string(code), "json output", enf))
+            logger.info(meta, end_banner())
+        os._exit(code)
 
     if args.verbose:
         print(f"Host: {args.host}")
@@ -836,16 +711,16 @@ def main():
             label = f"{svc}({port})" if svc else str(port)
             print(f"{args.host}:{label} = {r['status']}")
 
-        if logging_enabled:
-            write_log(meta, log_summary_ports(nagios_state_string(code), "verbose output", enf))
-            write_log(meta, end_banner())
-        sys.exit(code)
+        if logger and logging_enabled:
+            logger.info(meta, log_summary_ports(nagios_state_string(code), "verbose output", enf))
+            logger.info(meta, end_banner())
+        os._exit(code)
 
     if args.quiet:
-        if logging_enabled:
-            write_log(meta, log_summary_ports(nagios_state_string(code), "quiet output", enf))
-            write_log(meta, end_banner())
-        sys.exit(code)
+        if logger and logging_enabled:
+            logger.info(meta, log_summary_ports(nagios_state_string(code), "quiet output", enf))
+            logger.info(meta, end_banner())
+        os._exit(code)
 
     # ------------------------------------------------------------
     # Default Nagios single-line output
@@ -853,11 +728,11 @@ def main():
     msg = build_nagios_message(enf, code)
     print(msg)
 
-    if logging_enabled:
-        write_log(meta, log_summary_ports(nagios_state_string(code), msg))
-        write_log(meta, end_banner())
+    if logger and logging_enabled:
+        logger.info(meta, log_summary_ports(nagios_state_string(code), msg))
+        logger.info(meta, end_banner())
 
-    sys.exit(code)
+    os._exit(code)
 
 if __name__ == "__main__":
     main()

@@ -156,7 +156,6 @@ def build_parser():
     )
 
     return nag.parse()
-
 # -----------------------------
 # Display Options
 # -----------------------------
