@@ -5,6 +5,67 @@ This changelog follows a simple date‑based format.
 
 ---
 
+## [2026‑08‑03] Provider Integration & Enrichment Stabilization
+
+### Added
+- New NWS provider integration with:
+  - Gridpoint resolution
+  - Station list resolution
+  - Observation fetch and normalization
+  - WMO-based condition mapping
+  - Unified icon pipeline shared with Open‑Meteo
+- Provider switching via `--provider` flag (`open-meteo` and `nws`)
+- Unified enrichment pipeline for both providers:
+  - dewpoint (C/F)
+  - visibility (m/km/mi)
+  - pressure (Pa/hPa/inHg)
+  - cloudcover normalization
+  - context mapping
+  - icon mapping
+- PythonTools integration:
+  - JSON cache with TTL
+  - datetime formatting/parsing
+  - location normalization and validation
+  - ANSI color utilities
+  - dict utilities
+- Frozen binary validation for both providers (`dist/check_weather`)
+
+### Changed
+- `fetch_weather` updated to support provider dispatch and metadata passing.
+- Normalization pipeline updated for provider-agnostic WMO mapping.
+- Cache key logic updated to support provider-specific caching.
+- CLI behavior updated to support provider selection and unified output.
+- Logging improved for provider resolution, station selection, and enrichment.
+
+### Removed
+- Legacy Open‑Meteo-only assumptions in normalization and enrichment.
+- Old provider-specific branching logic replaced with unified dispatcher.
+
+---
+
+## Roadmap
+
+### Cycle A — Current Release (Pre‑Tag)
+- Severe weather alerts (NWS Alerts API)
+- Heat Index, Wind Chill, Wet Bulb, Humidex
+- Finalize `check_ports` enhancements
+- Validate freeze for both providers
+
+### Cycle B — Next Release (Post‑Tag)
+- Fire Weather (NWS + SPC Fire Outlook)
+- Radar integration (RainViewer → NEXRAD/MRMS)
+- Air Quality (OpenAQ / AirNow / EPA AQI)
+- SPC Convective Outlooks (polygon intersection)
+
+### Cycle C — Advanced Enhancements
+- Night/day icon switching
+- Custom icon themes / animated icons
+- Provider auto‑fallback system
+- Weather history / climate normals
+- Satellite imagery (GOES)
+
+---
+
 ## [2026‑05‑05] Classification Engine Rewrite
 
 ### Added
