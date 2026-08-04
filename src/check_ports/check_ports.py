@@ -36,6 +36,9 @@ from PythonTools.nagios import (
     should_output,
     nagios_summary,
 )
+from PythonTools.net import check_port
+from PythonTools.parsing import parse_ports, resolve_services
+
 # Root of the suite (two levels up from the tool script)
 SUITE_ROOT = Path(__file__).resolve().parent.parent
 def load_version() -> str:
@@ -53,9 +56,7 @@ VERSION = load_version()
 # Other Global Constants
 SCRIPT_VERSION = "1.1.0"
 SCRIPT_NAME = Path(sys.argv[0]).stem
-# -----------------------------
-# CLI Parser
-# -----------------------------
+
 def build_parser():
     nag = BaseNagiosParser(
         prog=SCRIPT_NAME,
@@ -139,152 +140,115 @@ def build_parser():
         nag.exit_unknown("Either --ports or --service must be specified.")
 
     return args, flags, mode
-# -----------------------------
-# Port Scanning 
-# -----------------------------
-def parse_ports(port_string):
+def build_metadata(args, mode):
     """
-    Parse a comma-delimited list of ports or port ranges.
-    Rejects host:port, host:service, and service names.
-    Returns a sorted, deduped list of integer ports.
+    Build the initial metadata dictionary for check_ports.
+    Pure function: no logging, no side-effects.
     """
-    if not port_string:
-        return []
+    command_string = " ".join(shlex.quote(arg) for arg in sys.argv)
 
-    tokens = [t.strip() for t in port_string.split(",") if t.strip()]
-    ports = []
+    return {
+        "log_dir": args.log_dir,
+        "log_max_mb": args.log_max_mb,
+        "mode": mode,
+        "_log_warn_emitted": False,
+        "command": command_string,
+        "logging_enabled": (mode != "nagios") and bool(args.log_dir),
 
-    for token in tokens:
-        # Reject host:port or host:service
-        if ":" in token:
-            raise CheckArgError(
-                f"Invalid port token '{token}'. Hostnames or service names are not "
-                "allowed in --ports; use -H/--host for hosts and -s/--service for services."
-            )
+        # tool-specific fields
+        "host": args.host,
+        "timeout": args.timeout,
+        "require_all": args.require_all,
+        "require_any": args.require_any,
+        "fail_only": args.fail_only,
 
-        # Reject service names (alphabetic tokens)
-        if token.isalpha():
-            raise CheckArgError(
-                f"Invalid port token '{token}'. Service names belong in --service, not --ports."
-            )
-
-        # Handle ranges
-        if "-" in token:
-            try:
-                start, end = token.split("-", 1)
-                start = int(start)
-                end = int(end)
-            except ValueError:
-                raise CheckArgError(f"Invalid port range '{token}'.")
-
-            if start < 1 or end < 1 or start > 65535 or end > 65535:
-                raise CheckArgError(f"Port range '{token}' is out of valid TCP range.")
-
-            if start > end:
-                raise CheckArgError(f"Invalid port range '{token}': start > end.")
-
-            ports.extend(range(start, end + 1))
-            continue
-
-        # Handle single numeric ports
-        try:
-            port = int(token)
-        except ValueError:
-            raise CheckArgError(f"Invalid port token '{token}'.")
-
-        if port < 1 or port > 65535:
-            raise CheckArgError(f"Port '{port}' is out of valid TCP range.")
-
-        ports.append(port)
-
-    return sorted(set(ports))
-def resolve_services(service_string):
+        # dynamic fields (populated later)
+        "service_requested": [],
+        "explicit_ports": [],
+        "service_ports": [],
+        "all_ports": [],
+    }
+def resolve_all_ports(args, meta, logger=None ):
     """
-    Resolve one or more service names into a list of TCP ports.
-    Supports comma-delimited service names.
-    Rejects numeric ports in --service.
+    Resolve explicit ports and service ports, merge them, update metadata,
+    emit warnings, and write the start banner. Handles CheckArgError cleanly.
+    Returns (ports, explicit_ports, service_ports).
     """
-    if not service_string:
-        return []
-
-    services = [s.strip() for s in service_string.split(",") if s.strip()]
-    resolved_ports = []
-
-    for svc in services:
-        # Reject numeric ports in --service
-        if svc.isdigit():
-            raise CheckArgError(
-                f"Invalid service '{svc}'. Numeric ports belong in --ports, not --service."
-            )
-
-        ports_for_service = []
-
-        # Primary resolution: socket.getservbyname()
-        try:
-            port = socket.getservbyname(svc, "tcp")
-            ports_for_service.append(port)
-        except OSError:
-            # Fallback: manual scan of /etc/services
-            try:
-                with open("/etc/services", "r") as f:
-                    for line in f:
-                        if line.startswith("#") or not line.strip():
-                            continue
-                        parts = line.split()
-                        if len(parts) >= 2 and parts[0] == svc:
-                            port_proto = parts[1]
-                            if "/tcp" in port_proto:
-                                port_num = int(port_proto.split("/")[0])
-                                ports_for_service.append(port_num)
-            except FileNotFoundError:
-                pass
-
-        if not ports_for_service:
-            raise CheckArgError(f"Service '{svc}' not found in /etc/services")
-
-        if len(ports_for_service) > 1:
-            print(f"WARNING: Service '{svc}' has multiple TCP entries; using all.")
-
-        resolved_ports.extend(ports_for_service)
-
-    return sorted(set(resolved_ports))
-def build_port_list(args):
-    """
-    Combine ports from --ports and --service into a single deduped list.
-    """
-    explicit_ports = parse_ports(args.ports) if args.ports else []
-    service_ports = resolve_services(args.service) if args.service else []
-
-    all_ports = sorted(set(explicit_ports + service_ports))
-
-    if not all_ports:
-        raise CheckArgError("No ports resolved from --ports or --service.")
-
-    return all_ports
-def check_port(host, port, timeout):
-    """
-    Attempt a single TCP connection to host:port with a strict timeout.
-
-    Returns one of:
-        "open"
-        "closed"
-        "timeout"
-        "unreachable"
-    """
+    logging_enabled = meta["logging_enabled"]
 
     try:
-        with socket.create_connection((host, port), timeout):
-            return "open"
+        # Parse explicit ports
+        explicit_ports = parse_ports(args.ports) if args.ports else []
 
-    except socket.timeout:
-        return "timeout"
+        # Resolve service ports
+        services_requested = args.service.split(",") if args.service else []
+        meta["service_requested"] = services_requested
+        service_ports = []
+        for svc in services_requested:
+            srv_ports = []
+            srv_ports = resolve_services(svc)
+            # Warn if a service maps to multiple ports
+            if len(srv_ports) > 1:
+                msg = f"Service '{svc}' maps to multiple TCP ports: {srv_ports}"
+                if logger and logging_enabled:
+                    logger.warning(msg)
+                else:
+                    print(msg)
+            service_ports.extend(srv_ports)
 
-    except ConnectionRefusedError:
-        return "closed"
 
-    except OSError:
-        # Includes: network unreachable, no route to host, DNS issues, etc.
-        return "unreachable"
+        # Merge ports
+        ports = sorted(set(explicit_ports + service_ports))
+
+        if not ports:
+            raise CheckArgError("No ports resolved from --ports or --service.")
+
+        # Update metadata
+        meta["explicit_ports"] = explicit_ports
+        meta["service_ports"]  = service_ports
+        meta["all_ports"]      = ports
+
+        # Write start banner
+        if logger and logging_enabled:
+            logger.info(start_banner_ports(meta))
+
+        return 
+
+    except CheckArgError as e:
+        # UNKNOWN state handling
+        msg = f"UNKNOWN - {e}"
+
+        if logger and logging_enabled:
+            # No START banner was written → write a minimal START
+            logger.info(meta, f"[START] {SCRIPT_NAME}.py host={meta['host']} cmd=\"{meta['command']}\"")
+            logger.info(meta, log_summary_ports("UNKNOWN", msg))
+            logger.info(meta, end_banner())
+
+        print(msg)
+        os._exit(UNKNOWN)
+def run_port_checks(args, meta, logger=None):
+    results = []
+
+    ports = meta["all_ports"]
+    service_ports = meta["service_ports"]
+    logging_enabled = meta["logging_enabled"]
+
+    # Build service → port mapping
+    services_requested = meta["service_requested"]
+    service_map = dict(zip(services_requested, service_ports))
+    port_to_service = {str(port): svc for svc, port in service_map.items()}
+
+    for port in ports:
+        status = check_port(args.host, port, args.timeout)
+        results.append({"port": port, "status": status})
+
+        if logger and logging_enabled:
+            svc = port_to_service.get(str(port))
+            label = f"{svc}({port})" if svc else port
+            logger.info(log_port_result(args.host, label, status))
+
+    return results, port_to_service
+
 def compute_nagios_code(enf, args):
     # require-all: all ports must be open
     if args.require_all:
@@ -521,8 +485,11 @@ def build_nagios_message(enf, code):
         return f"{code} - {summary} ({segment_str}) | {perfdata}"
     else:
         return f"{code} - {summary} | {perfdata}"
-def build_enforcement_object(args, service_ports, explicit_ports, ports, results):
-    services_requested = args.service.split(",") if args.service else []
+def build_enforcement_object(meta, results, port_to_service):
+    services_requested = meta["service_requested"]
+    service_ports      = meta["service_ports"]
+    explicit_ports     = meta["explicit_ports"]
+    ports              = meta["all_ports"]
 
     # service → port
     service_map = {
@@ -530,39 +497,31 @@ def build_enforcement_object(args, service_ports, explicit_ports, ports, results
         for svc, port in zip(services_requested, service_ports)
     }
 
-    # port → service (string keys for JSON)
-    port_to_service = {
-        str(port): svc
-        for svc, port in zip(services_requested, service_ports)
-    }
-
     # Helper for labeling service ports
     def svc_label(port):
-        return f"{port_to_service[str(port)]}({port})" if str(port) in port_to_service else str(port)
+        svc = port_to_service.get(str(port))
+        return f"{svc}({port})" if svc else str(port)
 
-    # Grouped buckets
-    open_ports = [r["port"] for r in results if r["status"] == "open"]
-    closed_ports = [r["port"] for r in results if r["status"] == "closed"]
-    timeout_ports = [r["port"] for r in results if r["status"] == "timeout"]
+    open_ports        = [r["port"] for r in results if r["status"] == "open"]
+    closed_ports      = [r["port"] for r in results if r["status"] == "closed"]
+    timeout_ports     = [r["port"] for r in results if r["status"] == "timeout"]
     unreachable_ports = [r["port"] for r in results if r["status"] == "unreachable"]
 
-    service_open = sorted([svc_label(p) for p in service_ports if p in open_ports])
+    service_open   = sorted([svc_label(p) for p in service_ports if p in open_ports])
     service_closed = sorted([svc_label(p) for p in service_ports if p in closed_ports])
 
-    explicit_open = sorted([str(p) for p in explicit_ports if p in open_ports])
+    explicit_open   = sorted([str(p) for p in explicit_ports if p in open_ports])
     explicit_closed = sorted([str(p) for p in explicit_ports if p in closed_ports])
 
-    # status_by_port
     status_by_port = {str(r["port"]): r["status"] for r in results}
 
-    # status_by_service
     status_by_service = {
         svc: status_by_port.get(str(port), "unknown")
         for svc, port in service_map.items()
     }
 
     return {
-        "host": args.host,
+        "host": meta["host"],
 
         "services_requested": services_requested,
         "service_ports": service_ports,
@@ -570,7 +529,7 @@ def build_enforcement_object(args, service_ports, explicit_ports, ports, results
         "all_ports": ports,
 
         "service_map": service_map,
-        "port_to_service": port_to_service,
+        "port_to_service": port_to_service,   # ← FIXED
 
         "service_open": service_open,
         "service_closed": service_closed,
@@ -586,153 +545,102 @@ def build_enforcement_object(args, service_ports, explicit_ports, ports, results
         "timeout_ports": timeout_ports,
         "unreachable_ports": unreachable_ports,
     }
+def output_results(mode, args, meta, results, port_to_service, enf, code, logger=None):
+    """
+    Handle all output modes:
+        • json
+        • verbose
+        • quiet
+        • default (Nagios single-line)
+    """
+
+    logging_enabled = meta["logging_enabled"]
+
+    match mode:
+
+        # ------------------------------------------------------------
+        # JSON output
+        # ------------------------------------------------------------
+        case "json":
+            print(json.dumps(enf, indent=2))
+
+            if logger and logging_enabled:
+                logger.info(log_summary_ports(nagios_state_string(code), "json output", enf))
+                logger.info(end_banner())
+
+            os._exit(code)
+
+        # ------------------------------------------------------------
+        # Verbose output
+        # ------------------------------------------------------------
+        case "verbose":
+            print(f"Host: {meta['host']}")
+            print(f"Services requested: {', '.join(meta['service_requested']) or 'None'}")
+
+            # Show service ports with service names
+            if meta["service_ports"]:
+                svc_labels = [
+                    f"{svc}({port})"
+                    for svc, port in zip(meta["service_requested"], meta["service_ports"])
+                ]
+                print(f"Service ports:      {', '.join(svc_labels)}")
+            else:
+                print("Service ports:      None")
+
+            print(f"Explicit ports:     {', '.join(str(p) for p in meta['explicit_ports']) or 'None'}")
+            print(f"All ports:          {', '.join(str(p) for p in meta['all_ports'])}")
+            print()
+
+            # Per-port results with service names when applicable
+            for r in results:
+                if meta["fail_only"] and r["status"] == "open":
+                    continue                
+                port = r["port"]
+                svc = port_to_service.get(str(port))
+                label = f"{svc}({port})" if svc else str(port)
+                print(f"{meta['host']}:{label} = {r['status']}")
+
+            if logger and logging_enabled:
+                logger.info(log_summary_ports(nagios_state_string(code), "verbose output", enf))
+                logger.info(end_banner())
+
+            os._exit(code)
+
+        # ------------------------------------------------------------
+        # Quiet output
+        # ------------------------------------------------------------
+        case "quiet":
+            if logger and logging_enabled:
+                logger.info(log_summary_ports(nagios_state_string(code), "quiet output", enf))
+                logger.info(end_banner())
+
+            os._exit(code)
+
+        # ------------------------------------------------------------
+        # Default Nagios single-line output
+        # ------------------------------------------------------------
+        case _:
+            msg = build_nagios_message(enf, code)
+            print(msg)
+
+            if logger and logging_enabled:
+                logger.info(log_summary_ports(nagios_state_string(code), msg))
+                logger.info(end_banner())
+
+            os._exit(code)
     
 def main():
     args, flags, mode = build_parser()
     logger = initialize_logger(args, mode)
-    command_string = " ".join(shlex.quote(arg) for arg in sys.argv)
-    # ------------------------------------------------------------
-    # Build metadata for logging
-    # ------------------------------------------------------------
-    meta = {
-        "log_dir": args.log_dir,
-        "log_max_mb": args.log_max_mb,
-        "mode": "verbose" if args.verbose else "normal",
-        "_log_warn_emitted": False,
-        "command": command_string,
-        
-        # tool-specific fields
-        "host": args.host,
-        "timeout": args.timeout,
-        "require_all": args.require_all,
-        "require_any": args.require_any,
-        "fail_only": args.fail_only,
-    }
-    flags = Flags.from_args(args)
-    mode = detect_mode(flags)
-    logging_enabled = (mode != "nagios") and bool(args.log_dir)
-
-    # ------------------------------------------------------------
-    # Resolve and combine ports
-    # ------------------------------------------------------------
-    try:
-        explicit_ports = parse_ports(args.ports) if args.ports else []
-        service_ports  = resolve_services(args.service) if args.service else []
-        ports = sorted(set(explicit_ports + service_ports))
-
-        if not ports:
-            raise CheckArgError("No ports resolved from --ports or --service.")
-
-        # ------------------------------------------------------------
-        # Update metadata with dynamic fields
-        # ------------------------------------------------------------
-        meta["explicit_ports"] = explicit_ports
-        meta["service_ports"]  = service_ports
-        meta["all_ports"]      = ports
-
-        # ------------------------------------------------------------
-        # Rotate log and write start banner (NOW SAFE)
-        # ------------------------------------------------------------
-        if logger and logging_enabled:
-            logger.info(meta, start_banner_ports(meta))
-
-    except CheckArgError as e:
-        msg = f"UNKNOWN - {e}"
-        if logger and logging_enabled:
-            # No START banner was written → write a minimal START
-            logger.info(meta, f"[START] {SCRIPT_NAME}.py host={meta['host']} cmd=\"{meta['command']}\"")
-            logger.info(meta, log_summary_ports("UNKNOWN", msg))
-            logger.info(meta, end_banner())
-        print(msg)
-        os._exit(3)
-
-    # ------------------------------------------------------------
-    # Execute connection tests
-    # ------------------------------------------------------------
-    results = []
-    for port in ports:
-        status = check_port(args.host, port, args.timeout)
-        results.append({"port": port, "status": status})
-
-        services_requested = args.service.split(",") if args.service else []
-        service_map = dict(zip(services_requested, service_ports))
-        port_to_service = {str(port): svc for svc, port in service_map.items()}
-
-        if logger and logging_enabled:
-            # Determine service-aware label
-            svc = port_to_service.get(str(port))
-            label = f"{svc}({port})" if svc else port
-            logger.info(meta, log_port_result(args.host, label, status))
-
-    enf = build_enforcement_object(
-        args,
-        service_ports,
-        explicit_ports,
-        ports,
-        results
-    )
+    meta = build_metadata(args, mode)
+    resolve_all_ports(args, meta, logger)
+    results, port_to_service = run_port_checks(args, meta, logger)
+    enf = build_enforcement_object(meta, results, port_to_service)
     # ------------------------------------------------------------
     # Compute Nagios exit code
     # ------------------------------------------------------------
     code = compute_nagios_code(enf, args)
-
-    # ------------------------------------------------------------
-    # Output modes
-    # ------------------------------------------------------------
-    if args.json:
-        print(json.dumps(enf, indent=2))
-        if logger and logging_enabled:
-            logger.info(meta, log_summary_ports(nagios_state_string(code), "json output", enf))
-            logger.info(meta, end_banner())
-        os._exit(code)
-
-    if args.verbose:
-        print(f"Host: {args.host}")
-        print(f"Services requested: {', '.join(args.service.split(',')) if args.service else 'None'}")
-
-        # Show service ports with service names
-        if service_ports:
-            svc_labels = [
-                f"{svc}({port})"
-                for svc, port in zip(args.service.split(","), service_ports)
-            ]
-            print(f"Service ports:      {', '.join(svc_labels)}")
-        else:
-            print("Service ports:      None")
-
-        print(f"Explicit ports:     {', '.join(str(p) for p in explicit_ports) if explicit_ports else 'None'}")
-        print(f"All ports:          {', '.join(str(p) for p in ports)}")
-        print()
-
-        # Per-port results with service names when applicable
-        for r in results:
-            port = r["port"]
-            svc = enf["port_to_service"].get(str(port))
-            label = f"{svc}({port})" if svc else str(port)
-            print(f"{args.host}:{label} = {r['status']}")
-
-        if logger and logging_enabled:
-            logger.info(meta, log_summary_ports(nagios_state_string(code), "verbose output", enf))
-            logger.info(meta, end_banner())
-        os._exit(code)
-
-    if args.quiet:
-        if logger and logging_enabled:
-            logger.info(meta, log_summary_ports(nagios_state_string(code), "quiet output", enf))
-            logger.info(meta, end_banner())
-        os._exit(code)
-
-    # ------------------------------------------------------------
-    # Default Nagios single-line output
-    # ------------------------------------------------------------
-    msg = build_nagios_message(enf, code)
-    print(msg)
-
-    if logger and logging_enabled:
-        logger.info(meta, log_summary_ports(nagios_state_string(code), msg))
-        logger.info(meta, end_banner())
-
-    os._exit(code)
+    output_results(mode, args, meta, results, port_to_service, enf, code, logger)
 
 if __name__ == "__main__":
     main()
