@@ -34,6 +34,7 @@ from PythonTools.cache import (
     save_json_cache,
     serialize_for_json,
 )
+
 from PythonTools.color import Color,colorize
 from PythonTools.datetime import (
     format_age,
@@ -44,6 +45,9 @@ from PythonTools.location import (
     normalize_city_name,
     validate_location_input,
     format_resolved_name,
+    resolve_location as pt_resolve,
+    LocationNotFoundError,
+    LocationInfo,
 )
 from PythonTools.log_helpers.factory import LoggerFactory
 from PythonTools.nagios import (
@@ -60,15 +64,13 @@ from PythonTools.nagios import (
 from PythonTools.utils import strip_none
 from PythonTools.weather import (
     WEATHER_PROVIDERS,
-    resolve_nws_meta,
     convert_units_mode_aware,
-    register_providers,
     fmt_temp,
     fmt_clouds,
     fmt_wind,
     fmt_precip,
 )
-
+from PythonTools.weather.providers import register_providers, resolve_nws_meta
 # Root of the suite (two levels up from the tool script)
 SUITE_ROOT = Path(__file__).resolve().parent.parent
 
@@ -331,184 +333,41 @@ def build_parser():
 # ---------------------------------------------------------------------------
 # Location Resolver (ZIP, City, Lat/Long)
 # ---------------------------------------------------------------------------
+# check_weather/location.py
 def resolve_location(args):
     """
-    Resolve ZIP, city, or lat/long into a structured location object.
-    Uses args.location, args.country, args.timeout.
+    Weather-specific wrapper around PythonTools.location.resolve_location.
+    Adds caching and returns a weather-tooling dict.
     """
 
     original = args.location.strip()
     country = (args.country or "US").upper()
     timeout = args.timeout
 
-    # ------------------------------------------------------------
-    # NEW: Normalize key for cache
-    # ------------------------------------------------------------
     cache_key = f"{country}:{original.lower().strip()}"
-
-    # ------------------------------------------------------------
-    # NEW: Check cache before doing anything
-    # ------------------------------------------------------------
     cached = load_location_from_cache(cache_key)
     if cached:
         return cached
 
-    # ------------------------------------------------------------
-    # Helper: build final structured location object
-    # ------------------------------------------------------------
-    def make_location(provider, lat, lon, city=None, state=None, zip_code=None):
-        return {
-            "query": original,
-            "provider": provider,
-            "latitude": lat,
-            "longitude": lon,
-            "city": city,
-            "state": state,
-            "country": country,
-            "zip": zip_code
-        }
+    try:
+        info: LocationInfo = pt_resolve(original, country, timeout)
+    except LocationNotFoundError:
+        raise RuntimeError(f"City not found: {original}")
 
-    # ------------------------------------------------------------
-    # Case 1: Lat/Long (handles negative values safely)
-    # ------------------------------------------------------------
-    if "," in original:
-        parts = original.split(",", 1)
-        try:
-            lat = float(parts[0].strip())
-            lon = float(parts[1].strip())
-            result = make_location("direct", lat, lon)
+    result = {
+        "query": info.query,
+        "provider": info.provider,
+        "latitude": info.point.latitude,
+        "longitude": info.point.longitude,
+        "city": normalize_city_name(info.city),
+        "state": info.state,
+        "country": info.country,
+        "zip": info.zip,
+        "url": info.url,
+    }
 
-            # NEW: Write to cache
-            save_location_to_cache(cache_key, result)
-            return result
-
-        except ValueError:
-            pass  # Not lat/long → fall through
-
-    # ------------------------------------------------------------
-    # Case 2: Postal code (digits only)
-    # ------------------------------------------------------------
-    if original.isdigit():
-        zip_url = f"https://api.zippopotam.us/{country}/{original}"
-        r = requests.get(zip_url, timeout=timeout)
-
-        if r.status_code == 200:
-            z = r.json()
-            place = z["places"][0]
-            result = make_location(
-                provider="zippopotam.us",
-                lat=float(place["latitude"]),
-                lon=float(place["longitude"]),
-                city=place["place name"],
-                state=place.get("state"),
-                zip_code=original
-            )
-            result["url"] = zip_url
-
-            # NEW: Write to cache
-            save_location_to_cache(cache_key, result)
-            return result
-
-    # ------------------------------------------------------------
-    # Case 3: City name (strip state if present)
-    # ------------------------------------------------------------
-    parts = [p.strip() for p in original.split(",")]
-    city = normalize_city_name(parts[0])
-
-    # Expand US state abbreviations → full names
-    state_filter = None
-    if len(parts) >= 2:
-        raw_state = parts[1].strip()
-        upper_state = raw_state.upper()
-        state_filter = US_STATES.get(upper_state, raw_state)
-
-    # ------------------------------------------------------------
-    # 1. First try: global search
-    # ------------------------------------------------------------
-    geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city}"
-    r = requests.get(geo_url, timeout=timeout)
-
-    if r.status_code == 200:
-        data = r.json()
-        results = data.get("results", [])
-
-        if state_filter:
-            filtered = [
-                r for r in results
-                if r.get("admin1", "").upper().startswith(state_filter.upper())
-            ]
-            if filtered:
-                entry = filtered[0]
-                result = make_location(
-                    provider="open-meteo",
-                    lat=entry["latitude"],
-                    lon=entry["longitude"],
-                    city=entry.get("name"),
-                    state=entry.get("admin1"),
-                    zip_code=None
-                )
-                result["url"] = geo_url
-
-                # NEW: Write to cache
-                save_location_to_cache(cache_key, result)
-                return result
-
-    # ------------------------------------------------------------
-    # 2. Second try: country-filtered search
-    # ------------------------------------------------------------
-    geo_url = (
-        "https://geocoding-api.open-meteo.com/v1/search"
-        f"?name={city}&country={country}"
-    )
-    r = requests.get(geo_url, timeout=timeout)
-
-    if r.status_code == 200:
-        data = r.json()
-        results = data.get("results", [])
-
-        if results:
-            entry = results[0]
-            result = make_location(
-                provider="open-meteo",
-                lat=entry["latitude"],
-                lon=entry["longitude"],
-                city=entry.get("name"),
-                state=entry.get("admin1"),
-                zip_code=None
-            )
-            result["url"] = geo_url
-
-            # NEW: Write to cache
-            save_location_to_cache(cache_key, result)
-            return result
-
-    # ------------------------------------------------------------
-    # Final fallback: Zippopotam.us city lookup
-    # ------------------------------------------------------------
-    city_url = f"https://api.zippopotam.us/{country}/{city}"
-    r = requests.get(city_url, timeout=timeout)
-
-    if r.status_code == 200:
-        z = r.json()
-        place = z["places"][0]
-        result = make_location(
-            provider="zippopotam.us",
-            lat=float(place["latitude"]),
-            lon=float(place["longitude"]),
-            city=place["place name"],
-            state=place.get("state"),
-            zip_code=z.get("post code")
-        )
-        result["url"] = city_url
-
-        # NEW: Write to cache
-        save_location_to_cache(cache_key, result)
-        return result
-
-    # ------------------------------------------------------------
-    # Nothing worked
-    # ------------------------------------------------------------
-    raise RuntimeError(f"City not found: {original}")
+    save_location_to_cache(cache_key, result)
+    return result
 # ---------------------------------------------------------------------------
 # Evaluation Logic
 # ---------------------------------------------------------------------------
