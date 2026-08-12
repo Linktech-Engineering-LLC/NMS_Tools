@@ -70,7 +70,7 @@ from PythonTools.weather import (
     fmt_wind,
     fmt_precip,
 )
-from PythonTools.weather.providers import register_providers, resolve_nws_meta
+from PythonTools.weather.providers import register_providers, resolve_nws_meta, fetch_valid_nws_observation
 # Root of the suite (two levels up from the tool script)
 SUITE_ROOT = Path(__file__).resolve().parent.parent
 
@@ -805,6 +805,10 @@ def fetch_weather(
     try:
         if provider == "nws":
             meta.update(resolve_nws_meta(lat,lon))
+            if mode in ("weekly", "hourly"):
+                obs, obs_url, station_id = fetch_valid_nws_observation(lat, lon, timeout, meta)
+                meta["cached_obs"] = obs
+                meta["cached_station_id"] = station_id                
         live, url = fetch_fn(lat, lon, timeout, meta)
     except Exception:
         live = None
