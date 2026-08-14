@@ -6,7 +6,7 @@ File: check_weather.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-07
-Last Modified: 2026-04-27
+Last Modified: 2026-08-14
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -805,10 +805,10 @@ def fetch_weather(
     try:
         if provider == "nws":
             meta.update(resolve_nws_meta(lat,lon))
-            if mode in ("weekly", "hourly"):
-                obs, obs_url, station_id = fetch_valid_nws_observation(lat, lon, timeout, meta)
-                meta["cached_obs"] = obs
-                meta["cached_station_id"] = station_id                
+        if (provider == "nws" and mode in ("weekly", "hourly")) or (provider == "open-meteo" and mode == "weekly") :
+            obs, obs_url, station_id = fetch_valid_nws_observation(lat, lon, timeout, meta)
+            meta["cached_obs"] = obs
+            meta["cached_station_id"] = station_id                
         live, url = fetch_fn(lat, lon, timeout, meta)
     except Exception:
         live = None
