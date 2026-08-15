@@ -1,208 +1,237 @@
 # Usage
+**Part of:** NMS_Tools Monitoring Suite
+**Script:** check_weather.py  
+**Author:** Leon McClatchey, Linktech Engineering LLC
+**License:** MIT
+**Last Updated:** 2026‑08‑15
 
-`check_weather.py` retrieves current weather conditions and short‑term forecast data using Open‑Meteo and Zippopotam.us. It resolves locations deterministically, evaluates thresholds, and outputs Nagios/Icinga‑compatible status lines with perfdata.
+`check_weather` retrieves current, hourly, and weekly weather data using a deterministic multi‑provider engine (NWS + Open‑Meteo). It resolves locations, normalizes provider fields, merges hourly/daily data, computes meteorological indexes, applies unit conversion, and outputs structured JSON suitable for CLI, CGI, dashboards, and automation.
 
-This document describes all CLI flags, output modes, examples, and integration notes.
+This document describes all CLI flags, output modes, examples, and integration notes for **NMS_Tools v2.0.0.**
 
----
+## Table of Contents
+1. [Basic Invocation](#1-basic-invocation)
+2. [Command‑Line Options](#2-commandline-options)
+3. [Output Modes](#3-output-modes)
+4. [Location Formats](#4-location-formats)
+5. [Examples](#5-examples)
+6. [Provider Selection](#6-provider-selection)
+7. [Caching Behavior](#7-caching-behavior)
+8. [Error Handling](#8-error-handling)
+9. [Deterministic Guarantees](#9-deterministic-guarantees)
 
 ## 1. Basic Invocation
-
 ```bash
 check_weather.py -l "<location>"
 ```
-
 The <location> may be:
+* `"Wichita, KS"`
+* `"Berlin, DE"`
+* `"67576"`
+* `"38.0,-98.7"`
 
-* City and state: "Wichita, KS"
-* City and country: "Berlin, DE"
-* ZIP code: "67576"
-* Latitude/longitude: "38.0,-98.7"
-
-The resolver automatically determines which provider to use.
+The resolver determines the correct provider and emits full metadata.
 
 ## 2. Command‑Line Options
+### Required
+```Code
+-l, --location <value>
+```
+Location string to resolve.
 
-**Required**:
+### Mode Selection
+```Code
+--current     Output current conditions
+--hourly      Output hourly forecast
+--weekly      Output weekly forecast
+--full        Output full merged structure (planned)
+```
+If no mode is provided, --current is used.
 
-```-l, --location <value>```
+### Output Format
+```Code
+--nagios      Nagios/Icinga single-line output (default)
+--json -j        Structured JSON
+--verbose -v     Multi-line diagnostic output
+--quiet -q      Exit code only (no output)
+```
+If no mode is provided, **Nagios/Icinga mode is used.**
 
-Location string to resolve. Required for all checks.
+### Provider Control (Optional)
+```Code
+--provider nws
+--provider open-meteo
+```
+Behavior:
+* If no provider is specified, the engine defaults to NWS.
+* If NWS is unavailable or fails, the engine falls back to Open‑Meteo.
+* If both providers fail, the engine falls back to cache.
+* If no cache exists, the engine returns an error (or UNKNOWN in Nagios mode).
 
-## 3. Threshold Options
+This matches the actual v2.0.0 provider architecture.
 
-Thresholds apply to the current conditions returned by Open‑Meteo.
+Caching Options
+```Code
+--no-cache        Disable cache read/write
+--cache-info      Show cache metadata only
+```
+Caching is enabled by default.
 
-* --temp-warn <°F> — WARNING if temperature ≥ value
-* --temp-crit <°F> — CRITICAL if temperature ≥ value
-* --wind-warn <mph> — WARNING if wind speed ≥ value
-* --wind-crit <mph> — CRITICAL if wind speed ≥ value
-* --gust-warn <mph> — WARNING if wind gust ≥ value
-* --gust-crit <mph> — CRITICAL if wind gust ≥ value
-* --precip-warn <mm> — WARNING if precipitation ≥ value
-* --precip-crit <mm> — CRITICAL if precipitation ≥ value
-
-If no thresholds are provided, the plugin always returns OK unless a resolver or provider error occurs.
-
-## 4. Output Modes
-
-### Default (Nagios/Icinga)
-
-Single‑line output with status, summary, and perfdata:
+## 3. Output Modes
+### 3.1 Nagios/Icinga Mode (default)
+Produces:
 
 ```Code
-OK - Temp 72°F, Wind 8 mph, Gust 12 mph | temp=72 wind=8 gust=12 precip=0
+OK - Temp 72°F, Wind 8 mph, Gust 12 mph | temp=72 wind=8 gust=12 precip=0 clouds=20
 ```
+Characteristics:
+* single line
+* status text at beginning
+* perfdata always included
+* thresholds applied
+* exit codes follow Nagios/Icinga conventions
 
-### Verbose Mode
+### 3.2 JSON Mode
+Produces structured JSON including:
+* normalized fields
+* merged hourly/daily data
+* index computation
+* provider metadata
+* resolver metadata
+* cache metadata
 
--v enables resolver diagnostics, provider metadata, and expanded fields.
+Recommended for dashboards, CGI, and automation.
 
+### 3.3 Verbose Mode
+Adds:
+* resolver path
+* provider URLs
+* raw provider fields
+* normalized fields
+* merge behavior
+* index computation
+* threshold evaluation
+* cache metadata
+
+Verbose mode is multi‑line and intended for diagnostics.
+
+### 3.4 Quiet Mode
 ```Code
-check_weather.py -l "St John, KS" -v
+--quiet
 ```
 
-Verbose mode includes:
+Produces no output, only an exit code.
 
-* Resolver path (ZIP → lat/lon, city/state → geocode, etc.)
-* Provider URLs used
-* Raw provider fields
-* Normalized values
-* Threshold evaluation details
+Useful for:
+* shell scripting
+* automation
+* conditional logic
+* silent monitoring checks
 
-### JSON Mode
-
---json outputs structured JSON suitable for ingestion by dashboards or log pipelines.
-
-Example:
-
-```bash
-check_weather.py -l "Denver, CO" --json
-```
-
-Output includes:
-
-* Normalized weather fields
-* Resolver metadata
-* Provider metadata
-* Threshold evaluation
-* Perfdata block
-
-See Metadata_Schema.md for the full schema.
-
-## 5. Exit Codes
-| Code | Meaning |
-| :---: | :--- |
-| 0 |	OK |
-| 1 |	WARNING |
-| 2 |	CRITICAL |
-|3 | UNKNOWN (resolver failure, provider error, invalid input) |
-
-Exit codes follow Nagios/Icinga conventions.
-
-## 6. Examples
-
-### Basic City Lookup
-
-```bash
-check_weather.py -l "Wichita, KS"
-```
-
-### ZIP Code Lookup
-
-```bash
+## 4. Location Formats
+### ZIP Code
+```Code
 check_weather.py -l 67576
 ```
+Uses Zippopotam.us → NWS/Open‑Meteo.
+
+### City + Region
+```Code
+check_weather.py -l "Wichita, KS"
+```
+Uses Open‑Meteo Geocoding → NWS/Open‑Meteo.
 
 ### Latitude/Longitude
-
-```bash
+```Code
 check_weather.py -l "38.0,-98.7"
 ```
+Uses coordinates directly.
 
-### Temperature Thresholds
-
+## 5. Examples
+### Default (Nagios/Icinga)
 ```bash
-check_weather.py -l "Phoenix, AZ" --temp-warn 95 --temp-crit 105
+check_weather -l "Wichita, KS"
 ```
-
-### Wind and Gust Thresholds
-
-```bash
-check_weather.py -l "Chicago, IL" --wind-warn 20 --wind-crit 30 --gust-warn 35 --gust-crit 45
-```
-
-### Verbose Diagnostic Output
-
-```bash
-check_weather.py -l "St John, KS" -v
-```
-
 ### JSON Output
-
 ```bash
-check_weather.py -l "Denver, CO" --json
+check_weather -l "Berlin, DE" --json
+```
+### Verbose Diagnostic Output
+```bash
+check_weather -l "Wichita, KS" --hourly --verbose
+```
+### Quiet Mode
+```bash
+check_weather -l "Wichita, KS" --quiet
+```
+### Weekly Forecast
+```bash
+check_weather -l "Wichita, KS" --weekly
+```
+### Force Open‑Meteo
+```bash
+check_weather -l "Berlin, DE" --provider open-meteo
 ```
 
-## 7. Perfdata Fields
-Perfdata is always included in default mode:
+## 6. Provider Selection
+The engine selects providers deterministically:
+1. Prefer NWS when coverage exists
+2. Fallback to Open‑Meteo
+3. Fallback to cache
+4. Error if no cache exists
 
-```Code
-temp=<°F> wind=<mph> gust=<mph> precip=<mm> clouds=<%>
-```
+Provider metadata includes:
+* provider_selected
+* provider_fallback
+* provider_reason
+* provider_urls
 
-Values are normalized and rounded for graph‑friendly ingestion.
+## 7. Caching Behavior
+Caching stores:
+* current
+* hourly
+* weekly
+* metadata
+* provider info
+* cache_id
+* cache_age
 
-## 8. Nagios / Icinga Integration
+Cache is used when:
+* provider fails
+* provider is unreachable
+* user requests cache info
 
-### Command Definition (Nagios)
+## 8. Error Handling
+Errors include:
+* resolver errors
+* provider errors
+* normalization errors
+* merge errors
+* index errors
+* conversion errors
+* caching errors
 
-```cfgdefine command {
-    command_name    check_weather
-    command_line    /usr/lib/nagios/plugins/check_weather.py -l "$ARG1$" $ARG2$
-}
-```
+All errors produce deterministic JSON with:
+* error_type
+* error_stage
+* provider URLs
+* resolver path
+* timestamps
 
-### Service Example
+Verbose mode prints full diagnostics.
 
-```cfg
-define service {
-    host_name       weather-host
-    service_description  Weather - Wichita
-    check_command   check_weather!"Wichita, KS"! --temp-warn 90 --temp-crit 100
-}
-```
+## 9. Deterministic Guarantees
+`check_weather` guarantees:
+*  deterministic provider selection
+* deterministic fallback behavior
+* deterministic normalization
+* deterministic merge behavior
+* deterministic index computation
+* deterministic unit conversion
+* stable schema
+* reproducible output
+* logged fallback behavior
 
-### Icinga 2 CheckCommand
+These guarantees ensure predictable monitoring behavior across all supported platforms.
 
-```icinga2
-object CheckCommand "check_weather" {
-    command = [ "/usr/lib64/nagios/plugins/check_weather.py" ]
-
-    arguments += {
-        "-l" = "$location$"
-        "--temp-warn" = "$temp_warn$"
-        "--temp-crit" = "$temp_crit$"
-    }
-}
-```
-
-## 9. Resolver Behavior Summary
-
-* ZIP codes → Zippopotam.us → lat/lon
-* City/state or city/country → Open‑Meteo geocoding
-* Lat/lon → used directly
-* All paths converge into Open‑Meteo forecast API
-
-Resolver failures return *UNKNOWN* with diagnostic details.
-
-## 10. Error Handling
-
-The plugin returns UNKNOWN for:
-
-* Invalid or ambiguous location
-* Provider timeout or HTTP error
-* Missing required fields in provider response
-* Internal parsing or normalization errors
-
-Verbose mode (-v) includes full diagnostics.
+End of Usage.md

@@ -1,4 +1,5 @@
 # check_weather — CHANGELOG
+**Part of:** NMS_Tools Monitoring Suite
 
 All notable changes to the `check_weather` tool are documented here.  
 This changelog follows a simple date‑based format.

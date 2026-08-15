@@ -31,3 +31,7 @@ build/
 
 # External Graphic files
 svg/
+
+# temporary txt files
+hourly.txt
+weekly.txt

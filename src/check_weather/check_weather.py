@@ -3,10 +3,11 @@
 # Copyright (c) 2026 Leon McClatchey, Linktech Engineering LLC
 """
 File: check_weather.py
+Version: 2.0.0
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-07
-Last Modified: 2026-08-14
+Last Modified: 2026-08-15
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -18,7 +19,6 @@ Description:
 import argparse
 import json
 import os
-import requests
 import sys
 import time
 
@@ -69,6 +69,8 @@ from PythonTools.weather import (
     fmt_clouds,
     fmt_wind,
     fmt_precip,
+    merge_daily_periods,
+    reorder_hourly_current_first,
 )
 from PythonTools.weather.providers import register_providers, resolve_nws_meta, fetch_valid_nws_observation
 # Root of the suite (two levels up from the tool script)
@@ -815,6 +817,17 @@ def fetch_weather(
 
     # Live success → convert + save cache
     if live:
+        match mode:
+            case "weekly":
+                # 1. Fetch hourly first
+                hourly_fn = prov["fetch_hourly"]
+                hourly_live, _ = hourly_fn(lat, lon, timeout, meta)
+                # 3. Merge weekly using hourly
+                live["days"] = merge_daily_periods(live["days"], hourly_live["hours"])
+            case "hourly":
+                live["hours"] = reorder_hourly_current_first(live["hours"], meta["timezone"])
+            case _:
+                pass
         data = convert_units_mode_aware(live, units, mode, meta, logging_enabled, logger)
         save_weather_cache(cache_id, data)
         return data, url, "live", 0, True

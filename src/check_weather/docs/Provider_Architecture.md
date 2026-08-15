@@ -1,179 +1,258 @@
 # Provider Architecture
+**Part of:** NMS_Tools Monitoring Suite
+**Script:** check_weather.py  
+**Author:** Leon McClatchey, Linktech Engineering LLC
+**License:** MIT
+**Last Updated:** 2026‑08‑15
 
-Deterministic Provider Model for check_weather.py
+This document defines the provider architecture for the check_weather subsystem in **NMS_Tools v2.0.0**, including provider selection rules, resolver behavior, provider capabilities, metadata guarantees, and fallback logic. It reflects the redesigned multi‑provider engine introduced in the v2 series.
 
-[check_weather.py] uses a deterministic, two‑provider architecture:
+The system is designed for deterministic, operator‑grade monitoring and produces stable, provider‑agnostic output across all modes.
 
-1. **Weather Provider** — always Open‑Meteo
-2. **Location Provider** — Zippopotam.us or Open‑Meteo Geocoding depending on input type
-
-This document defines the provider selection rules, URL construction, metadata guarantees, and resolver behavior.
+## Table of Contents
+1. [Overview](#1-overview)
+2. [Provider Model](#2-provider-model)
+    * [Weather Providers](#21-weather-providers)
+    * [Location Providers](#22-location-providers)
+3. [Provider Selection Rules](#3-provider-selection-rules)
+4. [Weather Provider Details](#4-weather-provider-details)
+    * [NWS](#41-nws)
+    * [Open‑Meteo](#42-openmeteo)
+5. [Location Provider Details](#5-location-provider-details)
+    * [ZIP Resolution](#51-zip-resolution)
+    * [City/Region Resolution](#52-cityregion-resolution)
+    * [Direct Latitude/Longitude](#53-direct-latitudelongitude)
+6. [Provider Metadata](#6-provider-metadata)
+7. [Fallback Behavior](#7-fallback-behavior)
+8. [Deterministic Guarantees](#8-deterministic-guarantees)
+9. [Examples](#9-examples)
 
 ## 1. Overview
+The v2.0.0 provider architecture separates:
+* **weather retrieval**
+* **location resolution**
+* **provider selection**
+* **provider fallback**
+* **provider metadata emission**
 
-The tool separates weather retrieval from location resolution.
+All providers map into a unified schema through the normalization layer.
 
-| Function | Provider |	Notes |
-| :--- | :--- | :--- |
-| Weather data | **Open‑Meteo** | Always used; selected via --provider (validated but not switchable) |
-| ZIP → lat/lon | **Zippopotam.us** | Used only when input is a ZIP code |
-| City/state → lat/lon | Open‑Meteo Geocoding | Used when input is not a ZIP |
-| Direct lat/lon | None | No provider lookup required |
+The system is fully deterministic and produces stable output across all modes (current, hourly, weekly).
 
-This separation ensures deterministic behavior and clear operator visibility.
+## 2. Provider Model
+### 2.1 Weather Providers
 
-## 2. Weather Provider (Always Open‑Meteo)
+| Provider | Capabilities | Coverage |
+| --- | --- | --- |
+| **NWS** | Current, hourly, weekly, station metadata, observations, alerts (planned) | United States |
+| **Open‑Meteo** | Hourly, daily/weekly, dewpoint/humidity, sunrise/sunset, astronomy (planned), alerts (optional) | Global |
 
-### Provider Name
+Both providers feed into the same normalization and merge layers.
 
-```open-meteo```
+### 2.2 Location Providers
 
-### Base URL
+| Input Type | Provider | Notes |
+| --- | --- | --- |
+| ZIP code | Zippopotam.us | US ZIP resolution |
+| City/state or city/country | Open‑Meteo Geocoding | Global geocoding |
+| Latitude/longitude | None | Direct coordinates |
+| NWS station metadata | NWS Points API | Used after initial resolution |
 
-```https://api.open-meteo.com/v1/forecast```
+Location resolution always produces:
+* latitude
+* longitude
+* display name
+* country code
+* admin1 (state/province)
+* provider metadata
 
-### Full Forecast URL
+## 3. Provider Selection Rules
+Provider selection follows deterministic rules:
+1. **If NWS coverage exists for the location → prefer NWS.**
+2. If NWS fails or is unavailable → fallback to Open‑Meteo.
+3. If both providers fail → fallback to cached data.
+4. If no cache exists → return error.
 
-Constructed with:
+Selection is logged in metadata:
 
-- latitude
-- longitude
-- hourly fields
-- timezone
-- unit system
+```Code
+provider_selected
+provider_fallback
+provider_reason
+```
 
-Example:
+## 4. Weather Provider Details
+### 4.1 NWS
+**Base Endpoints**
+* Points:
+  `https://api.weather.gov/points/<lat>,<lon>`
+* Gridpoint forecast:
+  `https://api.weather.gov/gridpoints/<office>/<gridX>,<gridY>/forecast`
+* Hourly forecast:
+  `https://api.weather.gov/gridpoints/<office>/<gridX>,<gridY>/forecast/hourly`
+* Observations:
+  `https://api.weather.gov/stations/<station>/observations/latest`
+* Alerts (planned):
+  `https://api.weather.gov/alerts/active`
 
-```https://api.open-meteo.com/v1/forecast?latitude=38.03&longitude=-98.76&current_weather=true&hourly=temperature_2m,...```
+**Metadata Emitted**
+* nws_office
+* grid_x / grid_y
+* station_id
+* station_name
+* observation_url
+* forecast_url
+* hourly_url
 
-### Metadata Emitted
+NWS provides the highest‑resolution US data.
 
-In resolved_location:
+### 4.2 Open‑Meteo
+Base Endpoint
 
-- weather_provider
-- weather_provider_url
-- weather_url (full URL)
+```Code
+https://api.open-meteo.com/v1/forecast
+```
 
-Weather provider is **never switchable** today.
-```--provider``` is validated and logged but does not change execution.
+**Capabilities**
+* hourly forecast
+* daily/weekly forecast
+* dewpoint/humidity
+* sunrise/sunset
+* astronomy (planned)
+* alerts (optional)
 
-## 3. Location Providers
-### 3.1 ZIP Code Resolution
+**Metadata Emitted**
+* openmeteo_url
+* hourly_fields
+* daily_fields
+* timezone
+* model metadata
 
+Open‑Meteo provides global coverage and consistent physics.
+
+## 5. Location Provider Details
+### 5.1 ZIP Resolution
 Used when input matches:
 
-```^\d{5}$```
+```Code
+^\d{5}$
+```
 
-#### Provider Name
+**Provider:** Zippopotam.us
+#### URL:
 
-```zippopotam.us```
+```Code
+https://api.zippopotam.us/US/<zip>
+```
 
-#### URL Pattern
+**Metadata Emitted**
+* location_provider: "zippopotam.us"
+* location_provider_url
+* city
+* state
+* country
+* latitude
+* longitude
 
-```https://api.zippopotam.us/<country>/<zip>```
-
-Example:
-
-```https://api.zippopotam.us/US/67576```
-
-#### Metadata Emitted
-
-- location_provider: "zippopotam.us"
-- location_provider_url: "https://api.zippopotam.us/US/67576"
-
-### 3.2 City/State Resolution
-
+### 5.2 City/Region Resolution
 Used when input is not a ZIP and not lat/lon.
 
-#### Provider Name
+**Provider:** Open‑Meteo Geocoding
+#### URL:
 
-```open-meteo```
+```Code
+https://geocoding-api.open-meteo.com/v1/search?name=<query>
+```
 
-#### URL Pattern
-```https://geocoding-api.open-meteo.com/v1/search?name=<query>```
+**Metadata Emitted**
+* location_provider: "open-meteo"
+* location_provider_url
+* city
+* admin1
+* country_code
+* latitude
+* longitude
 
-Example:
-
-```https://geocoding-api.open-meteo.com/v1/search?name=Saint John```
-
-#### Metadata Emitted
-
-- location_provider: "open-meteo"
-- location_provider_url: "<full geocoding URL>"
-
-### 3.3 Direct Latitude/Longitude
+### 5.3 Direct Latitude/Longitude
 Used when input matches:
 
-```<lat>,<lon>```
+```Code
+<lat>,<lon>
+```
 
-#### Provider Name
+**Provider:** direct
+**Metadata Emitted**
+* location_provider: "direct"
+* location_provider_url: null
+* latitude
+* longitude
 
-```direct```
-
-#### URL
-
-```None``` — no provider lookup is performed.
-
-#### Metadata Emitted
-
-- location_provider: "direct"
-- location_provider_url: null
-
-## 4. Provider Metadata in JSON Output
-
-The resolved_location block always includes:
-
+## 6. Provider Metadata
+All output modes include a `provider` block containing:
 | Field | Description |
-| :--- | :--- |
-| input | Original user input |
-| weather_provider | Always "open-meteo" |
-| weather_provider_url | Base forecast URL |
-| location_provider | "zippopotam.us", "open-meteo", or "direct" |
-| location_provider_url | URL used for resolution (or null) |
-| city | Resolved city |
-| state | Resolved state |
-| zip | ZIP code (if applicable) |
-| country | ISO country code |
-| latitude | Decimal latitude |
-| longitude | Decimal longitude |
-| weather_url | Full forecast URL used |
+| --- | --- |
+| provider_selected | "nws" or "open-meteo" |
+| provider_fallback | true/false |
+| provider_reason | Why the provider was selected |
+| provider_urls | All URLs used |
+| provider_capabilities | Capabilities of the selected provider |
+| provider_metadata | Provider‑specific metadata |
 
-This block is always present and never changes shape.
+This block is stable and schema‑aligned.
 
-## 5. Deterministic Behavior Guarantees
+## 7. Fallback Behavior
+Fallback behavior is deterministic:
+1. Try NWS
+2. If NWS fails → try Open‑Meteo
+3. If Open‑Meteo fails → use cached data
+4. If cache missing → error
 
-check_weather.py guarantees:
+Fallback reasons include:
+* provider timeout
+* provider HTTP error
+* missing fields
+* normalization failure
+* merge failure
+* location outside NWS coverage
 
-- Provider selection is deterministic
-- Provider URLs reflect the exact endpoints used
-- No fallback providers
-- No randomization
-- No silent provider switching
-- No ambiguous provider names
-- All provider metadata is emitted in JSON and verbose modes
-- Provider metadata is never emitted in Nagios mode
+Fallback is logged in metadata.
 
-These guarantees ensure stable monitoring behavior across all platforms.
+## 8. Deterministic Guarantees
+`check_weather` guarantees:
+* deterministic provider selection
+* deterministic fallback behavior
+* deterministic URL construction
+* deterministic metadata emission
+* no randomization
+* no silent provider switching
+* no ambiguous provider names
+* stable schema across all modes
 
-## 6. Examples
+These guarantees ensure predictable monitoring behavior across all supported platforms.
 
+## 9. Examples
 ### ZIP Input
 
+```Code
+Input: 67576
 Location Provider: zippopotam.us
-Location Provider URL: https://api.zippopotam.us/US/67576
-Weather Provider: open-meteo
-Weather Provider URL: https://api.open-meteo.com/v1/forecast
+Weather Provider: nws (preferred)
+Fallback: open-meteo if NWS fails
+```
 
 ### City Input
 
+```Code
+Input: "Saint John, KS"
 Location Provider: open-meteo
-Location Provider URL: https://geocoding-api.open-meteo.com/v1/search?name=Saint John
-Weather Provider: open-meteo
-Weather Provider URL: https://api.open-meteo.com/v1/forecast
+Weather Provider: nws (preferred)
+```
 
 ### Lat/Lon Input
-
+```Code
+Input: "38.03,-98.76"
 Location Provider: direct
-Location Provider URL: null
-Weather Provider: open-meteo
-Weather Provider URL: https://api.open-meteo.com/v1/forecast
+Weather Provider: nws (preferred)
+```
+
+**End of Provider_Architecture.md**
