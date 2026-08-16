@@ -3,12 +3,12 @@
 # Copyright (c) 2026 Leon McClatchey, Linktech Engineering LLC
 """
 File: check_weather.py
-Version: 2.0.0
+Version: 3.0.0
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-07
-Last Modified: 2026-08-15
-Required: Python 3.8+
+Last Modified: 2026-08-16
+Required: Python 3.10+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
 
@@ -507,21 +507,27 @@ def output_and_exit(status: int, payload: Dict[str, Any], args, flags, weather_m
     # JSON MODE (unchanged)
     # -----------------------------
     if flags[FlagNames.JSON]:
-        print(json.dumps(serialize_for_json(payload), indent=2))
+        output_string = json.dumps(serialize_for_json(payload), indent=2)
+        if args.output:
+            with open(args.output, "w") as f:
+                f.write(output_string)
+        else:
+            print(output_string)
         os._exit(status)
 
     # -----------------------------
     # VERBOSE MODE
     # -----------------------------
     if flags[FlagNames.VERBOSE]:
-        if weather_mode == "current":
-            verbose_current(payload)
-        elif weather_mode == "hourly":
-            verbose_hourly(payload)
-        elif weather_mode == "weekly":
-            verbose_weekly(payload)
-        else:
-            print(f"Unknown weather mode: {weather_mode}")
+        match weather_mode:
+            case "current":
+                verbose_current(payload)
+            case "hourly":
+                verbose_hourly(payload)
+            case "weekly":
+                verbose_weekly(payload)
+            case _:
+                print(f"Unknown weather mode: {weather_mode}")
         os._exit(status)
 
     # -----------------------------

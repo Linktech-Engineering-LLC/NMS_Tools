@@ -1,5 +1,11 @@
-# check_weather.py
-Deterministic Weather Monitoring Plugin for *NMS_Tools*
+# check_weather.py — README v3.0.0
+
+**Part of:** NMS_Tools Monitoring Suite  
+**Script:** `check_weather.py`  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.10+  
+**Last Updated:** 2026-08-17
 
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -12,24 +18,52 @@ Deterministic Weather Monitoring Plugin for *NMS_Tools*
 ![Location Provider](https://img.shields.io/badge/location-Open--Meteo%20Geocoding-teal)
 ![Icon Set](https://img.shields.io/badge/icons-Weather%20Icons-orange)
 
-## Overview
+<! -- Capability badges -->
+![Hybrid](https://img.shields.io/badge/model-hybrid-blue)
+![NWS](https://img.shields.io/badge/augmentation-NWS-red)
+![Export](https://img.shields.io/badge/output-JSON%20export-success)
+![Index Engine](https://img.shields.io/badge/index-engine-lightgrey)
+![Frozen](https://img.shields.io/badge/frozen-PyInstaller-green)
 
-**check_weather.py** is an operator‑grade weather monitoring plugin designed for Nagios, Icinga, Thruk, and the broader NMS_Tools suite.
+## Table of Contents
+1. [Overview](#1-overview)
+2. [Icon System](#2-icon-system)
+3. [Icon Mapping Table (WMO → Context → Icon)](#3-icon-mapping-table-wmo--context--icon)
+4. [Design Rationale: Backend‑Driven Icon Selection](#4-design-rationale-backenddriven-icon-selection)
+5. [Icon Classification & Recoloring Pipeline](#5-icon-classification--recoloring-pipeline)
+6. [Weather Demo](#6-weather-demo)
+7. [What’s New in v2.2.0 (2026‑04‑27)](#7-whats-new-in-v220-20260427)
+8. [Features](#8-features)
+9. [Usage](#9-usage)
+10. [Provider Architecture](#10-provider-architecture)
+11. [Inclusion Flags](#11-inclusion-flags)
+12. [Cache Flags](#12-cache-flags)
+13. [Logging](#13-logging)
+14. [Example Outputs](#14-example-outputs)
+15. [Upcoming Enhancements](#15-upcoming-enhancements)
+16. [Notes](#16-notes)
 
-It provides deterministic, timestamp‑aligned weather data using the Open‑Meteo hourly API, with full support for:
+## 1. Overview
+`check_weather.py` is an operator‑grade weather monitoring plugin designed for Nagios, Icinga, Thruk, and the broader NMS_Tools suite.
 
-- ZIP, city, and lat/long resolution
-- Metric and imperial units
-- Threshold evaluation
-- Nagios‑compliant perfdata
-- JSON and verbose output modes
-- Wind, gusts, humidity, precipitation, cloud cover
-- Condition codes + human‑readable condition text
-- Deterministic caching and logging
+It provides deterministic, timestamp‑aligned weather data using a **hybrid provider model**:
+* **Open‑Meteo** → forecast baseline
+* **NWS** → station‑level observations
+* **Backend merge** → unified, normalized output
 
-This tool is built for reliability, clarity, and long‑term maintainability.
+The tool supports:
+* ZIP, city, and lat/long resolution
+* Metric and imperial units
+* Threshold evaluation
+* Nagios‑compliant perfdata
+* JSON and verbose output modes
+* Rolling 24‑hour hourly slicing
+* Weekly slicing normalization
+* Scientific index engine (heat index, humidex, wet bulb, etc.)
+* Deterministic caching and logging
+* Frozen binary JSON export (--output FILE)
 
-## Icon System
+## 2. Icon System
 
 check_weather.py uses a deterministic, backend‑driven icon mapping based on the
 **Weather Icons** project by Erik Flowers:
@@ -69,7 +103,7 @@ Nighttime icons are selected using the local sunrise/sunset times returned by Op
 The backend supports expressive “alt” night icons (e.g., wi-night-alt-showers.svg)
 for improved clarity.
 
-## Icon Mapping Table (WMO → Context → Icon)
+## 3. Icon Mapping Table (WMO → Context → Icon)
 
 check_weather.py uses a deterministic mapping from **WMO weather codes** to:
 
@@ -113,7 +147,7 @@ This ensures correct icon selection even for:
 
 The Weather Icons project includes hundreds of icons, but check_weather uses a **minimal, deterministic subset** to avoid ambiguity and ensure consistent UI rendering.
 
-## Design Rationale: Backend‑Driven Icon Selection
+## 4. Design Rationale: Backend‑Driven Icon Selection
 
 ### Why the Backend Selects Icons
 
@@ -179,7 +213,7 @@ Because that leads to:
 
 The backend is the single source of truth.
 
-## Icon Classification & Recoloring Pipeline  
+## 5. Icon Classification & Recoloring Pipeline  
 *(Updated 2026‑05)*
 
 The `check_weather` tool uses a hybrid classifier to determine how each Weather Icons SVG should be recolored.  
@@ -242,7 +276,7 @@ This summary acts as a regression surface to detect classification drift.
 The legacy `classifier.py` has been removed.  
 All classification is now handled by `analyzer.py`.
 
-## Weather Demo
+## 6. Weather Demo
 
 A small HTML/JS/CSS demo is included in this directory (`weather_demo.html`,
 `weather.js`, `weather_demo.css`). These files are not part of the NMS_Tools
@@ -252,7 +286,7 @@ using the same JSON schema. The demo is provided for testing and experimentation
 
 --- 
 
-## What’s New in v2.2.0 (2026‑04‑27)
+## 7. What’s New in v2.2.0 (2026‑04‑27)
 
 ### Rolling 24‑Hour Hourly Forecast
 Hourly mode now begins at the **next hour ≥ local time**, not at midnight.  
@@ -281,7 +315,61 @@ All modes now include normalized, deterministic fields:
 
 Verbose mode uses these enriched fields directly.
 
-## Features
+## 8. Features
+
+### Hybrid Provider Model (Open‑Meteo + NWS)
+check_weather uses a hybrid model combining:
+* Open‑Meteo forecast data
+* NWS station‑level observations (temperature, dewpoint, humidity, wind, gusts, pressure)
+
+The backend merges both sources into a unified, normalized schema.
+Feels‑like calculations, scientific indices, and condition mapping use the merged dataset.
+
+### Scientific Index Engine
+check_weather computes:
+* Heat index
+* Wind chill
+* Humidex
+* Wet bulb temperature
+* Vapor pressure
+* Saturation vapor pressure
+* Mixing ratio
+* Specific humidity
+* Air density
+* Pressure altitude
+
+These values drive the unified feels‑like selection logic.
+
+### Feels‑Like Selection Logic
+The backend selects the feels‑like metric using:
+* Heat index
+* Wind chill
+* Humidex
+* Temperature (fallback)
+
+The selected metric is exposed as:
+
+```Code
+feels_like_source
+```
+
+### JSON Export (--output FILE)
+JSON output can be written directly to a file using:
+
+```Code
+--output FILE
+```
+
+This is required for frozen binaries, which bypass stdout.
+The final rendered JSON (current, hourly, weekly) is written to FILE exactly as displayed in console mode.
+
+### Frozen Binary Behavior (PyInstaller)
+Frozen binaries:
+* bypass stdout
+* require --output FILE for JSON export
+* write relative paths into the PyInstaller extraction directory
+
+This ensures deterministic behavior in all environments.
 
 ### Full hourly weather data
 
@@ -339,7 +427,7 @@ Install:
 pip install requests
 ```
 
-## Usage
+## 9. Usage
 
 ### Basic
 ```bash
@@ -400,7 +488,7 @@ Weekly mode now always returns 7 days beginning at the current local date.
 ./check_weather.py --location 67576 --log-dir ~/Logs
 ```
 
-## Provider Architecture
+## 10. Provider Architecture
 
 check_weather.py uses **three distinct provider components**:
 
@@ -449,7 +537,7 @@ check_weather always uses:
 The [--provider] value is logged for operator visibility but does not change execution behavior.
 Reserved for future multi‑provider support.
 
-## Inclusion Flags
+## 11. Inclusion Flags
 
 ```bash
 --include-gusts     Include wind gusts even without thresholds  
@@ -463,7 +551,7 @@ These flags control which fields appear in:
 - JSON output
 - Perfdata
 
-## Cache Flags
+## 12. Cache Flags
 
 ```bash
 --force-cache       Force reading from cache even if API is available  
@@ -472,7 +560,7 @@ These flags control which fields appear in:
 --cache-info        Display cache metadata  
 ```
 
-## Logging
+## 13. Logging
 
 **Logging is disabled in Nagios mode.**
 Nagios mode is the default output mode, and plugins must remain side‑effect‑free.
@@ -497,7 +585,7 @@ Rotation controlled by:
 --log-max-mb <size>
 ```
 
-## Example Outputs
+## 14. Example Outputs
 
 ### Nagios
 
@@ -616,7 +704,7 @@ Source: Live API
 ```
 ---
 
-## Upcoming Enhancements
+## 15. Upcoming Enhancements
 
 The following features are planned for the next release:
 
@@ -628,7 +716,7 @@ The following features are planned for the next release:
 
 ---
 
-## Notes
+## 16. Notes
 
 - Uses Open‑Meteo hourly API for deterministic, timestamp‑aligned data
 - Uses Zippopotam.us + Open‑Meteo Geocoding for location resolution

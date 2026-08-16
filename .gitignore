@@ -33,5 +33,4 @@ build/
 svg/
 
 # temporary txt files
-hourly.txt
-weekly.txt
+temp/
