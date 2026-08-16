@@ -18,7 +18,7 @@
 ![Location Provider](https://img.shields.io/badge/location-Open--Meteo%20Geocoding-teal)
 ![Icon Set](https://img.shields.io/badge/icons-Weather%20Icons-orange)
 
-<! -- Capability badges -->
+<!-- Capability badges -->
 ![Hybrid](https://img.shields.io/badge/model-hybrid-blue)
 ![NWS](https://img.shields.io/badge/augmentation-NWS-red)
 ![Export](https://img.shields.io/badge/output-JSON%20export-success)
