@@ -1,57 +1,75 @@
-# check_weather.py — Logging Reference
+# Logging Reference -- check_weather
 
-This document describes the logging behavior of check_weather.py, including log structure, rotation, metadata, and operator‑grade guarantees.
+**Part of:** NMS_Tools Monitoring Suite  
+**Script:** export_icons.py  
+**Version:** 3.0.0  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Last Updated:** 2026‑08‑16
 
-Logging is optional and is enabled only when --log-dir is provided.
+## Table of Contents
+1. [Enabling Logging](#1-enabling-logging)
+2. [Log Rotation](#2-log-rotation)
+3. [Log Structure](#3-log-structure)
+  * [START](#start)
+  * [LOCATION](#location)
+  * [WEATHER](#weather)
+  * [THRESHOLDS](#thresholds)
+  * [RESULT](#result)
+  * [END](#end)
+4. [Logging Guarantees](#4-logging-guarantees)
+5. [When Logging Is Useful](#5-when-logging-is-useful)
+6. [When Logging Is Not Recommended](#6-when-logging-is-not-recommended)
+7. [Logging Behavior in Nagios Mode](#7-logging-behavior-in-nagios-mode)
+  * [When Logging Is Disabled](#when-logging-is-disabled)
+  * [When Logging Is Enabled](#when-logging-is-enabled)
 
-## Enabling Logging
+## 1. Enabling Logging
+
+Logging is optional and enabled only when --log-dir is provided.
 
 ```bash
-./check_weather.py --location 67576 --log-dir /path/to/logs
+check_weather --location 67576 --log-dir /path/to/logs
 ```
 
 When enabled:
+* A log file is created inside the specified directory.
+* If the directory **does not exist**, the tool **creates it automatically**.
+* Parent directories are created as needed.
+* No partial writes occur.
+* Failures (permissions, invalid path, read‑only filesystem) produce:
+  * a clear error message
+  * an UNKNOWN exit state
+  * no malformed Nagios output
 
-- A log file is created inside the specified directory.
-- If the directory **does not exist**, the tool **attempts to create it automatically**.
-- Directory creation uses deterministic, operator‑grade behavior:
- - parent directories are created as needed
- - no partial writes
- - failures are cleanly reported
+This ensures logging is safe even on first‑run deployments.
 
-If directory creation fails (permissions, invalid path, read‑only filesystem), the tool:
-
-- Prints a clear error message
-- exits with UNKNOWN
-- does not produce malformed Nagios output
-
-This ensures logging is safe to enable even on first‑run deployments.
-
-## Log Rotation
+## 2. Log Rotation
 
 Rotation is controlled by:
 
-```--log-max-mb <size>```
+```Code
+--log-max-mb <size>
+```
 
-Default: 50 MB
+Default: **50 MB**
 
 When the log file exceeds the configured size:
-
-- The current file is renamed with a .1 suffix
-- A new log file is created
-- Only one rotation level is maintained (no cascading archives)
+* The current file is renamed with a .1 suffix
+* A new log file is created
+* Only one rotation level is maintained (no cascading archives)
 
 Rotation is deterministic and safe for Nagios/Icinga environments.
 
-## Log Structure
+## 3. Log Structure
 
 Each invocation produces a structured, multi‑section log entry.
 
-### Example Layout
+**Example Layout**
 
-```bash
+```Code
 [START] 2026-04-11T11:45:22Z
-  version: 1.4.0
+  version: 3.0.0
   python: 3.12.2
   args: --location 67576 --units imperial --show-location-details
   provider: open-meteo
@@ -92,140 +110,121 @@ Each invocation produces a structured, multi‑section log entry.
 [END]
 ```
 
-Sections
-[START]
+### START
 
 Contains metadata about the invocation:
+* Timestamp
+* Script version
+* Python version
+* Raw arguments
+* Weather provider
+* Logging directory
 
-- Timestamp
-- Script version
-- Python version
-- Raw arguments
-- Weather provider
-- Logging directory
-
-[LOCATION]
+### LOCATION
 
 Includes all resolved location metadata:
+* Input
+* Location provider name
+* Location provider URL
+* Resolved city/state/country
+* Latitude/longitude
 
-- Input
-- Location provider name
-- Location provider URL
-- Resolved city/state/country
-- Latitude/longitude
+Matches the `resolved_location` JSON block.
 
-Matches the resolved_location JSON block.
-
-[WEATHER]
+### WEATHER
 
 Contains the weather metrics used for evaluation:
+* Source (`Live API`, `Cache`, `Forced Cache`, `Cache (TTL ignored)`)
+* Cache age
+* All weather metrics in the selected unit system
+* Condition code + text
+* Weather API URL
 
-- Source (Live API, Cache, Forced Cache, Cache (TTL ignored))
-- Cache age
-- All weather metrics in the selected unit system
-- Condition code + text
-- Weather API URL
+### THRESHOLDS
 
-[THRESHOLDS]
-
-Only appears when thresholds are provided.
+Appears only when thresholds are provided.
 
 Includes:
+* All thresholds passed on the command line
+* Evaluation result (OK, WARNING, CRITICAL)
 
-- All thresholds passed on the command line
-- Evaluation result (OK, WARNING, CRITICAL)
-
-[RESULT]
+### RESULT
 
 Final Nagios‑style result:
+* Status
+* Message
+* Runtime in milliseconds
 
-- Status
-- Message
-- Runtime in milliseconds
-
-[END]
+### END
 
 Marks the end of the log entry.
 
-## Logging Guarantees
+## 4. Logging Guarantees
 
 Logging is designed to be:
 
 ### Deterministic
-
-- Same inputs → same log structure
-- No random fields
-- No nondeterministic ordering
+* Same inputs → same log structure
+* No random fields
+* No nondeterministic ordering
 
 ### Operator‑Grade
-
-- No multi‑line noise
-- No stack traces unless a fatal error occurs
-- No partial writes
+* No multi‑line noise
+* No stack traces unless a fatal error occurs
+* No partial writes
 
 ### Safe for Monitoring Systems
-
-- Logging never interferes with Nagios output
-- Logging failures never break monitoring
-- Log rotation is atomic
+* Logging never interferes with Nagios output
+* Logging failures never break monitoring
+* Log rotation is atomic
 
 ### Consistent Across Modes
 
 Logging works identically in:
+* Verbose mode
+* JSON mode
+* Quiet mode
 
-- Verbose mode
-- JSON mode
-- Quiet mode
-
-### When Logging Is Useful
+## 5. When Logging Is Useful
 
 Logging is recommended for:
+* Debugging location resolution
+* Verifying threshold evaluation
+* Tracking cache behavior
+* Auditing API usage
+* Long‑term monitoring diagnostics
 
-- Debugging location resolution
-- Verifying threshold evaluation
-- Tracking cache behavior
-- Auditing API usage
-- Long‑term monitoring diagnostics
-
-### When Logging Is Not Recommended
+## 6. When Logging Is Not Recommended
 
 Avoid logging when:
+* Running inside ephemeral containers
+* Running in read‑only environments
+* Running on systems with strict I/O limits
 
-- Running inside ephemeral containers
-- Running in read‑only environments
-- Running on systems with strict I/O limits
+## 7. Logging Behavior in Nagios Mode
 
-## Logging Behavior in Nagios Mode
+Logging is automatically disabled when the tool is running in Nagios mode (default mode when no `--verbose`, `--json`, or `--quiet` flags are provided).
 
-Logging is automatically disabled when the tool is running in Nagios mode, which is the default output mode when no other mode flags (--verbose, --json, --quiet) are provided.
-
-This behavior is intentional and guarantees:
-
-- **Side‑effect‑free execution**
-  Nagios plugins must not write files during normal operation.
-- **Deterministic performance**
-  No file I/O, no latency variance, no permission failures.
-- **Clean monitoring output**
-  No risk of stderr noise or partial writes interfering with Nagios.
-
+This guarantees:
+* **Side‑effect‑free execution**
+* **Deterministic performance**
+* **Clean monitoring output**
 
 ### When Logging Is Disabled
 
 Logging is disabled when:
+* No output mode flags are provided
+* The tool is producing a single‑line Nagios status message
+* The tool is invoked by Nagios/Icinga/Thruk
+* Even if --log-dir is supplied, logging will not activate in Nagios mode
 
-- No output mode flags are provided
-- The tool is producing a single‑line Nagios status message
-- The tool is invoked by Nagios/Icinga/Thruk
-- Even if --log-dir is supplied, logging will not activate in Nagios mode.
-
-###When Logging Is Enabled
+### When Logging Is Enabled
 
 Logging is enabled only when:
+* --verbose is used
+* --json is used
+* --quiet is used
 
-- ```--verbose``` is used
-- ```--json``` is used
-- ```--quiet``` is used
+Any mode other than default Nagios mode activates logging.
 
-Any mode other than default Nagios mode is active
-
-This ensures logging is available for diagnostics, development, and operator workflows — but never during monitoring execution.
+This ensures logging is available for diagnostics and operator workflows — but never during monitoring execution.

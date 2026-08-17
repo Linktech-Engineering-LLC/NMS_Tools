@@ -1,10 +1,11 @@
 # Provider Architecture for check_weather v3.0.0
 
-**Part of:** NMS_Tools Monitoring Suite
-**Script:** check_weather.py  
-**Author:** Leon McClatchey, Linktech Engineering LLC
-**License:** MIT
-**Last Updated:** 2026‑08‑15
+**Part of:** NMS_Tools Monitoring Suite  
+**Script:** export_icons.py  
+**Version:** 3.0.0  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Last Updated:** 2026‑08‑16
 
 This document defines the provider architecture for the check_weather subsystem in **NMS_Tools v2.0.0**, including provider selection rules, resolver behavior, provider capabilities, metadata guarantees, and fallback logic. It reflects the redesigned multi‑provider engine introduced in the v2 series.
 

@@ -1,5 +1,11 @@
 # Icon Classification Pipeline  
-**check_weather — Updated 2026‑05**
+
+**Part of:** NMS_Tools Monitoring Suite  
+**Script:** export_icons.py  
+**Version:** 3.0.0  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Last Updated:** 2026‑08‑16
 
 This document describes how Weather Icons SVGs are classified and recolored by the `check_weather` toolchain.  
 The classification system uses a **hybrid approach** that merges filename semantics with geometry analysis to produce stable, deterministic groups for recoloring.

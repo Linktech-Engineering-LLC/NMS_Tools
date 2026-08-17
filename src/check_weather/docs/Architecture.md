@@ -1,11 +1,12 @@
 # Architecture — check_weather v3.0.0
 
 **Part of:** NMS_Tools Monitoring Suite  
-**Script:** `check_weather.py`  
+**Script:** `check_weather.py` 
+**Version:** 3.0.0 
 **Author:** Leon McClatchey, Linktech Engineering LLC  
 **License:** MIT  
-**Requires:** Python 3.8+  
-**Last Updated:** 2026-08-15
+**Requires:** Python 3.10+  
+**Last Updated:** 2026-08-16
 
 ---
 

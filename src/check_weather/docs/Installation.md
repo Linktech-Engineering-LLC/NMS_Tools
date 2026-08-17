@@ -1,103 +1,137 @@
 # Installation
 
-`check_weather.py` is part of the NMS_Tools suite and follows the same deterministic, operator‑grade installation pattern as the other plugins. The tool is intentionally lightweight: one Python file, one dependency, and no hidden runtime requirements.
+**Part of:** NMS_Tools Monitoring Suite  
+**Script:** export_icons.py  
+**Version:** 3.0.0  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Last Updated:** 2026‑08‑16
 
----
+## Table of Contents
+1. [Platform Requirements](#1-platform-requirements)
+2. [Install the Frozen Binary](#2-install-the-frozen-binary)
+  * [Nagios (RHEL / CentOS / Fedora)](#nagios-rhel--centos--fedora)
+  * [Nagios (Debian / Ubuntu)](#nagios-debian--ubuntu)
+  * [Icinga 2 (RHEL‑based)](#icinga-2-rhelbased)
+  * [Icinga 2 (SUSE‑based)](#icinga-2-susebased)
+  * [Custom plugin directory](#custom-plugin-directory)
+3. [SELinux Considerations](#3-selinux-considerations)
+4. [Validate the Installation](#4-validate-the-installation)
+5. [Cache Directories](#5-cache-directories)
+6. [Logging Directory (Optional)](#6-logging-directory-optional)
+7. [Additional Documentation](#7-additional-documentation)
 
 ## 1. Platform Requirements
 
-- Python **3.6 or newer**
-- Linux server used for Nagios/Icinga plugin execution
-- Outbound HTTPS allowed to:
-  - `https://api.open-meteo.com` (forecast provider)
-  - `https://geocoding-api.open-meteo.com` (location resolver)
-  - `https://api.zippopotam.us` (ZIP code resolver)
+* Linux server used for Nagios/Icinga plugin execution
+* Outbound HTTPS allowed to:
+  * `https://api.open-meteo.com` (forecast provider)
+  * `https://geocoding-api.open-meteo.com` (location resolver)
+  * `https://api.zippopotam.us` (ZIP resolver)
+  * `https://api.weather.gov` (NWS provider)
 
-The plugin performs no local caching and writes no files.
+`check_weather` is a **frozen binary**.
 
----
+It has no runtime Python dependency and requires no virtual environment.
 
-## 2. Install the Only Dependency
+All PythonTools modules are embedded inside the binary.
 
-The plugin uses the `requests` library for HTTP calls.
+## 2. Install the Frozen Binary
 
-### Install via pip (recommended)
+Place the binary into your monitoring plugins directory.
 
-```bash
-pip install requests
-```
-
-### Install via OS package manager
-*RHEL / CentOS Stream / Fedora*
+### Nagios (RHEL / CentOS / Fedora)
 
 ```bash
-dnf install python3-requests
+install -m 755 check_weather /usr/lib64/nagios/plugins/
 ```
 
-### openSUSE Leap / Tumbleweed / SLES
+### Nagios (Debian / Ubuntu)
 
 ```bash
-zypper install python3-requests
+install -m 755 check_weather /usr/lib/nagios/plugins/
 ```
 
-### Install via RPM (offline or controlled environments)
-If your environment uses RPM‑based artifact deployment:
+### Icinga 2 (RHEL‑based)
 
 ```bash
-rpm -ivh python3-requests-*.rpm
+install -m 755 check_weather /usr/lib64/nagios/plugins/
 ```
 
-(Ensure the package matches your distribution’s Python version.)
-
-## 3. Deploy the Script
-Copy the plugin into your monitoring plugins directory:
+### Icinga 2 (SUSE‑based)
 
 ```bash
-cp check_weather.py /usr/lib/nagios/plugins/
-chmod 755 /usr/lib/nagios/plugins/check_weather.py
+install -m 755 check_weather /usr/lib/nagios/plugins/
 ```
 
-For Icinga 2 on RHEL‑based systems:
+### Custom plugin directory
 
 ```bash
-install -m 755 check_weather.py /usr/lib64/nagios/plugins/
+install -m 755 check_weather /opt/monitoring/plugins/
 ```
 
-For SUSE‑based systems (Leap / SLES):
-
-```bash
-install -m 755 check_weather.py /usr/lib/nagios/plugins/
-```
-
-## 4. SELinux Considerations
+## 3. SELinux Considerations
 
 If SELinux is enforcing, ensure the monitoring engine can make outbound HTTPS requests.
 
 Depending on your environment’s restrictions, you may need to:
 
-* Allow outbound network access for the Nagios/Icinga process
-* Create a targeted policy module if your security baseline requires it
+* allow outbound network access for the Nagios/Icinga process
+* create a targeted policy module if your baseline requires it
 
 No SELinux changes are required on permissive systems.
 
-## 5. Validate the Installation
+## 4. Validate the Installation
 
 Run a simple test:
 
 ```bash
-check_weather.py -l "St John, KS"
+check_weather -l "St John, KS"
 ```
 
 Expected behavior:
+* single‑line Nagios/Icinga status output
+* clean perfdata fields
+* no verbose output unless -v is used
+* Verbose mode (-v) includes:
+* resolver details
+* provider metadata
+* cache metadata
+* JSON output (if --json is used)
 
-* A single‑line Nagios/Icinga status output
-* Clean perfdata fields
-* No verbose output unless -v is used
+## 5. Cache Directories
 
-Verbose mode (-v) includes resolver details, provider metadata, and JSON output.
+check_weather automatically creates and manages two cache directories:
 
-## 6. Additional Documentation
+```Code
+~/.cache/nms_tools/weather/
+~/.cache/nms_tools/location/
+```
 
-* Usage.md — CLI usage, examples, and threshold configuration
-* Operation.md — resolver logic, provider behavior, and error handling
-* Metadata_Schema.md — JSON schema for verbose mode output
+These are created on first run.
+No manual setup is required.
+
+## 6. Logging Directory (Optional)
+
+Logging is disabled unless --log-dir is provided.
+
+Example:
+
+```bash
+check_weather -l "St John, KS" --log-dir /var/log/nms_tools/
+```
+
+Log files follow the unified NMS_Tools logging model:
+* rotation
+* archive
+* max size
+* deterministic formatting
+
+See **Logging.md** for details.
+
+## 7. Additional Documentation
+* [Usage.md](Usage.md) — CLI usage, examples, threshold configuration
+* [Operation.md](Operation.md) — resolver logic, provider behavior, error handling
+* [Provider_Architecture.md](Provider_Architecture.md) — provider registry contract and fetch logic
+* [Metadata_Schema.md](Metadata_Schema.md) — JSON schema for all output modes
+* [Enforcement.md](Enforcement.md) — Nagios/Icinga rules, severity model, deterministic guarantees

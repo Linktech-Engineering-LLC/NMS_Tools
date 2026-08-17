@@ -1,219 +1,312 @@
-# check_weather.py — Flags Reference
+# Flags Reference — check_weather
 
-This document provides a complete reference for all command‑line flags supported by check_weather.py.
-Flags are grouped by purpose for clarity and operator‑grade usability.
+**Part of:** NMS_Tools Monitoring Suite  
+**Script:** export_icons.py  
+**Version:** 3.0.0  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Last Updated:** 2026‑08‑16
 
-## Location & Units
+## Table of Contents
+1. [Location & Units](#1-location--units)
+2. [Output Modes](#2-output-modes)
+    * [Default Nagios Mode](#default-mode--nagios-output)
+    * [Verbose](#verbose)
+    * [JSON](#json)
+    * [Quiet](#quiet)
+    * [Version](#version)
+3. [Provider & Debug Options](#3-provider--debug-options)
+4. [Inclusion Flags](#4-inclusion-flags)
+5. [Cache Control](#5-cache-control)
+6. [Thresholds](#6-thresholds)
+7. [Logging](#7-logging)
+8. [Miscellaneous](#8-miscellaneous)
+9. [Notes](#9-notes)
 
-```-l, --location <zip|city|lat,lon>```
+## 1. Location & Units
+
+```Code
+-l, --location <zip|city|lat,lon>
+```
 
 Specifies the location to query. Accepts:
+* ZIP code (`67576`)
+* City name (`"Saint John, KS"`)
+* Latitude/longitude (`38.03,-98.76`)
 
-- ZIP code (67576)
-- City name ("Saint John, KS")
-- Latitude/longitude (38.03,-98.76)
+```Code
+--country <code>
+```
 
-```--country <code>```
+Country code for ZIP resolution (default: `US`).
 
-Country code for ZIP resolution (default: US).
-
-```-u, --units <imperial|metric>```
+```Code
+-u, --units <imperial|metric>
+```
 
 Selects the output unit system.
 
-## Output Modes
+## 2. Output Modes
 
 ### Default Mode — Nagios Output
 
 Nagios mode is the implicit default when no other output mode is selected.
+* Single‑line status message
+* Includes perfdata
+* No extra whitespace
+* No multi‑line output
+* Designed for Nagios, Icinga, Thruk, PNP4Nagios
 
-- Produces a single‑line status message
-- Includes perfdata
-- No extra whitespace or multi‑line output
-- Designed for Nagios, Icinga, Thruk, and PNP4Nagios
+There is no `--nagios` **switch** — Nagios mode is automatic.
 
-There is no --nagios switch.
-This is intentional to keep Nagios usage zero‑configuration.
+### Verbose
 
-```-v, --verbose```
+```Code
+-v, --verbose
+```
 
-Enables detailed operator‑grade output including:
+Enables detailed operator‑grade output:
+* Location resolution details (with `--show-location-details`)
+* Cache source and age
+* Expanded weather metrics
+* Threshold evaluation
+* Weather + location provider metadata
+* Full weather API URL
 
-- Location resolution details (when combined with --show-location-details)
-- Cache source and age
-- Expanded weather metrics
-- Threshold evaluation
-- Weather provider + location provider
-- Full weather API URL
+### JSON
 
-```-j, --json```
+```Code
+-j, --json
+```
 
-Outputs structured JSON suitable for automation, dashboards, or logging.
+Outputs structured JSON suitable for automation:
+* All weather metrics (both unit systems)
+* source, cache_age, cache_written
+* resolved_location block
+* runtime_ms
 
-Includes:
+### Quiet
 
-- All weather metrics in both unit systems
-- source, cache_age, cache_written
-- resolved_location block
-- runtime_ms
+```Code
+-q, --quiet
+```
 
-```-q, --quiet```
+Exit code only.
+No output.
 
-Exit code only. No output.
+### Version
 
-
-```-V, --version```
+```Code
+-V, --version
+```
 
 Shows script version and Python version.
 
-## Provider & Debug Options
+## 3. Provider & Debug Options
 
-```--provider {open-meteo}```
+```Code
+--provider {open-meteo|nws}
+```
+Selects the weather provider.
 
-Validated weather provider selection.
-Currently only open-meteo is supported.
+Supported providers:
+* **open‑meteo**
+    * current
+    * hourly
+    * weekly
+    * deterministic WMO weather codes
+    * stable geometry‑based icon mapping
 
-This flag is logged for operator visibility but does not change execution behavior.
+* **nws**
+    * current
+    * hourly
+    * weekly
+    * **alerts**
+    * full NWS metadata chain
+    * deterministic shortForecast + icon mapping
 
-```--show-location-details```
+If omitted, the provider is selected automatically based on:
+* location
+* availability
+* resolver metadata
+
+```Code
+--show-location-details
+```
 
 Displays a detailed block describing:
+* Input location
+* Location provider name + URL
+* Weather provider name + base URL
+* Resolved city/state/country
+* Latitude/longitude
+* Full weather API URL
 
-- Input location
-- Location provider name
-- Location provider URL
-- Weather provider name
-- Weather provider base URL
-- Resolved city/state/country
-- Latitude/longitude
-- Full weather API URL
-
-```--show-codes```
+```Code
+--show-codes
+```
 
 Show numeric weather condition codes in verbose mode.
 
-```--no-color```
+```Code
+--no-color
+```
 
 Disable ANSI color output in verbose mode.
 
-## Inclusion Flags
+## 4. Inclusion Flags
 
-These flags control which fields appear in verbose, JSON, and perfdata output.
+Control which fields appear in verbose, JSON, and perfdata output.
 
-```--include-gusts```
+```Code
+--include-gusts
+```
 
 Include wind gusts even if no gust thresholds are set.
 
-```--include-precip```
+```Code
+--include-precip
+```
 
 Include precipitation fields.
 
-```--include-clouds```
+```Code
+--include-clouds
+```
 
 Include cloud cover fields.
 
-## Cache Control
+## 5. Cache Control
 
-```--force-cache```
+```Code
+--force-cache
+```
 
 Force reading from cache even if the API is available.
+Verbose mode reports: `Source: forced cache`.
 
-Verbose mode reports: ```Source: forced cache```.
-
-```--ignore-cache```
+```Code
+--ignore-cache
+```
 
 Bypass the cache entirely and force a fresh API request.
 
-```--ignore-ttl```
+```Code
+--ignore-ttl
+```
 
 Use cached data even if expired.
+Verbose mode reports: `Source: cache (TTL ignored)`.
 
-Verbose mode reports: ```Source: cache (TTL ignored)```.
+```Code
+--cache-info
+```
 
-```--cache-info```
+Display cache metadata and exit:
+* Cache path
+* Timestamp
+* Age
+* TTL
+* Size
+* Last write status
 
-Display cache metadata and exit.
-
-Shows:
-
--Cache path
-- Timestamp
-- Age
-- TTL
-- Size
-- Last write status
-
-```--cache-path <path>```
+```Code
+--cache-path <path>
+```
 
 Override the default cache file location.
 
-```--cache-expire <seconds>```
+```Code
+--cache-expire <seconds>
+```
 
 Override the default TTL for this invocation.
 
-```--cache-clear```
+```Code
+--cache-clear
+```
 
 Delete the cache file and exit.
 
-## Thresholds
+## 6. Thresholds
 
-```--warning-temp <value>```
-```--critical-temp <value>```
-Temperature thresholds.
+```Code
+--warning-temp <value>
+--critical-temp <value>
+```
+Temperature thresholds (bi‑directional).
 
-```--warning-wind <value>```
-```--critical-wind <value>```
+```Code
+--warning-wind <value>
+--critical-wind <value>
+```
 Wind speed thresholds.
 
-```--warning-gust <value>```
-```--critical-gust <value>```
+```Code
+--warning-gust <value>
+--critical-gust <value>
+```
 Wind gust thresholds.
 
-```--warning-humidity <value>```
-```--critical-humidity <value>```
+```Code
+--warning-humidity <value>
+--critical-humidity <value>
+```
 Humidity thresholds.
 
-```--warning-precip <value>```
-```--critical-precip <value>```
+```Code
+--warning-precip <value>
+--critical-precip <value>
+```
 Precipitation thresholds.
 
-```--warning-cloud <value>```
-```--critical-cloud <value>```
+```Code
+--warning-cloud <value>
+--critical-cloud <value>
+```
 Cloud cover thresholds.
 
 Verbose mode includes threshold evaluation details when thresholds are set.
 
-## Logging
+## 7. Logging
 
-**Logging is disabled in Nagios mode.**
+Logging is **disabled in Nagios mode**.
 Nagios mode is the default output mode, and plugins must remain side‑effect‑free.
-Logging only activates when using --verbose, --json, or --quiet.
 
+Logging activates only when using:
+* `--verbose`
+* `--json`
+* `--quiet`
 
-```--log-dir <path>```
-
+```Code
+--log-dir <path>
+```
 Enable logging to the specified directory.
 
-```--log-max-mb <size>```
-
+```Code
+--log-max-mb <size>
+```
 Maximum log size before rotation (default: 50 MB).
 
 Log entries include:
 
-- [START] metadata banner
-- [WEATHER] blocks
-- [RESULT] final state
-- [END] termination marker
+* `[START]` metadata banner
+* `[LOCATION]` block
+* `[WEATHER]` block
+* `[THRESHOLDS]` block
+* `[RESULT]` final state
+* `[END]` termination marker
 
-## Miscellaneous
-```-h, --help```
+## 8. Miscellaneous
 
+```Code
+-h, --help
+```
 Display usage information.
 
-## Notes
-
-- Nagios mode is the default and requires no switch.
-- Cache age is calculated deterministically and shown in all modes that support it.
-- All weather metrics (apparent temperature, dew point, visibility, pressure, etc.) are available in verbose and JSON modes.
-- All cache flags behave consistently across verbose, JSON, and Nagios output.
-- Provider architecture is fully documented in the README.
+## 9. Notes
+* Nagios mode is the default and requires no switch.
+* Cache age is calculated deterministically and shown in all modes that support it.
+* All weather metrics (apparent temperature, dew point, visibility, pressure, etc.) are available in verbose and JSON modes.
+* All cache flags behave consistently across verbose, JSON, and Nagios output.
+* Provider architecture is fully documented in Provider_Architecture.md.

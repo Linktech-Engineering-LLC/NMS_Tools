@@ -1,10 +1,30 @@
 # Enforcement Model
+
+**Part of:** NMS_Tools Monitoring Suite  
+**Script:** export_icons.py  
+**Version:** 3.0.0  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Last Updated:** 2026‑08‑16
+
 Deterministic Monitoring Enforcement for NMS_Tools
 
 check_weather.py follows the unified NMS_Tools enforcement model used across all monitoring plugins.
 The tool produces deterministic, single‑line Nagios/Icinga output in default mode and supports verbose and JSON modes for diagnostics and ingestion.
 
 This document defines the enforcement rules, output guarantees, severity model, and behavior under monitoring and policy enforcement.
+
+## Table of Contents
+1. [Enforcement Overview](#1-enforcement-overview)
+2. [Output Rules](#2-output-rules)
+3. [Severity Model](#3-severity-model)
+4. [Threshold Enforcement](#4-threshold-enforcement)
+5. [UNKNOWN Enforcement](#5-unknown-enforcement)
+6. [Perfdata Enforcement](#6-perfdata-enforcement)
+7. [Verbose Mode Enforcement](#7-verbose-mode-enforcement)
+8. [JSON Mode Enforcement](#8-json-mode-enforcement)
+9. [Deterministic Behavior Guarantees](#9-deterministic-behavior-guarantees)
+10. [Examples](#10-examples)
 
 ## 1. Enforcement Overview
 check_weather.py implements two enforcement layers:

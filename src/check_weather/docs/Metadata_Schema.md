@@ -1,10 +1,11 @@
 # Metadata Schema — check_weather v3.0.0
 
 **Part of:** NMS_Tools Monitoring Suite  
-**Script:** `check_weather.py`  
+**Script:** export_icons.py  
+**Version:** 3.0.0  
 **Author:** Leon McClatchey, Linktech Engineering LLC  
 **License:** MIT  
-**Last Updated:** 2026-08-15
+**Last Updated:** 2026‑08‑16
 
 ---
 

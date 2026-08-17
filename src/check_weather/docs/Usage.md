@@ -1,10 +1,11 @@
 # Usage for check_weather v3.0.0
 
-**Part of:** NMS_Tools Monitoring Suite
-**Script:** check_weather.py  
-**Author:** Leon McClatchey, Linktech Engineering LLC
-**License:** MIT
-**Last Updated:** 2026‑08‑15
+**Part of:** NMS_Tools Monitoring Suite  
+**Script:** export_icons.py  
+**Version:** 3.0.0  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Last Updated:** 2026‑08‑16
 
 `check_weather` retrieves current, hourly, and weekly weather data using a deterministic multi‑provider engine (NWS + Open‑Meteo). It resolves locations, normalizes provider fields, merges hourly/daily data, computes meteorological indexes, applies unit conversion, and outputs structured JSON suitable for CLI, CGI, dashboards, and automation.
 

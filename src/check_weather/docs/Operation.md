@@ -1,11 +1,11 @@
 # check_weather v3.0.0 Operation
 
 **Part of:** NMS_Tools Monitoring Suite  
-**Script:** `check_weather.py`  
+**Script:** export_icons.py  
+**Version:** 3.0.0  
 **Author:** Leon McClatchey, Linktech Engineering LLC  
 **License:** MIT  
-**Requires:** Python 3.8+  
-**Last Updated:** 2026-08-15
+**Last Updated:** 2026‑08‑16
 
 This document describes the operational flow of the check_weather subsystem within NMS_Tools v2.0.0, including provider selection, location resolution, normalization, merge behavior, index computation, caching, and output modes. It reflects the redesigned multi‑provider architecture introduced in the v2 series.
 
