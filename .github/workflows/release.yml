@@ -49,6 +49,7 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install -r requirements.txt
           python3 -m pip install git+https://github.com/linktech-engineering-llc/PythonTools.git@v0.2.0
+          python3 -m pip install pyinstaller
           python3 -m pip install pyinstaller jsonschema
           python3 -m pip install flake8 black isort yamllint
 
@@ -118,7 +119,7 @@ jobs:
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "datestamp=$DATESTAMP" >> $GITHUB_OUTPUT
-          echo "hash=$GIT_HASH" >> $GITHUB_OUTPUT
+          echo "hash=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
       - name: Compute checksums and sizes
         id: sums
