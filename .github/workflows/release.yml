@@ -195,28 +195,36 @@ jobs:
           EOF
 
           FIRST=1
-          for f in artifacts/*; do
-            NAME=$(basename "$f")
-            SIZE=$(stat -c%s "$f")
-            SHA=$(sha256sum "$f" | awk '{print $1}')
-            CRC=$(python3 -c "import zlib,sys;print('%08X'%zlib.crc32(open('$f','rb').read())&0xFFFFFFFF)")
-            TYPE=$(echo "$NAME" | sed -E 's/.*\.(tgz|zip|deb|rpm)$/\1/')
-            OS="linux"
-            ARCH="x86_64"
+          for f in artifacts/*.deb artifacts/*.rpm artifacts/*.tgz artifacts/*.zip; do
+              NAME=$(basename "$f")
+              SIZE=$(stat -c%s "$f")
+              SHA=$(sha256sum "$f" | awk '{print $1}')
 
-            if [ $FIRST -eq 0 ]; then echo "," >> stable/metadata.json; fi
-            FIRST=0
+              CRC=$(python3 - <<EOF
+          import zlib
+          with open("$f", "rb") as fp:
+              data = fp.read()
+          print("%08X" % (zlib.crc32(data) & 0xFFFFFFFF))
+          EOF
+          )
 
-            cat >> stable/metadata.json <<EOF
-              {
-                "name": "${NAME}",
-                "size": ${SIZE},
-                "sha256": "${SHA}",
-                "crc32": "${CRC}",
-                "type": "${TYPE}",
-                "os": "${OS}",
-                "arch": "${ARCH}"
-              }
+              TYPE=$(echo "$NAME" | sed -E 's/.*\.(tgz|zip|deb|rpm)$/\1/')
+              OS="linux"
+              ARCH="x86_64"
+
+              if [ $FIRST -eq 0 ]; then echo "," >> stable/metadata.json; fi
+              FIRST=0
+
+              cat >> stable/metadata.json <<EOF
+                {
+                  "name": "${NAME}",
+                  "size": ${SIZE},
+                  "sha256": "${SHA}",
+                  "crc32": "${CRC}",
+                  "type": "${TYPE}",
+                  "os": "${OS}",
+                  "arch": "${ARCH}"
+                }
           EOF
           done
 
