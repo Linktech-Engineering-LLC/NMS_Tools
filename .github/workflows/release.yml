@@ -41,9 +41,8 @@ jobs:
             dpkg-dev \
             zip \
             libarchive-zip-perl \
-            libsnmp-dev \ 
+            libsnmp-dev \
             snmp-mibs-downloader
-
 
       - name: Install Python build dependencies
         run: |
