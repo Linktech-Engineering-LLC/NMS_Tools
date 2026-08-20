@@ -7,7 +7,7 @@ Version: 3.0.0
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-07
-Last Modified: 2026-08-16
+Last Modified: 2026-08-20
 Required: Python 3.10+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -71,8 +71,13 @@ from PythonTools.weather import (
     fmt_precip,
     merge_daily_periods,
     reorder_hourly_current_first,
+    fetch_cached_alerts,
 )
-from PythonTools.weather.providers import register_providers, resolve_nws_meta, fetch_valid_nws_observation
+from PythonTools.weather.providers import (
+    register_providers, 
+    resolve_nws_meta, 
+    fetch_valid_nws_observation
+)
 # Root of the suite (two levels up from the tool script)
 SUITE_ROOT = Path(__file__).resolve().parent.parent
 
@@ -813,11 +818,15 @@ def fetch_weather(
     try:
         if provider == "nws":
             meta.update(resolve_nws_meta(lat,lon))
-        if (provider == "nws" and mode in ("weekly", "hourly")) or (provider == "open-meteo" and mode == "weekly") :
+        if (provider == "nws" and mode in ("weekly", "hourly", "full")) or (provider == "open-meteo" and mode in ("weekly", "full")) :
             obs, obs_url, station_id = fetch_valid_nws_observation(lat, lon, timeout, meta)
             meta["cached_obs"] = obs
-            meta["cached_station_id"] = station_id                
-        live, url = fetch_fn(lat, lon, timeout, meta)
+            meta["cached_station_id"] = station_id
+        if mode == "full":
+            live = fetch_fn(lat, lon, timeout, meta)
+        else:                
+            live, url = fetch_fn(lat, lon, timeout, meta)
+        live["alerts"] = fetch_cached_alerts(lat, lon, timeout)
     except Exception:
         live = None
 
