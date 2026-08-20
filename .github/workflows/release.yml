@@ -40,7 +40,7 @@ jobs:
             rpm \
             dpkg-dev \
             zip \
-            crc32
+            libarchive-zip-perl
 
       - name: Install Python build dependencies
         run: |
@@ -49,7 +49,7 @@ jobs:
           python3 -m pip install git+https://github.com/linktech-engineering-llc/PythonTools.git@v0.2.0
           python3 -m pip install pyinstaller jsonschema
           python3 -m pip install flake8 black isort yamllint
-          
+
       - name: Run lint checks (non-blocking)
         run: |
           flake8 || true

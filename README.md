@@ -23,6 +23,8 @@ Deterministic, operator‑grade monitoring tools for Linux and Nagios environmen
 
 <!-- Versions -->
 [![Latest Release](https://img.shields.io/github/v/release/Linktech-Engineering-LLC/NMS_Tools)](https://github.com/Linktech-Engineering-LLC/NMS_Tools/releases/latest)
+![Stable Version](https://img.shields.io/badge/Stable-2.0.0-green?style=flat-square)
+![PythonTools](https://img.shields.io/badge/PythonTools-0.2.0-blue?style=flat-square)
 ![Nightly Version](https://img.shields.io/badge/Nightly-latest-blue)
 
 ---
