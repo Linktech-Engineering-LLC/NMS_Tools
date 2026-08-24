@@ -7,7 +7,7 @@ Version: 3.0.0
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-07
-Last Modified: 2026-08-20
+Last Modified: 2026-08-25
 Required: Python 3.10+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -729,14 +729,17 @@ def start_banner_weather(meta):
         f" include_clouds={meta['include_clouds']}"
     )
 def log_weather_data_mode_aware(weather_mode: str, data: Dict[str, Any]) -> str:
-    if weather_mode == "current":
-        return log_weather_current_flat(data)
-    elif weather_mode == "hourly":
-        return log_weather_hourly_flat(data)
-    elif weather_mode == "weekly":
-        return log_weather_weekly_flat(data)
-    else:
-        return f"[WEATHER] error=unknown_mode mode={weather_mode}"
+    match weather_mode:
+        case "current":
+            return log_weather_current_flat(data)
+        case "hourly":
+            return log_weather_hourly_flat(data)
+        case "weekly":
+            return log_weather_weekly_flat(data)
+        case "full":
+            return "[WEATHER] mode=full"
+        case _:
+            return f"[WEATHER] error=unknown_mode mode={weather_mode}"
 def log_weather_data(weather):
     fields = []
     for k, v in weather.items():
@@ -858,20 +861,19 @@ def fetch_weather(
 # Main
 # -----------------------------
 def main() -> None:
-    args, flags, mode = build_parser()
+    args, flags, display_mode = build_parser()
     weather_flags = WeatherFlags.from_args(args)
-    # Base metadata (script name, mode, log_dir)
     meta = {
-        "log_dir": str(Path(args.log_dir).expanduser()) if args.log_dir else None,
+        "log_dir": ...,
         "flags": flags,
         "weather_flags": weather_flags,
-        "mode": mode,
+        "display_mode": display_mode,
     }
-    logger = initialize_logger(args, meta["mode"])
+    logger = initialize_logger(args, meta["display_mode"])
     # ------------------------------------------------------------
     # 5. Determine Nagios mode + logging
     # ------------------------------------------------------------
-    logging_enabled = mode != "nagios" and meta["log_dir"]
+    logging_enabled = display_mode != "nagios" and meta["log_dir"]
     if not validate_location_input(args.location, args.country):
         raise ValueError(f"Invalid Location Specified: {args.location}")
 
@@ -888,7 +890,7 @@ def main() -> None:
     )
 
     # Nagios only works with current mode
-    if mode == "nagios" and weather_mode != "current":
+    if display_mode == "nagios" and weather_mode != "current":
         raise RuntimeError("Nagios mode only supports current weather.")
 
     meta.update({
@@ -903,11 +905,11 @@ def main() -> None:
         "include_precip": weather_flags[WeatherFlagNames.INCLUDE_PRECIP],
         "include_clouds": weather_flags[WeatherFlagNames.INCLUDE_CLOUDS],
         "log_max_mb": args.log_max_mb,
-        "mode": mode,
+        "display_mode": display_mode,
         "weather_mode": weather_mode,   # NEW
     })
 
-    logging_enabled = mode != "nagios" and args.log_dir
+    logging_enabled = display_mode != "nagios" and args.log_dir
 
     loc = resolve_location(args)
     lat = loc.get("latitude", 0)
