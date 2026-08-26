@@ -366,7 +366,7 @@ def resolve_location(args):
         "provider": info.provider,
         "latitude": info.point.latitude,
         "longitude": info.point.longitude,
-        "city": normalize_city_name(info.city),
+        "city": normalize_city_name(info.city) if info.city else None,
         "state": info.state,
         "country": info.country,
         "zip": info.zip,
@@ -874,7 +874,7 @@ def main() -> None:
     # 5. Determine Nagios mode + logging
     # ------------------------------------------------------------
     logging_enabled = display_mode != "nagios" and meta["log_dir"]
-    if not validate_location_input(args.location, args.country):
+    if not validate_location_input(args.location, args.country, args.lat, args.lon):
         raise ValueError(f"Invalid Location Specified: {args.location}")
 
     meta["start"] = time.time()
