@@ -3,7 +3,7 @@
    Author: Leon McClatchey
    Company: Linktech Engineering LLC
    Created: 2026-05-06
-   Modified: 2026-05-06
+   Modified: 2026-05-28
    Part of: NMS_Tools Monitoring Suite
    License: MIT (see LICENSE for details)
 
@@ -47,6 +47,7 @@
         <link rel="stylesheet" href="styles/components/footer.css">
         <link rel="stylesheet" href="styles/components/sidenav.css">
 
+        <link rel="stylesheet" href="styles/pages/site.css">
         <link rel="stylesheet" href="styles/pages/weather_demo1.css">
         <link rel="stylesheet" href="styles/responsive/mobile.css">
     </head>
@@ -64,22 +65,21 @@
                 <img src="images/LT_Logo.png" alt="Linktech Logo" class="logo">
             </div>
         </header>
+
         <!--#include virtual="/includes/sidenav.html" -->
 
         <div class="page-body">
-
             <main class="content-wrapper">
 
                 <h1>Weather Demo</h1>
 
                 <p class="intro">
                     This demo mirrors the behavior of <code>check_weather.py</code>.
-                    <br>Enter any location in a flexible format — City/State, ZIP code, or latitude/longitude.
-                    <br>The country defaults to <strong>US</strong> unless specified.
+                    Enter any location in a flexible format — City/State, ZIP code, or latitude/longitude.
+                    The country defaults to <strong>US</strong> unless specified.
                 </p>
 
                 <form id="weather-form" class="weather-form">
-
                     <label for="location">Location</label>
                     <input type="text" id="location" placeholder="City/State, ZIP, or lat,lon" required>
 
@@ -94,43 +94,52 @@
 
                     <button type="submit">Get Weather</button>
                 </form>
+
                 <div id="loading-spinner" class="loading-spinner" style="display:none;">
                     <div class="spinner"></div>
                     <div class="spinner-text">Loading weather…</div>
                 </div>
-                <div id="weather-container">
-                    <div class="content fade-target" id="current-content">
-                        <div class="icon" id="current-icon"></div>
-                        <div class="content" id="current-details"></div>
-                    </div>
 
-                    <div class="content fade-target" id="hourly-content">
-                        <div class="icon" id="hourly-icon"></div>
-                        <div class="content" id="hourly-details"></div>
-                    </div>
+                <!-- NEW: Weather metadata -->
+                <div id="weather-meta" class="content fade-target"></div>
 
-                    <div class="content fade-target" id="weekly-content">
-                        <div class="icon" id="weekly-icon"></div>
-                        <div class="content" id="weekly-details"></div>
+                    <div id="weather-container">
+
+                        <!-- ALERTS (full-width banner) -->
+                        <div class="content fade-target" id="alerts-content"></div>
+
+                        <!-- CURRENT -->
+                        <div class="content fade-target" id="current-content">
+                            <div class="icon" id="current-icon"></div>
+                            <div class="content" id="current-details"></div>
+                            <div class="content" id="current-extras"></div>
+                        </div>
+
+                        <!-- WEEKLY -->
+                        <div class="content fade-target" id="weekly-content">
+                            <div class="icon" id="weekly-icon"></div>
+                            <div class="content" id="weekly-details"></div>
+                        </div>
+
+                        <!-- HOURLY -->
+                        <div class="content fade-target" id="hourly-content">
+                            <div class="icon" id="hourly-icon"></div>
+                            <div class="content" id="hourly-details"></div>
+                        </div>
+
                     </div>
-                </div>
 
                 <h2>Related Projects</h2>
                 <!--#include virtual="/includes/related-nms_tools.html" -->
+                <!--#include virtual="/includes/contact.html" -->
 
             </main>
-
         </div>
 
         <footer class="site-footer">
-            © 2026 Linktech Engineering LLC<br>
-            <a href="mailto:ldmcclatchey@linktechengineering.net">
-                ldmcclatchey@linktechengineering.net
-            </a><br>
-            <a href="https://github.com/sponsors/ldmcclatchey">
-                ❤️ Enjoy my tools? You can support my work on GitHub Sponsors
-            </a>
+            <!--#include virtual="/includes/footer.html" -->
         </footer>
+
         <script src="scripts/common.js"></script>
         <script src="scripts/weather.js"></script>
     </body>
