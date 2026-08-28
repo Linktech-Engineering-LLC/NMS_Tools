@@ -72,6 +72,7 @@ from PythonTools.weather import (
     merge_daily_periods,
     reorder_hourly_current_first,
     fetch_cached_alerts,
+    normalize_output,
 )
 from PythonTools.weather.providers import (
     register_providers, 
@@ -848,12 +849,12 @@ def fetch_weather(
                 pass
         data = convert_units_mode_aware(live, units, mode, meta, logging_enabled, logger)
         save_weather_cache(cache_id, data)
-        return data, url, "live", 0, True
+        return normalize_output(data), url, "live", 0, True
 
     # Live failed → fallback to cache
     if cached:
         data = convert_units_mode_aware(cached, units, mode, meta, logging_enabled, logger)
-        return data, None, "cache", cache_age, False
+        return normalize_output(data), None, "cache", cache_age, False
 
     # No live + no cache → fail
     raise RuntimeError("Weather API unreachable and no cached data")

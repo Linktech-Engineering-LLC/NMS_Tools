@@ -6,7 +6,7 @@ File: check_ticker.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-06-17
-Modified: 2026-08-26
+Modified: 2026-08-28
 Required: Python 3.10dist+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
