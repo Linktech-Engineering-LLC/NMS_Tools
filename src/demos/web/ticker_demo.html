@@ -1,0 +1,121 @@
+<!-- ========================================================================
+   File: ticker_demo.html
+   Author: Leon McClatchey
+   Company: Linktech Engineering LLC
+   Created: 2026-08-29
+   Modified: 2026-08-29
+   Part of: NMS_Tools Monitoring Suite
+   License: MIT (see LICENSE for details)
+
+   Description:
+       Demonstrates the check_ticker.py tool
+   ======================================================================== -->
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Ticker Demo – Linktech Engineering</title>
+
+        <!-- SEO -->
+        <meta name="description" content="Interactive stock ticker lookup demo showing normalized quote output, deterministic data inspection, and clean financial lookup powered by FastAPI.">
+        <meta name="keywords" content="ticker demo, stock lookup, financial tools, deterministic monitoring, NMS-Tools, Linktech Engineering LLC">
+
+        <!-- Open Graph -->
+        <meta property="og:title" content="Ticker Demo – Linktech Engineering">
+        <meta property="og:description" content="Interactive stock ticker lookup demo powered by deterministic normalization logic.">
+        <meta property="og:type" content="website">
+        <meta property="og:url" content="https://www.linktechengineering.net/ticker.html">
+
+        <!-- Twitter -->
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="Ticker Demo – Linktech Engineering">
+        <meta name="twitter:description" content="Interactive stock ticker lookup demo with deterministic output normalization.">
+
+        <!-- Stylesheets -->
+        <link rel="stylesheet" href="styles/base/reset.css">
+        <link rel="stylesheet" href="styles/base/typography.css">
+        <link rel="stylesheet" href="styles/base/variable.css">
+
+        <link rel="stylesheet" href="styles/layout/layout.css">
+
+        <link rel="stylesheet" href="styles/components/cards.css">
+        <link rel="stylesheet" href="styles/components/header.css">
+        <link rel="stylesheet" href="styles/components/footer.css">
+        <link rel="stylesheet" href="styles/components/sidenav.css">
+
+        <link rel="stylesheet" href="styles/pages/site.css">
+        <link rel="stylesheet" href="styles/pages/ticker_demo.css">
+        <link rel="stylesheet" href="styles/responsive/mobile.css">
+
+        <!-- Scripts -->
+        <script src="/scripts/global.js"></script>
+    </head>
+    <body>
+        <header class="site-header">
+            <div class="header-left">
+                <img src="images/LT_Logo.png" alt="Linktech Engineering Logo" class="logo">
+            </div>
+            <div class="header-center">
+                <h1>Linktech Engineering LLC</h1>
+                <h2>Owner: Leon McClatchey</h2>
+            </div>
+            <div class="header-right">
+                <img src="images/LT_Logo.png" alt="Linktech Logo" class="logo">
+            </div>
+        </header>
+
+        <!--#include virtual="/includes/sidenav.html" -->
+
+        <div class="page-body">
+            <main class="content-wrapper">
+
+                <h1>Ticker Demo</h1>
+
+                <p class="intro">
+                    This demo mirrors the behavior of the backend FastAPI ticker endpoint.
+                    Enter any stock ticker symbol (e.g., <code>AAPL</code>, <code>MSFT</code>, <code>TSLA</code>) to retrieve
+                    normalized quote data including price, change, percent change, and last update timestamp.
+                </p>
+
+                <form id="ticker-form" class="ticker-form">
+                    <label for="ticker">Ticker Symbol</label>
+                    <input type="text" id="ticker" placeholder="AAPL" required>
+
+                    <button type="submit">Lookup</button>
+                </form>
+
+                <div id="loading-spinner" class="loading-spinner" style="display:none;">
+                    <div class="spinner"></div>
+                    <div class="spinner-text">Loading quote…</div>
+                </div>
+
+                <!-- Metadata / summary -->
+                <div id="ticker-meta" class="content fade-target"></div>
+
+                <div id="ticker-container">
+
+                    <div id="ticker-meta" class="content fade-target"></div>
+
+                    <div id="quote-content" class="content fade-target"></div>
+
+                    <div id="sparkline-content" class="content fade-target"></div>
+
+                </div>
+
+                <h2>Related Projects</h2>
+                <!--#include virtual="/includes/related-nms_tools.html" -->
+                <!--#include virtual="/includes/contact.html" -->
+
+            </main>
+        </div>
+
+        <footer class="site-footer">
+            <!--#include virtual="/includes/footer.html" -->
+        </footer>
+
+        <script src="scripts/common.js"></script>
+        <script src="scripts/ticker.js"></script>
+    </body>
+</html>

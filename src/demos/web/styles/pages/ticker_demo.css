@@ -1,0 +1,170 @@
+/* ========================================================================
+   File: ticker_demo.css
+   Author: Leon McClatchey
+   Company: Linktech Engineering LLC
+   Created: 2026‑08‑29
+   Description:
+       Styles for the Ticker Demo page.
+       Simplified from weather_demo.css — no alerts, weekly, or hourly grids.
+   ======================================================================== */
+
+/* ===== Ticker Form ===== */
+.ticker-form {
+  margin: 0 auto 2rem;
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  max-width: 400px;
+}
+
+.ticker-form input {
+  flex: 1;
+  padding: 0.5rem;
+  font-size: 1rem;
+}
+
+.ticker-form button {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  background-color: #003366;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.ticker-form button:hover {
+  background-color: #002244;
+}
+
+/* ===== Spinner ===== */
+.loading-spinner {
+  display: none;
+  justify-content: center;
+  align-items: center;
+  margin: 1rem 0;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 4px solid #ccc;
+  border-top-color: #003366;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner-text {
+  margin-left: 0.5rem;
+  font-size: 0.9rem;
+  color: #003366;
+}
+
+/* ===== Quote Card ===== */
+#quote-content {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  max-width: 600px;
+  margin: 0 auto 1rem;
+  display: flex;
+  justify-content: flex-start;
+}
+
+#quote-content .content {
+  margin: 4px 0;
+}
+
+/* ===== Price Highlight ===== */
+#quote-price {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #003366;
+}
+
+/* ===== Change Coloring ===== */
+#quote-change {
+  font-weight: 500;
+}
+
+#quote-change.positive {
+  color: #007700;
+}
+
+#quote-change.negative {
+  color: #b00000;
+}
+
+/* ===== Extras ===== */
+#quote-extras {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+/* ===== Sparkline / Trend ===== */
+#sparkline-content {
+  background: #f0f0f0;
+  border-radius: 6px;
+  padding: 10px;
+  text-align: center;
+  font-size: 0.85rem;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 600px) {
+  .ticker-form {
+    flex-direction: column;
+  }
+}
+.quote-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.quote-col {
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 6px;
+}
+
+.quote-price {
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.quote-change.positive { color: #007700; }
+.quote-change.negative { color: #b00000; }
+
+.quote-section-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.quote-error {
+    padding: 12px;
+    background: #fff4f4;
+    border-left: 4px solid #c00;
+    border-radius: 6px;
+    color: #900;
+}
+#quote-content {
+  transition: opacity 0.3s ease;
+}
+
+.quote-collapsed {
+  opacity: 0;
+  height: 0;
+  overflow: hidden;
+}
+.meta-error {
+    text-align: center;
+    font-weight: 700;
+    color: #b00000;   /* strong red */
+    padding: 8px 0;
+}
