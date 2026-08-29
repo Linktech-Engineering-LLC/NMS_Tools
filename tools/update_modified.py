@@ -1,74 +1,27 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: MIT
-# Copyright (c) 2026 Leon McClatchey, Linktech Engineering LLC
 """
-File: update_modified.py
-Author: Leon McClatchey
-Company: Linktech Engineering LLC
-Created: 2026-05-06
-Modified: 2026-08-28
-Required: Python 3.8+
-Part of: NMS_Tools Monitoring Suite
-License: MIT (see LICENSE for details)
+Universal header updater for Python projects.
 
-Description: 
-    Standalone header updater for Python scripts.
-
-    - Self-contained logger (no external imports)
-    - Recursively scans directories
-    - Updates the 'Modified:' header line
-    - Defaults to scanning the parent folder
-
+Behavior:
+- If --path/-p is provided, scan only that project.
+- If no path is provided, treat the parent folder of this script as the
+  project root and scan ALL Python files beneath it.
+- Supports --preview mode.
 """
 
 import os
 import sys
-import shutil
-import zipfile
-import platform
 import argparse
+from datetime import date, datetime
 from pathlib import Path
-from datetime import datetime
 
-# ---------------------------------------------------------------------------
-# Global Constants
-# ---------------------------------------------------------------------------
-SUITE_ROOT = Path(__file__).resolve().parent.parent
-SCRIPT_VERSION = "1.0.0"
-SCRIPT_NAME = Path(sys.argv[0]).stem
+# PythonTools logging
+from PythonTools.log_helpers.helpers import resolve_paths, initialize_universal_logging
 
-# Default scan directory (alias for suite root)
-SCAN_DIR = SUITE_ROOT
-AUTO_EXCLUDES = {".venv", "venv", "__pycache__", "site-packages"}
+# ------------------------------------------------------------
+# Enhanced Argparse (consistent with check_html.py)
+# ------------------------------------------------------------
 
-# Logging
-DEFAULT_LOG_DIR = Path.home() / "logs"
-
-# ---------------------------------------------------------------------------
-# Status Codes
-# ---------------------------------------------------------------------------
-STATUS_OK = 0
-STATUS_WARNING = 1
-STATUS_CRITICAL = 2
-STATUS_UNKNOWN = 3
-
-# ---------------------------------------------------------------------------
-# Python Version
-# ---------------------------------------------------------------------------
-def load_version() -> str:
-    version_file = SUITE_ROOT / "VERSION"
-    try:
-        return version_file.read_text(encoding="utf-8").strip()
-    except Exception:
-        return "External to NMS_TOOLS Suite"
-
-VERSION = load_version()
-MIN_MAJOR = 3
-MIN_MINOR = 8
-
-# ---------------------------------------------------------------------------
-# Custom Formatter
-# ---------------------------------------------------------------------------
 class CustomFormatter(
     argparse.ArgumentDefaultsHelpFormatter,
     argparse.RawDescriptionHelpFormatter
@@ -81,257 +34,169 @@ class CustomFormatter(
             return help_text
         return f"{help_text} (default: {action.default})"
 
+
 class CheckArgError(Exception):
     pass
+
 
 class CheckArgumentParser(argparse.ArgumentParser):
     def error(self, message):
         print(f"ERROR: {message}\n")
         self.print_help()
-        sys.exit(STATUS_UNKNOWN)
+        sys.exit(1)   # UNKNOWN not needed here; this is not a Nagios plugin
 
-# ---------------------------------------------------------------------------
-# Logger Class
-# ---------------------------------------------------------------------------
-class Logger:
-    def __init__(self, log_dir, script_path=None, max_mb=50, verbose=False):
-        self.log_dir = Path(log_dir)
-        self.verbose = verbose
-        self.max_bytes = max_mb * 1024 * 1024
-        self._warn_emitted = False
 
-        # Determine script name automatically
-        if script_path is None:
-            script_path = __file__
-        self.script_name = Path(script_path).stem
-
-        self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.logfile = self.log_dir / f"{self.script_name}.log"
-
-    def ts(self):
-        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    def write(self, message):
-        try:
-            with open(self.logfile, "a", encoding="utf-8") as f:
-                f.write(f"{self.ts()}; {message}\n")
-        except Exception as e:
-            if not self._warn_emitted:
-                self._warn_emitted = True
-                warn = f"[WARN] Unable to write to log directory: {self.log_dir} — {e}"
-                if self.verbose:
-                    print(warn)
-
-    def rotate_if_needed(self):
-        if not self.logfile.exists():
-            return
-
-        if self.logfile.stat().st_size < self.max_bytes:
-            return
-
-        archive_path = self._build_archive_path()
-        shutil.move(self.logfile, archive_path)
-        self._compress_file(archive_path)
-
-        with open(self.logfile, "w", encoding="utf-8") as f:
-            f.write(f"{self.ts()}; [INFO] log rotated to {archive_path.name}.zip\n")
-
-    def _build_archive_path(self):
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        return self.log_dir / f"{self.script_name}_{ts}.log"
-
-    def _compress_file(self, path):
-        zip_path = str(path) + ".zip"
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
-            z.write(path, arcname=path.name)
-        os.remove(path)
-
-    def start_banner(self):
-        self.write(f"[START] {self.script_name}.py")
-
-    def end_banner(self):
-        self.write("[END]")
-
-# ---------------------------------------------------------------------------
-# Header Update Logic
-# ---------------------------------------------------------------------------
-def update_header(path: Path, logger: Logger, dry_run: bool) -> bool:
-    """
-    Update the Modified: header only if the date is different.
-    If dry_run=True, do not write changes.
-    Returns True if an update *would* occur.
-    """
-    if path.suffix != ".py":
-        return False
-    try:
-        text = path.read_text(encoding="utf-8").splitlines(keepends=True)
-    except Exception as e:
-        logger.write(f"[ERROR] Unable to read {path}: {e}")
-        return False
-
-    today = datetime.now().strftime("%Y-%m-%d")
-    updated = False
-    new_lines = []
-
-    for line in text:
-        if line.strip().startswith("Modified:"):
-            old_date = line.split(":", 1)[1].strip()
-
-            # Only update if the date actually changed
-            if old_date != today:
-                new_lines.append(f"Modified: {today}\n")
-                updated = True
-            else:
-                new_lines.append(line)
-        else:
-            new_lines.append(line)
-
-    # If nothing changed, skip
-    if not updated:
-        logger.write(f"[SKIP] Skipping {path}")
-        return False
-
-    # Dry-run: report but do not write
-    if dry_run:
-        logger.write(f"[DRYRUN] Would update: {path}")
-        return True
-
-    # Write updated file
-    try:
-        path.write_text("".join(new_lines), encoding="utf-8")
-        logger.write(f"[INFO] Updated header: {path}")
-        return True
-    except Exception as e:
-        logger.write(f"[ERROR] Unable to write {path}: {e}")
-        return False
-
-# ---------------------------------------------------------------------------
-# Directory Walker
-# ---------------------------------------------------------------------------
-def scan_directory(root: Path, logger: Logger, dry_run: bool = False, excludes=None):
-    if excludes is None:
-        excludes = set()
-    updated_count = 0
-    skipped_count = 0
-
-    for dirpath, dirs, files in os.walk(root):
-        # Remove excluded directories from traversal
-        dirs[:] = [d for d in dirs if d not in excludes]
-        for name in files:
-            if not name.endswith(".py"):
-                continue
-
-            full_path = Path(dirpath) / name
-            if update_header(full_path, logger, dry_run):
-                updated_count += 1
-            else:
-                skipped_count += 1
-
-    return updated_count, skipped_count
-
-# ---------------------------------------------------------------------------
-# Argument Parser
-# ---------------------------------------------------------------------------
-def build_parser() -> argparse.Namespace:
+def build_parser():
     parser = CheckArgumentParser(
-        prog=SCRIPT_NAME,
+        prog="update_modified",
         description=(
-            "Update Modified Header Tool\n\n"
-            "Recursively scans Python files and updates the 'Modified:' header line."
+            "Universal Python header updater.\n\n"
+            "Updates 'Modified:' headers in Python files modified today.\n"
+            "If --path is omitted, the parent folder of this script is treated\n"
+            "as the project root and ALL Python files beneath it are scanned."
         ),
         formatter_class=CustomFormatter,
-        add_help=True,
+        add_help=True
     )
 
-    core = parser.add_argument_group("Core Options")
-    core.add_argument(
-        "paths",
-        nargs="*",
-        help=f"Folders to scan default: {str(SCAN_DIR)}",
+    parser.add_argument(
+        "-p", "--path",
+        help="Path to a specific project. If omitted, scan the parent folder.",
     )
-    core.add_argument(
-        "--dry-run",
+
+    parser.add_argument(
+        "--preview",
         action="store_true",
-        help="Show which files would be updated without modifying them",
-    )
-    core.add_argument(
-        "--exclude",
-        action="append",
-        default=[],
-        metavar="DIR",
-        help="Directory names to exclude from scanning (can be used multiple times)",
+        help="Show which files WOULD be updated, but do not modify anything.",
     )
 
-    log = parser.add_argument_group("Logging Options")
-    log.add_argument(
-        "-l", "--log-dir",
-        dest="log_dir",
-        default=str(DEFAULT_LOG_DIR),
-        help="Directory to store logs",
-    )
-    log.add_argument(
-        "--log-max-mb",
-        type=int,
-        default=50,
-        dest="log_max_mb",
-        help="Maximum log size in MB before rotation",
-    )
+    return parser
 
-    out = parser.add_argument_group("Output Options")
-    out.add_argument(
-        "-v", "--verbose",
-        action="store_true",
-        help="Detailed output",
-    )
-    out.add_argument(
-        "-V", "--version",
-        action="version",
-        version=(
-            f"NMS_TOOLS Suite Version: {VERSION}\n"
-            f"{SCRIPT_NAME}: {SCRIPT_VERSION}\n"
-            f"Python: {platform.python_version()}"
-        ),
-        help="Show script and Python version",
-    )
+# ------------------------------------------------------------
+# Helper Functions (no side effects)
+# ------------------------------------------------------------
 
-    return parser.parse_args()
+def build_summary(updated_files: list[str], preview: bool) -> str:
+    mode = "PREVIEW" if preview else "UPDATE"
+    today = date.today()
+    lines = [f"{mode} summary for {today}"]
+    if updated_files:
+        lines.append("\n=== Files updated ===")
+        lines.extend(f" - {f}" for f in updated_files)
+    else:
+        lines.append("\nNo files updated today")
+    return "\n".join(lines)
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+
+def get_new_files_today(root_path: Path) -> list[Path]:
+    """Return all .py files under root_path whose mtime is today."""
+    today = date.today()
+    new_files = []
+
+    for root, _, files in os.walk(root_path):
+        for f in files:
+            if f.endswith(".py"):
+                path = Path(root) / f
+                mtime = datetime.fromtimestamp(path.stat().st_mtime).date()
+                if mtime == today:
+                    new_files.append(path)
+
+    return new_files
+
+
+def update_file(path: Path, project_root: Path) -> str | None:
+    """
+    Update the Modified header in a file.
+    Return relative path if updated, else None.
+    """
+    updated = False
+    today = date.today().isoformat()
+    lines = []
+
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip().startswith("Modified:"):
+                lines.append(f" Modified: {today}\n")
+                updated = True
+            else:
+                lines.append(line)
+
+    if updated:
+        with path.open("w", encoding="utf-8") as f:
+            f.writelines(lines)
+        return str(path.relative_to(project_root))
+
+    return None
+
+
+def walk_project(project_root: Path, preview: bool) -> list[str]:
+    """Walk project and update headers, return list of updated files."""
+    fs_files = get_new_files_today(project_root)
+    updated_files: list[str] = []
+
+    for path in fs_files:
+        rel = str(path.relative_to(project_root))
+        if preview:
+            updated_files.append(rel)
+        else:
+            result = update_file(path, project_root)
+            if result:
+                updated_files.append(result)
+
+    return updated_files
+
+
+# ------------------------------------------------------------
+# GLOBAL LOGGER INITIALIZATION
+# ------------------------------------------------------------
+
+def init_logging_for_universal_script():
+    # Resolve paths for this script
+    paths = resolve_paths(__file__)
+     # Universal scripts usually have no CLI args
+    args = argparse.Namespace()
+
+    # Build the context expected by initialize_universal_logging()
+    context = {
+        "PROJECT_NAME": "update_modified",
+        "args": args,
+        "paths": paths,
+        "secrets": {},
+    }
+
+    logging_ctx = initialize_universal_logging(context)
+    return logging_ctx["logger"]
+
+
+logger = init_logging_for_universal_script()
+
+
+# ------------------------------------------------------------
+# Main Orchestration
+# ------------------------------------------------------------
+
 def main():
-    args = build_parser()
+    parser = build_parser()
+    args = parser.parse_args()
 
-    roots = [Path(p).resolve() for p in args.paths] if args.paths else [SCAN_DIR]
-    dry_run = args.dry_run
-    excludes = set(args.exclude)
-    # Always exclude virtual environments
-    excludes.update(AUTO_EXCLUDES)
-    
-    logger = Logger(
-        log_dir=args.log_dir,
-        max_mb=args.log_max_mb,
-        verbose=args.verbose,
-    )
+    # Determine project root
+    if args.path:
+        project_root = Path(args.path).expanduser().resolve()
+        if not project_root.exists():
+            print(f"Error: path does not exist: {project_root}")
+            sys.exit(1)
+    else:
+        # Default: parent folder of this script
+        project_root = Path(__file__).resolve().parent.parent
 
-    logger.start_banner()
+    logger.info(f"Scanning project root: {project_root}")
+    print(f"Scanning project root: {project_root}, {args.preview}")
 
-    total_updated = 0
-    total_skipped = 0
+    updated_files = walk_project(project_root, args.preview)
+    summary = build_summary(updated_files, args.preview)
+    print(summary)
+    logger.info(summary)
 
-    for root in roots:
-        logger.write(f"[INFO] Scanning: {root}")
-        updated, skipped = scan_directory(root, logger, dry_run=dry_run, excludes=excludes)
-        total_updated += updated
-        total_skipped += skipped
-
-    logger.write(f"[RESULT] updated={total_updated} skipped={total_skipped}")
-    logger.end_banner()
-
-    sys.exit(STATUS_OK)
 
 if __name__ == "__main__":
-    if sys.version_info < (MIN_MAJOR, MIN_MINOR):
-        print(f"ERROR: Python {MIN_MAJOR}.{MIN_MINOR}+ required")
-        sys.exit(STATUS_UNKNOWN)
     main()
