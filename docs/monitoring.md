@@ -1,23 +1,46 @@
 # Monitoring Integration Guide  
-Operator‑grade Nagios/Icinga integration for all NMS_Tools binaries.
+
+**Suite:** NMS_Tools Monitoring Suite
+**Maintainer:** Leon McClatchey, Linktech Engineering LLC
+**Document Type:** Monitoring Integration Guide
+**Last Updated:** 2026‑08‑30
+
+## 📘 Table of Contents
+1. [Overview](#1-overview)
+2. [Exit Codes](#2-exit-codes)
+3. [Nagios Plugin Path](#3-nagios-plugin-path)
+4. [check_cert — TLS Certificate Monitoring](#4-check_cert--tls-certificate-monitoring)
+5. [check_html — HTTP/HTTPS Content Validation](#5-check_html--httphttps-content-validation)
+6. [check_interfaces — Network Interface Monitoring](#6-check_interfaces--network-interface-monitoring)
+7. [check_ports — Port Availability Monitoring](#7-check_ports--port-availability-monitoring)
+8. [check_weather — Deterministic Weather Monitoring](#8-check_weather--deterministic-weather-monitoring)
+9. [check_ticker — Ticker Movement Monitoring](#9-check_ticker--ticker-movement-monitoring)
+10. [Best Practices](#10-best-practices)
+11. [Icinga Integration](#11-icinga-integration)
+12. [Zabbix / Sensu Notes](#12-zabbix--sensu-notes)
+13. [Summary](#13-summary)
+
+===
+
+## 1. Overview
 
 NMS_Tools provides deterministic, standalone monitoring utilities designed for production environments.  
-All tools:
 
-- return Nagios‑compatible exit codes  
-- produce stable, machine‑readable output  
-- behave consistently across distributions  
-- require no Python runtime  
-- install into `/usr/local/bin`  
+All tools:
+* return Nagios‑compatible exit codes  
+* produce stable, machine‑readable output  
+* behave consistently across distributions  
+* require no Python runtime  
+* install into `/usr/local/bin`  
 
 This guide provides integration examples for **all tools** in the suite.
 
 ---
 
-# Exit Codes
+## 2. Exit Codes
 
 | Code | Meaning |
-|------|---------|
+| *---* | *--- |
 | `0` | OK |
 | `1` | WARNING |
 | `2` | CRITICAL |
@@ -27,26 +50,24 @@ All tools follow this convention.
 
 ---
 
-# Nagios Plugin Path
+## 3. Nagios Plugin Path
 
 NMS_Tools installs into:
 
 /usr/local/bin
 
-
 You may optionally create symlinks:
 
 /usr/lib/nagios/plugins/check_cert -> /usr/local/bin/check_cert
-
 
 …but this is not required.  
 All examples below reference the canonical install path.
 
 ---
 
-# 1. check_cert — TLS Certificate Monitoring
+## 4. check_cert — TLS Certificate Monitoring
 
-## Command Definition
+### Command Definition
 
 ```bash
 define command {
@@ -55,7 +76,7 @@ define command {
 }
 ```
 
-## Service Definition
+### Service Definition
 
 ```bash
 define service {
@@ -66,29 +87,29 @@ define service {
 }
 ```
 
-## Example Outputs
+### Example Outputs
 
-### OK:
+#### OK:
 
 ```Code
 OK - Certificate valid (expires in 42 days)
 ```
 
-### WARNING:
+#### WARNING:
 
 ```Code
 WARNING - Certificate expires in 7 days
 ```
 
-### CRITICAL:
+#### CRITICAL:
 
 ```Code
 CRITICAL - Certificate expired 2 days ago
 ```
 
-# 2. check_html — HTTP/HTTPS Content Validation
+## 5. check_html — HTTP/HTTPS Content Validation
 
-## Command Definition
+### Command Definition
 
 ```bash
 define command {
@@ -97,7 +118,7 @@ define command {
 }
 ```
 
-## Service Definition
+### Service Definition
 
 ```bash
 define service {
@@ -108,23 +129,23 @@ define service {
 }
 ```
 
-## Example Outputs
+### Example Outputs
 
-### OK:
+#### OK:
 
 ```Code
 OK - Title matches: Example Domain
 ```
 
-### CRITICAL:
+#### CRITICAL:
 
 ```Code
 CRITICAL - Title mismatch (expected 'Example Domain', got 'Example')
 ```
 
-# 3. check_interfaces — Network Interface Monitoring
+## 6. check_interfaces — Network Interface Monitoring
 
-## Command Definition
+### Command Definition
 
 ```bash
 define command {
@@ -133,7 +154,7 @@ define command {
 }
 ```
 
-## Service Definition
+### Service Definition
 
 ```bash
 define service {
@@ -144,23 +165,23 @@ define service {
 }
 ```
 
-## Example Outputs
+### Example Outputs
 
-### OK:
+#### OK:
 
 ```Code
 OK - eth0 UP (1000Mbps), lo UP
 ```
 
-### CRITICAL:
+#### CRITICAL:
 
 ```Code
 CRITICAL - eth1 DOWN
 ```
 
-# 4. check_ports — Port Availability Monitoring
+## 7. check_ports — Port Availability Monitoring
 
-## Command Definition
+### Command Definition
 
 ```bash
 define command {
@@ -169,7 +190,7 @@ define command {
 }
 ```
 
-## Service Definition
+### Service Definition
 
 ```bash
 define service {
@@ -180,21 +201,21 @@ define service {
 }
 ```
 
-## Example Outputs
+### Example Outputs
 
-### OK:
+#### OK:
 
 ```Code
 OK - Port 22 open (SSH)
 ```
 
-### CRITICAL:
+#### CRITICAL:
 
 ```Code
 CRITICAL - Port 22 closed
 ```
 
-# 5. check_weather — Deterministic Weather Monitoring
+## 8. check_weather — Deterministic Weather Monitoring
 
 Useful for:
 
@@ -203,7 +224,7 @@ Useful for:
 * outdoor equipment
 * weather‑dependent automation
 
-## Command Definition
+### Command Definition
 
 ```bash
 define command {
@@ -212,7 +233,7 @@ define command {
 }
 ```
 
-## Service Definition
+### Service Definition
 
 ```bash
 define service {
@@ -223,53 +244,97 @@ define service {
 }
 ```
 
-## Example Outputs
+### Example Outputs
 
-### OK:
+#### OK:
 
 ```Code
 OK - Clear sky, 72°F
 ```
 
-### WARNING:
+#### WARNING:
 
 ```Code
 WARNING - High wind advisory (28 mph)
 ```
 
-### CRITICAL:
+#### CRITICAL:
 
 ```Code
 CRITICAL - Severe weather alert: Thunderstorm Warning
 ```
 
-# Best Practices
+## 9. check_ticker — Ticker Movement Monitoring
 
-## 1. Use explicit timeouts
+Useful for:
+* financial dashboards
+* movement‑based alerting
+* backend ingestion validation
+* ticker‑driven automation
 
-Nagios example:
+### Command Definition
+
+```bash
+define command {
+    command_name    check_ticker
+    command_line    /usr/local/bin/check_ticker --symbol "$ARG1$"
+}
+```
+
+### Service Definition
+
+```bash
+define service {
+    use                     generic-service
+    host_name               ops-dashboard
+    service_description     Ticker Movement
+    check_command           check_ticker!AAPL
+}
+```
+
+### Example Outputs
+
+#### OK
+
+```code
+OK - AAPL stable (movement +0.12%)
+```
+
+#### WARNING
+
+```code
+WARNING - AAPL volatility elevated (movement +4.8%)
+```
+
+#### CRITICAL
+
+```code
+CRITICAL - AAPL severe drop detected (movement -9.3%)
+```
+
+## 10. Best Practices
+
+### Use explicit timeouts
 
 ```Code
 check_command check_cert!443! -t 10
 ```
 
-## 2. Use retry intervals for weather and HTML checks
+### Use retry intervals for weather and HTML checks
 
 These are subject to transient network conditions.
 
-## 3. Keep thresholds deterministic
+### Keep thresholds deterministic
 
 Avoid fuzzy logic — NMS_Tools is designed for precision.
 
-## 4. Prefer service‑specific hostgroups
-
-Example:
+### Prefer service‑specific hostgroups
 
 ```Code
 hostgroup_name web-servers
 ```
 
-# Icinga Integration
+## 11. Icinga Integration
 
 Icinga uses the same command definitions as Nagios.
 
@@ -285,7 +350,7 @@ object CheckCommand "check_cert" {
 }
 ```
 
-# Zabbix / Sensu Notes
+## 12. Zabbix / Sensu Notes
 
 These tools can call NMS_Tools binaries directly:
 
@@ -293,7 +358,7 @@ These tools can call NMS_Tools binaries directly:
 UserParameter=check_cert[*],/usr/local/bin/check_cert --host $1 --port $2
 ```
 
-# Summary
+## 13. Summary
 
 NMS_Tools integrates cleanly with:
 

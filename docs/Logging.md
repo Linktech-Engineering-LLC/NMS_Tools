@@ -1,15 +1,32 @@
 # Logging Architecture — NMS_Tools (2026)
 
+**Suite:** NMS_Tools Monitoring Suite
+**Maintainer:** Leon McClatchey, Linktech Engineering LLC
+**Document Type:** Logging Architecture
+**Last Updated:** 2026‑08‑30
+
+## 📘 Table of Contents
+1. [Logging Overview](#1-logging-overview)
+2. [Log Directory Behavior](#2-log-directory-behavior)
+3. [Log File Naming](#3-log-file-naming)
+4. [Log Format](#4-log-format)
+5. [Logged Events](#5-logged-events)
+6. [Log Rotation](#6-log-rotation)
+7. [Log Access](#7-log-access)
+8. [Nagios/Icinga Behavior](#8-nagiosicinga-behavior)
+9. [Error Handling](#9-error-handling)
+10. [Summary](#10-summary)
+
+---
+
+## 1. Logging Overview
+
 NMS_Tools implements a deterministic, operator‑grade logging system shared across
 all tools in the suite. Logging is **opt‑in**, **caller‑gated**, and **disabled by
 default** to preserve Nagios/Icinga single‑line output semantics.
 
 This document defines the logging behavior, rotation rules, metadata schema, and
 operational expectations for all tools.
-
----
-
-## 1. Logging Overview
 
 Logging is enabled only when the caller provides:
 
@@ -19,11 +36,11 @@ If omitted, logging is fully disabled and no files are created.
 
 Logging is used for:
 
-- Troubleshooting
-- Auditing
-- Operator visibility
-- Post‑incident review
-- Development and diagnostics
+* Troubleshooting
+* Auditing
+* Operator visibility
+* Post‑incident review
+* Development and diagnostics
 
 Nagios mode **never** writes logs unless explicitly requested.
 
@@ -33,12 +50,12 @@ Nagios mode **never** writes logs unless explicitly requested.
 
 When `--log-dir` is provided:
 
-- The directory is created automatically if it does not exist
-- Creation uses `os.makedirs(..., exist_ok=True)` for deterministic behavior
-- If the executing user lacks permission to create or write to the directory:
-  - Logging is disabled
-  - A single warning is emitted (verbose/JSON modes only)
-  - Tool execution continues normally
+* The directory is created automatically if it does not exist
+* Creation uses `os.makedirs(..., exist_ok=True)` for deterministic behavior
+* If the executing user lacks permission to create or write to the directory:
+  * Logging is disabled
+  * A single warning is emitted (verbose/JSON modes only)
+  * Tool execution continues normally
 
 Example:
 
@@ -56,9 +73,9 @@ Nagios mode never prints this warning to stdout.
 
 Each tool writes to a deterministic log file:
 
-- `check_cert.py` → `check_cert.log`
-- `check_html.py` → `check_html.log`
-- `check_interfaces.py` → `check_interfaces.log`
+* `check_cert.py` → `check_cert.log`
+* `check_html.py` → `check_html.log`
+* `check_interfaces.py` → `check_interfaces.log`
 
 Log files are always located inside the caller‑provided `--log-dir`.
 
@@ -86,18 +103,18 @@ A deterministic phase identifier, not a severity level.
 
 Common tags include:
 
-- `[START]`   — tool invocation and input parameters
-- `[HTML]`    — HTTP/HTTPS capture details (check_html)
-- `[CERT]`    — certificate capture/validation (check_cert)
-- `[SNMP]`    — interface enumeration (check_interfaces)
-- `[RESULT]`  — final state, failure list, merged severity
-- `[END]`     — completion marker
+* `[START]`   — tool invocation and input parameters
+* `[HTML]`    — HTTP/HTTPS capture details (check_html)
+* `[CERT]`    — certificate capture/validation (check_cert)
+* `[SNMP]`    — interface enumeration (check_interfaces)
+* `[RESULT]`  — final state, failure list, merged severity
+* `[END]`     — completion marker
 
 ### Event and Metadata
 After the tag, each entry contains:
 
-- an event label (e.g., `check_html`, `capture`, `validation`)
-- a deterministic list of `key=value` fields
+* an event label (e.g., `check_html`, `capture`, `validation`)
+* a deterministic list of `key=value` fields
 
 Example:
 
@@ -115,30 +132,48 @@ Example:
 
 Each tool logs events relevant to its domain.
 
-### check_cert.py
-- Hostname resolution
-- TLS handshake lifecycle
-- Certificate parsing
-- Chain validation
-- Enforcement results
-- Internal warnings/errors
+### check_cert
+* Hostname resolution
+* TLS handshake lifecycle
+* Certificate parsing
+* Chain validation
+* Enforcement results
+* Internal warnings/errors
 
-### check_html.py
-- Hostname resolution
-- Connection lifecycle
-- Redirects
-- HTTP/HTTPS capture details
-- Backend detection
-- Enforcement results
-- Internal warnings/errors
+### check_html
+* Hostname resolution
+* Connection lifecycle
+* Redirects
+* HTTP/HTTPS capture details
+* Backend detection
+* Enforcement results
+* Internal warnings/errors
 
-### check_interfaces.py
-- Hostname resolution
-- SNMP connection lifecycle
-- Local interface enumeration
-- Remote interface enumeration
-- Enforcement results
-- Internal warnings/errors
+### check_interfaces
+* Hostname resolution
+* SNMP connection lifecycle
+* Local interface enumeration
+* Remote interface enumeration
+* Enforcement results
+* Internal warnings/errors
+
+### check_weather
+* Provider selection (Open‑Meteo, NWS, fallback)
+* API request lifecycle
+* Cache read/write lifecycle
+* Deterministic slicing decisions
+* Enrichment pipeline (icons, context, astronomy, indices)
+* Alert ingestion (NWS feed)
+* Enforcement results
+* Internal warnings/errors
+
+### check_ticker
+* Backend fetch lifecycle
+* Deterministic movement calculation
+* Normalization pipeline
+* Update loop timing
+* Enforcement results
+* Internal warnings/errors
 
 ---
 
@@ -147,16 +182,16 @@ Each tool logs events relevant to its domain.
 Rotation is deterministic, size‑based, and uses compressed archives.
 
 ### Rules
-- Default max size: **50 MB**
-- Configurable via:
+* Default max size: **50 MB**
+* Configurable via:
 
       --log-max-mb SIZE
 
-- When the active log exceeds the limit:
-  - The log file is atomically moved to a timestamped archive path
-  - The archive is immediately compressed into a `.zip` file
-  - A new log file is created
-  - A rotation notice is written as the first line of the new log
+* When the active log exceeds the limit:
+  * The log file is atomically moved to a timestamped archive path
+  * The archive is immediately compressed into a `.zip` file
+  * A new log file is created
+  * A rotation notice is written as the first line of the new log
 
 Example rotated archive:
 
@@ -167,10 +202,10 @@ Example rotation notice:
     2026-03-30 08:56:38; [INFO] log rotated to check_html_20260330_085638.log.zip
 
 ### Behavior Guarantees
-- No log data is ever deleted
-- No nested archive folders are created
-- Rotation is atomic and safe for Nagios/NRPE execution
-- Failures emit a single warning (verbose/JSON only) and do not interrupt tool execution
+* No log data is ever deleted
+* No nested archive folders are created
+* Rotation is atomic and safe for Nagios/NRPE execution
+* Failures emit a single warning (verbose/JSON only) and do not interrupt tool execution
 
 ---
 
@@ -205,11 +240,11 @@ Logging is enabled only when **both** of the following are true:
 
 Nagios/Icinga mode:
 
-- Never writes logs (even if `--log-dir` is set)
-- Always emits a single clean line to stdout
-- Never prints log paths, warnings, or internal details
-- Never emits rotation notices
-- Never prints verbose or diagnostic output
+* Never writes logs (even if `--log-dir` is set)
+* Always emits a single clean line to stdout
+* Never prints log paths, warnings, or internal details
+* Never emits rotation notices
+* Never prints verbose or diagnostic output
 
 This ensures deterministic, plugin‑safe behavior for monitoring systems.
 
@@ -219,9 +254,9 @@ This ensures deterministic, plugin‑safe behavior for monitoring systems.
 
 If logging cannot be initialized:
 
-- The tool prints a deterministic warning to stderr (not stdout)
-- Logging is silently disabled
-- Tool execution continues normally
+* The tool prints a deterministic warning to stderr (not stdout)
+* Logging is silently disabled
+* Tool execution continues normally
 
 Example:
 

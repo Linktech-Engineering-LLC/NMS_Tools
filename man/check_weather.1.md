@@ -1,94 +1,88 @@
-% NMS_TOOLS(7) NMS_Tools | Suite Overview and Architecture
+% CHECK_WEATHER(1) NMS_Tools | Deterministic Weather Monitoring Tool
 % Linktech Engineering
 % April 2026
 
 # NAME
-**nms_tools** — deterministic network monitoring and inspection tool suite
+**check_weather** — deterministic weather condition evaluator with provider registry and alert engine
+
+# SYNOPSIS
+**check_weather** [--city <name>] [--provider <id>] [--json] [--verbose]  
+**check_weather** [--debug-cache] [--debug-location]  
+**check_weather** [--ttl <seconds>] [--ignore-ttl] [--ignore-cache] [--cache-info]
 
 # DESCRIPTION
-**NMS_Tools** is a unified collection of deterministic, audit‑transparent
-monitoring and inspection utilities used across Linktech Engineering
-infrastructure. Each tool follows strict engineering principles:
+**check_weather** retrieves and evaluates current and forecast weather conditions
+using deterministic JSON schemas and a unified provider architecture. The tool
+supports multiple weather providers, cache handling, slicing normalization,
+astronomy fields, index calculations, and NWS alert ingestion.
 
-- Predictable, reproducible behavior  
-- No hidden state  
-- Audit‑transparent output  
-- Strict separation between human and machine modes  
-- Minimal dependencies  
-- Monitoring‑friendly design  
+The tool is designed for monitoring systems, automation pipelines, and
+operator‑grade diagnostics.
 
-The suite provides consistent CLI patterns, JSON schemas, logging behavior, and
-operational semantics across all included tools.
+# OPTIONS
 
-# INCLUDED TOOLS
+## --city <name>
+City or location name to resolve.  
+Supports Open‑Meteo geocoding and NWS station lookup.
 
-## check_ports(1)
-Deterministic multi-port TCP availability checker.
+## --provider <id>
+Override provider selection.  
+Examples: `openmeteo`, `nws`.
 
-## check_weather(1)
-Weather condition evaluator with deterministic rule engine and provider registry.
+## --json
+Emit deterministic JSON output.
 
-## check_cert(1)
-TLS certificate inspection and policy enforcement tool.
+## --verbose
+Emit human‑readable verbose output.
 
-## check_html(1)
-HTTP/HTTPS inspection and content validation tool.
+## --debug-cache
+Display cache path, age, TTL, and hit/miss status.
 
-## check_interfaces(1)
-Network interface state and SNMP-based operational status checker.
+## --debug-location
+Display resolved coordinates, station ID, and lookup method.
 
-# DIRECTORY STRUCTURE
-A typical installation includes:
+## --ttl <seconds>
+Override cache TTL.
 
-```
-/usr/local/bin/              Executables
-/usr/local/share/man/man1/   Tool man pages
-/usr/local/share/man/man7/   Suite overview (this page)
-/var/log/nms_tools/          Optional logging directory
-```
+## --ignore-ttl
+Bypass TTL check and force API fetch.
 
-# LOGGING
-Tools may emit operator‑grade logs with rotation when configured via:
+## --ignore-cache
+Skip cache entirely.
 
-```
---log-dir <path>
---log-max-mb <size>
-```
+## --cache-info
+Display cache metadata without fetching.
 
-Logging is deterministic and free of noise, suitable for automation and
-post‑incident analysis.
+## --help
+Show help text.
 
-# JSON OUTPUT
-All tools support deterministic JSON output for automation pipelines.  
-Schemas are versioned and documented in:
+# EXIT CODES
+**0** — OK  
+**1** — WARNING  
+**2** — CRITICAL  
+**3** — UNKNOWN
 
-```
-docs/Metadata_Schema.md
-```
+# EXAMPLES
 
-# NAGIOS / MONITORING INTEGRATION
-Each tool supports Nagios‑compatible exit codes:
+## Basic usage
 
-- **0** — OK  
-- **1** — WARNING  
-- **2** — CRITICAL  
-- **3** — UNKNOWN  
+check_weather --city "Wichita, KS"
 
-Future versions will include optional perfdata blocks.
+## JSON output
 
-# FUTURE ENHANCEMENTS
-- Centralized man‑page generation pipeline  
-- Named port support in check_ports  
-- Provider registry expansion in check_weather  
-- TLS chain validation improvements in check_cert  
-- Structured HTML parsing in check_html  
-- Enhanced SNMP diagnostics in check_interfaces  
-- Unified JSON schema versioning  
-- Packaging for RPM/DEB distributions  
+check_weather --city "Wichita, KS" --json
+
+## Force API fetch
+
+check_weather --city "Wichita, KS" --ignore-cache
+
+## Debug cache
+
+check_weather --debug-cache --city "Wichita, KS"
 
 # SEE ALSO
-**check_ports(1)**, **check_weather(1)**, **check_cert(1)**,  
-**check_html(1)**, **check_interfaces(1)**
+**check_ports(1)**, **check_cert(1)**, **check_html(1)**,  
+**check_interfaces(1)**, **check_ticker(1)**, **nms_tools(7)**
 
 # AUTHOR
 Linktech Engineering — https://www.linktechengineering.net/projects/nms-tools/

@@ -1,69 +1,130 @@
 # NMS_Tools Suite Layout
-The NMS_Tools suite is a collection of self‑contained Nagios/Icinga‑compatible Python plugins.
-All required Python dependencies are bundled inside the suite, so no pip installation or virtual environment is required.
 
-The suite installs into:
+**Suite:** NMS_Tools Monitoring Suite
+**Maintainer:** Leon McClatchey, Linktech Engineering LLC
+**Document Type:** Suite LayoutSuite Layout
+**Last Updated:** 2026‑08‑30
 
-`/usr/local/nagios/NMS_Tools/`
+## 📘 Table of Contents
+1. [Overview](#1-overview)
+2. [Build Output Layout](#2-build-output-layout)
+3. [Installation Locations](#3-installation-locations)
+4. [Runtime Requirements](#4-runtime-requirements)
+5. [Using the Tools](#5-using-the-tools)
+6. [Optional Suite Directory](#6-optional-suite-directory)
+7. [Man Pages](#7-man-pages)
+8. [Support Model](#8-support-model)
 
-and tools are executed directly by Nagios or NRPE.
+## 1. Overview
 
-## Directory Structure
+NMS_Tools is a suite of self‑contained, frozen Linux binaries designed for deterministic, audit‑transparent monitoring in Nagios, Icinga, NRPE, NCPA, and standalone operator workflows.
 
-NMS_Tools/
-│
-├── VERSION                 # Suite version
-│
-├── libs/                   # Bundled Python dependencies (vendored)
-│                           # Tools automatically load these at runtime
-│
-├── check_weather/          # Weather monitoring plugin
-│   └── check_weather.py
-│
-├── check_cert/             # Certificate expiration monitoring plugin
-│   └── check_cert.py
-│
-├── check_html/             # HTTP/HTML endpoint monitoring plugin
-│   └── check_html.py
-│
-└── man/                    # Man pages for each tool (optional)
+All tools:
+* are distributed as **PyInstaller‑frozen executables**
+* require **no Python runtime**
+* require **no pip**, **no virtualenv**, and *no external dependencies**
+* behave identically across distributions
+* support Nagios/Icinga exit codes
+* support JSON, verbose, quiet, and machine‑mode output
 
-## Installation
+The suite may be installed as:
+* individual binaries
+* DEB/RPM packages
+* a unified suite directory (optional)
 
-To install the suite:
-`sudo make install-suite`
-This copies the entire directory to:
+## 2. Build Output Layout
+After freezing, all tools are emitted directly into `dist/`:
 
-`/usr/local/nagios/NMS_Tools/`
+dist/check_cert
+dist/check_html
+dist/check_weather
+dist/check_ports
+dist/check_interfaces
+dist/check_ticker
 
-and sets correct permissions.
+## 3. Installation Locations
 
-## Runtime Requirements
+### System‑wide (recommended)
 
-* Python 3.8+
+/usr/local/bin/
+
+### Nagios plugin directory (optional)
+
+/usr/local/nagios/libexec/
+
+### Suite directory (legacy / optional)
+
+/usr/local/nagios/NMS_Tools/
+
+The suite directory layout is preserved for operators who prefer a single folder containing all tools.
+
+## 4. Runtime Requirements
+
+* Linux (x86_64)
+* No Python installation
 * No pip
 * No virtual environment
 * No external dependencies
 
-All tools automatically load their vendored libraries from `libs/`.
+All tools are fully self‑contained.
 
-## Using the Tools
-Each tool can be executed directly:
+## 5. Using the Tools
 
-`/usr/local/nagios/NMS_Tools/check_cert/check_cert.py --help`
+Tools can be executed directly:
+
+```bash
+/usr/local/bin/check_cert --help
+```
+
+Or from the suite directory:
+
+```bash
+/usr/local/nagios/NMS_Tools/check_cert/check_cert --help
+```
 
 Nagios command definitions typically look like:
 
-`command[check_cert]=/usr/local/nagios/NMS_Tools/check_cert/check_cert.py -H www.example.com`
+command[check_cert]=/usr/local/bin/check_cert -H www.example.com
 
-## Man Pages (Optional)
+All tools return Nagios‑compatible exit codes:
+* `0` `OK`
+* `1` `WARNING`
+* `2` `CRITICAL`
+* `3` `UNKNOWN`
+
+## 6. Optional Suite Directory
+If installed as a suite directory, the layout is:
+
+NMS_Tools/
+│
+├── VERSION
+│
+├── check_cert
+├── check_html
+├── check_weather
+├── check_ports
+├── check_interfaces
+├── check_ticker
+│
+└── man/
+    ├── man1/
+    └── man7/
+
+This directory is optional and exists only for operators who prefer a unified suite folder.
+
+## 7. Man Pages
+
 If installed, man pages are available under:
 
-`man1/   (individual tools)`
-`man7/   (suite overview)`
+man1/   (individual tools)
+man7/   (suite overview)
 
-## Support Model
+Man pages are optional and included only when requested.
 
-* Tools are designed to run only inside the suite directory
-* Individual scripts copied out of the suite are unsupported
-* All dependencies are bundled in `libs/`
+## 8. Support Model
+
+* Tools are designed to run **only as frozen binaries**
+* Individual binaries copied out of the suite directory are fully supported
+* Python scripts are **not** distributed and **not** supported
+* No external dependencies are required
+* All tools behave deterministically regardless of installation path

@@ -1,5 +1,14 @@
-# NMS_Tools  
-Deterministic, operator‑grade monitoring tools for Linux and Nagios environments.
+# NMS_Tools
+Deterministic, operator‑grade monitoring utilities for Linux and Nagios environments.
+
+**Suite:** NMS_Tools Monitoring Suite  
+**Maintainer:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT (source) • Proprietary (binaries)  
+**Requires:** Python 3.12+ (for source builds)  
+**Version:** 2.0.0 (Stable) • Nightly: latest  
+**Packaging:** DEB • RPM • TGZ • ZIP  
+**PythonTools:** 0.2.0  
+**Last Updated:** 2026‑08‑30
 
 <!-- Branding -->
 [![Linktech Engineering](https://img.shields.io/badge/LINKTECH%20ENGINEERING-gray)](https://github.com/Linktech-Engineering-LLC)
@@ -29,7 +38,28 @@ Deterministic, operator‑grade monitoring tools for Linux and Nagios environmen
 
 ---
 
-## Overview
+## 📘 Table of Contents
+1. [Overview](#1-overview)
+2. [Tools in This Suite](#2-tools-in-this-suite)
+3. [Packaging](#3-packaging)
+4. [Installation](#4-installation)
+5. [Dashboards](#5-dashboards)
+6. [Downloads](#6-downloads)
+7. [Building From Source](#7-building-from-source)
+  * [Stage 1 — Freeze (PyInstaller)](#stage-1--freeze-all-tools-pyinstaller)
+  * [Stage 2 — Full Packaging](#stage-2--full-packaging-deb-rpm-tgz-zip)
+8. [Repository Structure](#8-repository-structure)
+9. [Quick Start](#9-quick-start)
+10. [Demos](#10-️-demos)
+11. [Why NMS_Tools?](#11-why-nms_tools)
+12. [Project Ecosystem](#12-project-ecosystem)
+13. [Philosophy](#13-philosophy)
+14. [Contributing](#14-contributing)
+15. [License](#15-license)
+
+---
+
+## 1. Overview
 
 **NMS_Tools** is a suite of deterministic, operator‑grade monitoring and inspection utilities designed for Linux and Nagios‑based environments.
 Each tool produces predictable, machine‑readable output suitable for automation, dashboards, and monitoring pipelines.
@@ -48,7 +78,7 @@ This ensures consistent behavior across distributions, monitoring systems, and a
 
 ---
 
-## Tools in This Suite
+## 2. Tools in This Suite
 
 | Tool | Description | Documentation |
 |------|-------------|---------------|
@@ -61,7 +91,7 @@ This ensures consistent behavior across distributions, monitoring systems, and a
 
 ---
 
-## Packaging
+## 3. Packaging
 
 NMS_Tools is distributed in multiple formats to support diverse deployment environments:
 
@@ -87,7 +117,7 @@ All packaging formats include:
 
 ---
 
-## Installation
+## 4. Installation
 
 NMS_Tools is distributed as:
 
@@ -126,7 +156,7 @@ unzip nms_tools-<version>.zip
 
 --- 
 
-## Dashboards
+## 5. Dashboards
 
 ### Nightly Dashboard
 
@@ -138,7 +168,7 @@ https://linktech-engineering-llc.github.io/NMS_Tools/
 Versioned, immutable release builds:
 https://linktech-engineering-llc.github.io/NMS_Tools/stable/
 
-## Downloads
+## 6. Downloads
 
 **Stable releases:**
 https://github.com/Linktech-Engineering-LLC/NMS_Tools/releases
@@ -146,7 +176,7 @@ https://github.com/Linktech-Engineering-LLC/NMS_Tools/releases
 **Nightly builds:**
 https://linktech-engineering-llc.github.io/NMS_Tools/
 
-## Building From Source
+## 7. Building From Source
 
 NMS_Tools uses a two‑stage build system:
 
@@ -229,7 +259,7 @@ packaging/build_all.sh --packages
 
 ---
 
-## Repository Structure
+## 8. Repository Structure
 
 ```Code
 src/
@@ -239,19 +269,28 @@ src/
   check_ports/
   check_weather/
   check_ticker/
+  demos/
+    weather/
+    ticker/
+
+tools/
+  (suite management scripts)
+
 scripts/
   build.py
+
 packaging/
   debian/
   rpm/
   output/
+
 .github/
   workflows/
 ```
 
 ---
 
-## Quick Start
+## 9. Quick Start
 
 NMS_Tools provides deterministic, standalone monitoring utilities that behave consistently across environments.  
 Each tool is a single PyInstaller‑compiled binary with predictable exit codes and machine‑readable output.
@@ -296,7 +335,61 @@ All tools return Nagios‑compatible exit codes (0=OK, 1=WARNING, 2=CRITICAL, 3=
 
 ---
 
-## Why NMS_Tools?
+## 10. 🖥️ Demos
+NMS_Tools includes lightweight demonstration frontends under `src/demos/` that visualize deterministic tool output.
+These demos are **not part of the monitoring suite** and **not shipped in DEB/RPM packages**.
+They exist for development, testing, and demonstration purposes.
+
+---
+
+### All Demos
+All demos in the suite share the same architectural foundation:
+* **FastAPI backend integration**
+* **Apache reverse proxy compatibility**
+* **DOM‑driven updates** (pure JavaScript manipulating DOM elements)
+* **deterministic JSON ingestion**
+* **lightweight, framework‑free HTML/JS/CSS design**
+
+These characteristics apply to:
+* Weather Demo
+* Ticker Demo
+* any future demos added to the suite
+
+---
+
+### Weather Demo (src/demos/weather/)
+A standalone HTML/JS/CSS frontend that renders deterministic JSON output from `check_weather`.
+
+Features:
+* 3‑column layout
+* alert banner
+* recolored icon pack
+* rolling 24‑hour and 7‑day forecast modes
+* external weather.js logic
+
+--- 
+
+### Ticker Demo (src/demos/ticker/)
+A lightweight frontend demonstrating deterministic ticker ingestion and trend visualization.
+
+Demo‑specific features:
+* current price and quote metrics
+* trend and history placeholders (future development)
+* color‑coded movement indicators
+* external ticker.js logic
+
+---
+
+### Demo Packaging
+Demos are:
+* stored under src/demos/
+* not included in DEB/RPM packages
+* included only in TGZ/ZIP portable archives
+* referenced in documentation but not treated as production tools
+
+---
+
+## 11. Why NMS_Tools?
 
 Traditional monitoring scripts often suffer from:
 
@@ -337,7 +430,7 @@ NMS_Tools is built for operators who need tools that behave the same way every t
 
 ---
 
-## Project Ecosystem
+## 12. Project Ecosystem
 
 NMS_Tools is part of the **Linktech Engineering Tools Suite**, alongside:
 * **PythonTools** — deterministic foundation library
@@ -358,7 +451,7 @@ Together, these projects form a cohesive ecosystem of operator‑grade automatio
 
 ---
 
-## Philosophy
+## 13. Philosophy
 
 NMS_Tools is built around a few core principles:
 
@@ -369,7 +462,7 @@ NMS_Tools is built around a few core principles:
 
 ---
 
-## Contributing
+## 14. Contributing
 
 Contributions are welcome.  
 Please keep submissions:
@@ -383,7 +476,7 @@ See [CONTRIBUTING](CONTRIBUTING.md) for details.
 
 ---
 
-## License
+## 15. License
 
 MIT License  
 See [LICENSE](LICENSE) for details.

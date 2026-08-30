@@ -31,7 +31,28 @@ The format follows semantic versioning:
 
 ---
 
-## [3.0.0] — Initial Stable Release
+## [Documentation Update] — 2026‑08‑30
+### Added
+- Header Info Block standard
+- Numbered H2 section rule
+- Deterministic TOC rule
+- Unified suite documentation identity
+- Updated README, Installation.md, Packaging.md, CONTRIBUTING.md, SECURITY.md
+
+## [2.0.0] — Suite Release — 2026‑08‑28
+### Added
+- check_ticker tool
+- Weather Demo v3.0.0 backend integration
+- Ticker Demo v1.0.0 backend integration
+- Unified FastAPI backend architecture
+- Apache reverse proxy compatibility for all demos
+- Deterministic documentation structure (Header Blocks + TOC)
+- Updated Installation, Packaging, and Security policies
+
+### Notes
+- This is the first suite release using Python 3.10+ baseline.
+
+## [1.0.0] — Initial Stable Release
 
 ### Added
 - Deterministic JSON output mode  
@@ -42,9 +63,41 @@ The format follows semantic versioning:
 - AIA chain reconstruction  
 - OCSP reachability detection  
 - Expiration thresholds  
-- Python‑3.6 compatibility  
+- Python-3.6 compatibility
 - Stable CLI contract  
 - Installation, Operation, and Usage documentation  
+
+## check_ticker [1.0.0] — 2026‑08‑29
+### Added
+- Deterministic ticker ingestion
+- JSON output mode
+- FastAPI backend integration
+- DOM‑driven demo frontend
+- Rolling update loop
+- Color‑coded movement indicators
+
+### Notes
+- Trending/history metrics planned for future development
+
+## check_weather [3.0.0] — 2026‑08‑28
+### Added
+- Unified provider architecture (Open‑Meteo + NWS)
+- Provider registry with `--provider` override
+- Deterministic slicing normalization
+- Astronomy fields (sunrise, sunset, moon phase)
+- Index engine (heat index, wind chill, humidex)
+- Alert engine (NWS Alerts API)
+- Unified icon pipeline
+- Frozen binary behavior documentation
+- Updated Architecture, Metadata Schema, Operation, Provider Architecture, and Usage docs
+
+### Improved
+- Normalization pipeline
+- JSON export structure
+- Logging and fallback behavior
+
+### Notes
+- This release aligns check_weather with the Weather Demo v3.0.0 backend.
 
 ## check_weather.py [2.0.0] - 2026-04-10
 ### Added

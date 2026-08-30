@@ -185,7 +185,7 @@ Future versions will include optional perfdata blocks.
 
 # SEE ALSO
 **check_ports(1)**, **check_weather(1)**, **check_cert(1)**,  
-**check_html(1)**, **check_interfaces(1)**
+**check_html(1)**, **check_interfaces(1)**, **check_ticker(1)**
 
 # AUTHOR
 Linktech Engineering — https://www.linktechengineering.net/projects/nms-tools/

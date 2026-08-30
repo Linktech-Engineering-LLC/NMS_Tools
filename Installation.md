@@ -1,6 +1,30 @@
 # Installation
 
-## Overview
+**Suite:** NMS_Tools Monitoring Suite
+**Maintainer:** Leon McClatchey, Linktech Engineering LLC
+**Document Type:** Installation Guide
+**Last Updated:** 2026‑08‑30
+
+---
+
+## 📘 Table of Contents
+1. [Overview](#1-overview)
+2. [Installation Locations](#2-installation-locations)
+3. [Prerequisites](#3-prerequisites)
+4. [Installing the Full Suite](#4-installing-the-full-suite)
+  * [DEB Installation](#deb-installation-debianubuntu)
+  * [RPM Installation](#rpm-installation-fedorarhelopensuse)
+5. [Installing Individual Tools](#5-installing-individual-tools)
+6. [Nightly Builds](#6-nightly-builds)
+7. [Uninstallation](#7-uninstallation)
+  * [DEB Removal](#deb-removal)
+  * [RPM Removal](#rpm-removal)
+  * [Manual Binary Removal](#manual-binary-removal)
+8. [Notes](#8-notes)
+
+---
+
+## 1. Overview
 
 NMS_Tools is distributed as standalone Linux binaries and native system packages (DEB/RPM).  
 No Python runtime is required — each tool is a self‑contained executable built with PyInstaller.
@@ -9,18 +33,17 @@ You may install the entire suite or individual tools depending on your environme
 
 ---
 
-## Installation Locations
+## 2. Installation Locations
 
 NMS_Tools binaries may be installed in either of two locations:
 
-### **1. System‑wide path (default)**  
+### **System‑wide path (default)**  
 For general CLI usage, automation, cron jobs, and operator workflows:
 
 [/usr/bin/]
 
-### **2. Nagios plugin directory**  
+### **Nagios plugin directory**  
 For monitoring environments (Nagios, Icinga, Naemon, NRPE, NCPA):
-
 
 [/usr/local/nagios/libexec/]
 
@@ -32,25 +55,25 @@ All tools are fully Nagios‑compatible and can be used as drop‑in plugins.
 
 ---
 
-## Prerequisites
+## 3. Prerequisites
 
-- Linux system (x86_64)
-- Standard utilities (bash, coreutils)
-- Root/sudo access for system‑wide installation (DEB/RPM)
+* Linux system (x86_64)
+* Standard utilities (bash, coreutils)
+* Root/sudo access for system‑wide installation (DEB/RPM)
 
 No Python installation is required.
 
 ---
 
-## Installing the Full Suite
+## 4. Installing the Full Suite
 
-### Option 1 — Install via DEB package (Debian/Ubuntu)
+### DEB Installation (Debian/Ubuntu)
 
 ```bash
 sudo dpkg -i nms-tools_<version>.deb
 ```
 
-### Option 2 — Install via RPM package (Fedora/RHEL/openSUSE)
+### RPM Installation (Fedora/RHEL/openSUSE)
 
 ```bash
 sudo rpm -i nms_tools-<version>-1.noarch.rpm
@@ -64,7 +87,9 @@ Packages install all tools into standard system paths:
 /usr/bin/check_ports
 /usr/bin/check_weather
 
-## Installing Individual Tools
+---
+
+## 5. Installing Individual Tools
 Each tool is also available as a standalone binary.
 
 Download from:
@@ -104,7 +129,7 @@ Repeat for any tool you want to install individually.
 
 ---
 
-## Nightly Builds
+## 6. Nightly Builds
 
 Nightly builds include:
 
@@ -117,15 +142,17 @@ Available at:
 
 https://linktech-engineering-llc.github.io/NMS_Tools/
 
-## Uninstallation
+---
 
-### DEB
+## 7. Uninstallation
+
+### DEB Removal
 
 ```bash
 sudo dpkg -r nms-tools
 ```
 
-### RPM
+### RPM Removal
 
 ```bash
 sudo rpm -e nms_tools
@@ -151,7 +178,9 @@ Or:
 sudo rm -r /usr/local/nagios/libexec/NMS_Tools/
 ```
 
-# Notes
+---
+
+## 8. Notes
 
 * All binaries are deterministic and self‑contained.
 * No Python environment or vendor library is required.
