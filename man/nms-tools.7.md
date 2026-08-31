@@ -3,7 +3,7 @@
 % April 2026
 
 # NAME
-**nms_tools** — deterministic network monitoring and inspection tool suite
+**nms-tools** — deterministic network monitoring and inspection tool suite
 # VERSION
 This build of **NMS_Tools** was generated with the following metadata:
 
@@ -16,7 +16,7 @@ These fields are automatically injected during packaging and reflect the
 exact state of the repository at build time.
 
 # DESCRIPTION
-**NMS_Tools** is a unified collection of deterministic, audit‑transparent
+**NMS-Tools** is a unified collection of deterministic, audit‑transparent
 monitoring and inspection utilities used across Linktech Engineering
 infrastructure. Each tool follows strict engineering principles:
 
