@@ -61,7 +61,7 @@ sed -i \
     -e "s/{{BUILD_TYPE}}/${NIGHTLY:-0}/" \
     -e "s/{{BUILD_DATE}}/${DATESTAMP}/" \
     -e "s/{{GIT_HASH}}/${GIT_HASH}/" \
-    "$MAN_OUT_DIR/nms-tools.7"
+    "$MAN_OUT_DIR/nms_tools.7"
 
 # ------------------------------------------------------------
 # Create source tarball (hyphens, matching spec)
