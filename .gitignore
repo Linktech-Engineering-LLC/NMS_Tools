@@ -34,4 +34,4 @@ svg/
 
 # temporary folders
 temp/
-man/generated/*
+#man/generated/*
