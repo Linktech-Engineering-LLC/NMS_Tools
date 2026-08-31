@@ -55,7 +55,7 @@ else
 fi
 
 echo "[NMS_Tools] Using version: $VERSION"
-
+ 
 sed -i \
     -e "s/{{VERSION}}/${VERSION}/" \
     -e "s/{{BUILD_TYPE}}/${NIGHTLY:-0}/" \
