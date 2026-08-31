@@ -1,4 +1,40 @@
-# check_html.py — Enforcement Model (Version 1, Final)
+# check_html.py — Enforcement Model
+
+**Part of:** NMS_Tools Monitoring Suite  
+**Document:** Enforcement Model  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+  
+**Last Updated:** 2026‑08‑17
+
+## Table of Contents
+
+1. [Overview](#1-overview)
+2. [Enforcement Overview](#2-enforcement-overview)
+3. [Status Enforcement](#2-status-enforcement)  
+    1. [3.1 Inputs](#21-inputs)  
+    2. [3.2 Rules](#22-rules)
+4. [Content‑Type Enforcement](#3-content-type-enforcement)  
+    1. [4.1 Inputs](#31-inputs)  
+    2. [4.2 Rules](#32-rules)
+5. [HTML Enforcement](#4-html-enforcement)  
+    1. [5.1 Inputs](#41-inputs)  
+    2. [5.2 Rules](#42-rules)
+6. [Backend Enforcement](#5-backend-enforcement)  
+    1. [6.1 Inputs](#51-inputs)  
+    2. [6.2 Rules](#52-rules)
+7. [Severity Merging](#6-severity-merging)
+8. [Final Message Construction](#7-final-message-construction)
+9. [Output Mode Interaction](#8-output-mode-interaction)  
+    1. [9.1 JSON Mode](#81-json-mode)  
+    2. [9.2 Verbose Mode](#82-verbose-mode)  
+    3. [9.3 Quiet Mode](#83-quiet-mode)  
+    4. [9.4 Nagios/Icinga Mode](#84-nagiosicinga-mode)  
+    5. [9.5 Logging Behavior](#85-logging-behavior)
+
+---
+
+## 1. Overview
 
 check_html.py implements a deterministic, multi‑stage enforcement engine.
 Each subsystem evaluates a specific aspect of the HTTP/HTTPS response and returns a structured result:
@@ -15,7 +51,7 @@ The final status is computed using strict Nagios severity precedence:
 
 This document defines the complete enforcement model for Version 1.
 
-## 1. Enforcement Overview
+## 2. Enforcement Overview
 The enforcement engine evaluates four independent domains:
 
 1. Status Enforcement
@@ -43,16 +79,16 @@ Each subsystem returns a structured result:
 
 The engine merges these results into a final Nagios status and message.
 
-## 2. Status Enforcement
+## 3. Status Enforcement
 Status enforcement validates the HTTP status code.
 
-### 2.1 Inputs
+### 3.1 Inputs
 
 * status from capture
 * --expect-status (optional)
 * TLS handshake state
 
-### 2.2 Rules
+### 3.2 Rules
 **TLS failure**
 
 ```Code
@@ -78,15 +114,15 @@ CRITICAL - Expected 200, got 404
 ```Code
 OK - Status 200 OK
 ```
-## 3. Content‑Type Enforcement
+## 4. Content‑Type Enforcement
 Validates the presence and correctness of the Content-Type header.
 
-### 3.1 Inputs
+### 4.1 Inputs
 
 * content_type from capture
 * --require-type (optional)
 
-### 3.2 Rules
+### 4.2 Rules
 
 Missing content‑type
 
@@ -106,15 +142,15 @@ CRITICAL - Expected content-type text/html, got application/json
 OK - Content-type text/html
 ```
 
-## 4. HTML Enforcement
+## 5. HTML Enforcement
 Validates the presence of an HTML body.
 
-### 4.1 Inputs
+### 5.1 Inputs
 
 * body from capture
 * --require-html (optional)
 
-### 4.2 Rules
+### 5.2 Rules
 
 **Missing HTML body (only if required)**
 
@@ -135,15 +171,15 @@ OK - HTML body present or not required
 OK - HTML body present
 ```
 
-## 5. Backend Enforcement
+## 6. Backend Enforcement
 Validates the detected backend against operator expectations.
 
-### 5.1 Inputs
+### 6.1 Inputs
 * backend detection result
 * --require-backend (optional)
 * TLS handshake state
 
-### 5.2 Rules
+### 6.2 Rules
 
 **TLS failure**
 Backend cannot be evaluated:
@@ -170,7 +206,7 @@ CRITICAL - Backend mismatch: expected nginx, detected apache
 OK - Backend nginx
 ```
 
-## 6. Severity Merging
+## 7. Severity Merging
 Final status is computed using strict Nagios precedence:
 
 **CRITICAL > WARNING > UNKNOWN > OK**
@@ -185,7 +221,7 @@ No CRITICAL but at least one WARNING → WARNING
 
 This ensures deterministic, operator‑grade behavior.
 
-## 7. Final Message Construction
+## 8. Final Message Construction
 The final message is selected using:
 
 * The highest‑severity subsystem’s message
@@ -198,7 +234,7 @@ OK - 200 OK (text/html)
 
 Nagios/Icinga mode always prints exactly one line.
 
-## 8. Output Mode Interaction
+## 9. Output Mode Interaction
 
 check_html.py has four mutually exclusive output modes:
 
@@ -209,30 +245,30 @@ check_html.py has four mutually exclusive output modes:
 
 Only one mode can ever be active.
 
-### JSON Mode
+### 9.1 JSON Mode
 - Prints the full metadata object
 - Includes capture, backend, enforcement, perfdata, and meta sections
 - Intended for automation and downstream tooling
 
-### Verbose Mode
+### 9.2 Verbose Mode
 - Prints multi-line human-readable output
 - Includes banners, subsystem summaries, and final status
 
-### Quiet Mode
+### 9.3 Quiet Mode
 - **Prints nothing**
 - **Suppresses all stdout**
 - Still performs full enforcement
 - Still returns the correct Nagios exit code
 - Logging is enabled only if `--log-dir` is provided
 
-### Nagios/Icinga Mode
+### 9.4 Nagios/Icinga Mode
 - Activated when no other mode is selected
 - Prints exactly **one clean line**
 - Never writes logs (even if `--log-dir` is provided)
 - Never prints warnings, verbose text, or JSON
 - Designed for deterministic plugin behavior
 
-### Logging Behavior
+### 9.5 Logging Behavior
 Logging is enabled only when:
 
 - `--log-dir` is provided  

@@ -8,12 +8,12 @@
 ## 📘 Table of Contents
 1. [Overview](#1-overview)
 2. [Available Tools](#2-available-tools)
-    * [check_ports](#check_ports)
-    * [check_weather](#check_weather)
-    * [check_cert](#check_cert)
-    * [check_html](#check_html)
-    * [check_interfaces](#check_interfaces)
-    * [check_ticker](#check_ticker)
+    1. [2.1 check_ports](#21-check_ports)
+    2. [2.2 check_weather](#22-check_weather)
+    3. [2.3 check_cert](#23-check_cert)
+    4. [2.4 check_html](#24-check_html)
+    5. [2.5 check_interfaces](#25-check_interfaces)
+    6. [2.6 check_ticker](#26-check_ticker)
 3. [Documentation Suite](#3-documentation-suite)
 4. [Project Website](#4-project-website)
 5. [Philosophy](#5-philosophy)
@@ -34,7 +34,7 @@ schema details, and the project roadmap.
 
 ## 2. Available Tools
 
-### check_ports
+### 2.1 check_ports
 Deterministic multi‑port TCP connectivity checker.
 
 * Supports lists, ranges, and mixed port sets  
@@ -46,7 +46,7 @@ Deterministic multi‑port TCP connectivity checker.
 
 ---
 
-### check_weather
+### 2.2 check_weather
 Rule‑based weather condition evaluator using deterministic JSON schemas.
 
 * Supports temperature, wind, visibility, precipitation, and condition rules  
@@ -57,7 +57,7 @@ Rule‑based weather condition evaluator using deterministic JSON schemas.
 
 ---
 
-### check_cert
+### 2.3 check_cert
 Deterministic TLS certificate inspection and policy enforcement.
 
 * JSON, verbose, and Nagios output modes  
@@ -68,7 +68,7 @@ Deterministic TLS certificate inspection and policy enforcement.
 
 ---
 
-### check_html
+### 2.4 check_html
 Deterministic HTTP/HTTPS inspection and content‑validation tool.
 
 * TLS‑aware request pipeline  
@@ -79,7 +79,7 @@ Deterministic HTTP/HTTPS inspection and content‑validation tool.
 
 ---
 
-### check_interfaces
+### 2.5 check_interfaces
 Network interface state and SNMP‑based status checker.
 
 * Deterministic interface enumeration  
@@ -89,7 +89,7 @@ Network interface state and SNMP‑based status checker.
 
 ---
 
-### check_ticker
+### 2.6 check_ticker
 Deterministic ticker ingestion and movement analysis.
 * JSON output mode
 * FastAPI backend integration

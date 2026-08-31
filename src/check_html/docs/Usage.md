@@ -1,10 +1,32 @@
 # check_html.py — Usage Guide
+
+**Part of:** NMS_Tools Monitoring Suite  
+**Document:** Usage Guide  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+  
+**Last Updated:** 2026‑08‑17
+
+## Table of Contents
+1. [Overview](#1-overview)
+2. [Basic Usage](#2-basic-usage)
+3. [Output Modes](#3-output-modes)
+4. [Protocol Selection](#4-protocol-selection)
+5. [Enforcement Options](#5-enforcement-options)
+6. [Timeout and Redirects](#6-timeout-and-redirects)
+7. [Examples](#7-examples)
+8. [Nagios Integration](#8-nagios-integration)
+9. [Exit Codes](#9-exit-codes)
+10. [Help Output](#10-help-output)
+11. [Hostname Resolution](#11-hostname-resolution)
+
+## 1. Overview
 check_html.py is a deterministic HTTP/HTTPS inspection and content‑validation tool.
 It supports JSON, verbose, and Nagios output modes, and is designed for operators, automation systems, and monitoring platforms.
 
 This guide describes the command‑line interface, output modes, examples, and Nagios integration.
 
-## 1. Basic Usage
+## 2. Basic Usage
 **HTTP check**
 ```bash
 ./check_html.py -H example.com
@@ -17,10 +39,10 @@ This guide describes the command‑line interface, output modes, examples, and N
 ```bash
 ./check_html.py -H example.com -p 8080
 ```
-## 2. Output Modes
+## 3. Output Modes
 check_html.py supports three deterministic output modes.
 
-### 2.1 JSON Mode (-j / --json)
+### 3.1 JSON Mode (-j / --json)
 Structured output for automation:
 
 ```bash
@@ -33,7 +55,7 @@ Produces a canonical JSON object containing:
 * enforcement results
 * final status and message
 
-### 2.2 Verbose Mode (-v / --verbose)
+### 3.2 Verbose Mode (-v / --verbose)
 Human‑readable, multi‑section output:
 
 ```bash
@@ -50,7 +72,7 @@ Sections include:
 * HTML enforcement
 * Final result
 
-### 2.3 Default Mode (Nagios Single‑Line)
+### 3.3 Default Mode (Nagios Single‑Line)
 No flags required:
 
 ```bash
@@ -68,7 +90,7 @@ CRITICAL - TLS handshake failed
 ```
 This mode is used for Nagios/Icinga integration.
 
-## 3. Protocol Selection
+## 4. Protocol Selection
 
 **Force HTTPS**
 ```bash
@@ -89,7 +111,7 @@ If neither flag is provided:
 
 This behavior is deterministic and consistent across all output modes.
 
-## 4. Enforcement Options
+## 5. Enforcement Options
 **Expected HTTP status**
 
 ```bash
@@ -112,7 +134,7 @@ This behavior is deterministic and consistent across all output modes.
 ```
 Backend detection is based on server headers and known patterns.
 
-## 5. Timeout and Redirects
+## 6. Timeout and Redirects
 
 **Set timeout (seconds)**
 ```bash./check_html.py -H example.com -t 10
@@ -131,7 +153,7 @@ Limit redirects
 
 Redirects are followed deterministically up to the specified limit.
 
-## 6. Examples
+## 7. Examples
 
 **Check a normal website**
 ```bash
@@ -158,7 +180,7 @@ Redirects are followed deterministically up to the specified limit.
 ./check_html.py -H api.example.com --json
 ```
 
-## 7. Nagios Integration
+## 8. Nagios Integration
 
 **Command definition**
 
@@ -186,7 +208,7 @@ define service {
 OK - 200 OK (text/html)
 ``` 
 
-## 8. Exit Codes
+## 9. Exit Codes
 check_html.py uses standard Nagios exit codes:
 
 | Code | Meaning |
@@ -200,7 +222,7 @@ Exit codes are determined by the enforcement subsystem using Nagios‑aware seve
 
 **CRITICAL > WARNING > UNKNOWN > OK**
 
-## 9. Help Output
+## 10. Help Output
 View all flags:
 
 ```bash
@@ -209,7 +231,7 @@ View all flags:
 
 The CLI parser is noise‑free, grouped, and deterministic.
 
-## 10. Hostname Resolution
+## 11. Hostname Resolution
 
 All NMS_Tools plugins that accept -H require the hostname to be resolvable via the system resolver (DNS, /etc/hosts, or equivalent).
 

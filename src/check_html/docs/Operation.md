@@ -1,10 +1,40 @@
-# check_html.py — Operation Guide (Version 1 Final)
+# check_html.py — Operation Guide
 
+**Part of:** NMS_Tools Monitoring Suite  
+**Document:** Operation Guide  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+  
+**Last Updated:** 2026‑08‑17
+
+## Table of Contents
+
+1. [Overview](#1-overview)
+2. [Stage 1 — CLI Parsing](#2-stage-1--cli-parsing)
+3. [Stage 2 — URL Construction & Protocol Selection](#3-stage-2--url-construction--protocol-selection)
+4. [Stage 3 — HTTP/TLS Request](#4-stage-3--httptls-request)
+5. [Stage 4 — Response Capture](#5-stage-4--response-capture)
+6. [Stage 5 — Backend Detection](#6-stage-5--backend-detection)
+7. [Stage 6 — Enforcement Subsystems](#7-stage-6--enforcement-subsystems)  
+    1. [7.1 Status Enforcement](#71-status-enforcement)  
+    2. [7.2 Content‑Type Enforcement](#72-content-type-enforcement)  
+    3. [7.3 HTML Enforcement](#73-html-enforcement)  
+    4. [7.4 Backend Enforcement](#74-backend-enforcement)
+8. [Stage 7 — Unified Result Object](#8-stage-7--unified-result-object)
+9. [Stage 8 — Output Modes](#9-stage-8--output-modes)  
+    1. [9.1 JSON Mode](#91-json-mode)  
+    2. [9.2 Verbose Mode](#92-verbose-mode)  
+    3. [9.3 Quiet Mode](#93-quiet-mode)  
+    4. [9.4 Nagios/Icinga Mode](#94-nagiosicinga-mode)
+10. [Stage 9 — Exit Codes](#10-stage-9--exit-codes)
+11. [Troubleshooting](#11-troubleshooting)
+
+---
+
+## 1. Overview
 check_html.py is a deterministic HTTP/HTTPS inspection and content‑validation tool.
 This document describes the runtime pipeline, capture behavior, backend detection,
 enforcement model, output modes, and exit code logic.
-
-## 1. Overview
 
 Every execution of check_html.py follows a deterministic nine‑stage pipeline:
 

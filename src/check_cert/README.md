@@ -1,32 +1,64 @@
 # check_cert — TLS Certificate Inspection & Monitoring Tool
 
-![Python Version](https://img.shields.io/badge/python-3.6%2B-blue)
+**Part of:** NMS_Tools Monitoring Suite  
+**Script:** `check_cert.py`  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+  
+**Last Updated:** 2026-08-17
+
+![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-stable-brightgreen)
 ![Nagios Plugin](https://img.shields.io/badge/Nagios-plugin-success)
 ![NMS_Tools](https://img.shields.io/badge/NMS_Tools-check__cert-blueviolet)
 
+## Table of Contents
+1. [Overview](#1-overview)
+2. [Features](#2--features)
+    1. [2.1 Deterministic Metadata Extraction](#21-deterministic-metadata-extraction)
+    2. [2.2 Chain, AIA, and OCSP](#22--chain-aia-and-ocsp)
+    3. [2.3 Unified Enforcement Engine](#23--unified-enforcement-engine)
+    4. [2.4 Clean Output Modes](#24--clean-output-modes)
+3. [Quick Start](#3--quick-start)
+4. [Output Modes](#4--output-modes)
+    1. [4.1 Nagios Mode](#41--nagios-default)
+    2. [4.2 Verbose Mode](#42--verbose-mode--v----verbose)
+    3. [4.3 JSON Mode](#43--json-mode--j----json)
+5. [Enforcement Model](#5--enforcement-model)
+6. [Logging Subsystem](#6--logging-subsystem)
+7. [CLI Reference](#7--cli-reference)
+8. [Installation](#8--installation)
+9. [PythonTools Requirement](#9--pythontools-requirement-script-mode)
+10. [Documentation](#10--documentation)
+11. [Roadmap](#11--roadmap)
+12. [License](#12l--license)
+
+---
+
+## 1. Overview
+
 **check_cert** is an operator‑grade TLS certificate inspection and monitoring tool designed for:
 
-- Nagios / Icinga / Sensu
-- Automation pipelines
-- CI/CD validation
-- Standalone diagnostics
+* Nagios / Icinga / Sensu
+* Automation pipelines
+* CI/CD validation
+* Standalone diagnostics
 
 The tool produces **deterministic**, **structured**, and **audit‑transparent** output across all modes:
 
-- Nagios (default)
-- Verbose inspection
-- JSON for automation
-- Canonical log banners (START / CERT / RESULT / END)
+* Nagios (default)
+* Verbose inspection
+* JSON for automation
+* Canonical log banners (START / CERT / RESULT / END)
 
 check_cert is part of the **NMS_Tools** monitoring suite.
 
 ---
 
-## 📘 Features
+## 2. 📘 Features
 
-### 🔍 Deterministic Metadata Extraction
+### 2.1🔍 Deterministic Metadata Extraction
 
 check_cert extracts a complete, operator‑grade metadata set:
 
@@ -61,7 +93,7 @@ check_cert extracts a complete, operator‑grade metadata set:
   * `key_state`
   * `key_message`
 
-### 🔗 Chain, AIA, and OCSP
+### 2.2 🔗 Chain, AIA, and OCSP
 
 #### AIA Metadata
 * Issuer URLs
@@ -86,7 +118,7 @@ check_cert extracts a complete, operator‑grade metadata set:
 * OCSP status (none, present, etc.)
 * Reachability (reachable)
 
-### 🛡 Unified Enforcement Engine
+### 2.3 🛡 Unified Enforcement Engine
 
 All output modes share a deterministic enforcement block.
 
@@ -122,7 +154,7 @@ All modes produce:
 }
 ```
 
-### 📤 Clean Output Modes
+### 2.4 📤 Clean Output Modes
 
 #### ⭐ Nagios (default)
 
@@ -258,7 +290,7 @@ Machine‑readable structured output with a stable schema.
 
 ---
 
-## 🚀 Quick Start
+## 3. 🚀 Quick Start
 
 Check a certificate:
 
@@ -287,9 +319,9 @@ Nagios thresholds:
 
 ---
 
-## 🧭 Output Modes
+## 4. 🧭 Output Modes
 
-### ⭐ Nagios (default)
+### 4.1 ⭐ Nagios (default)
 
 Deterministic single‑line output:
 
@@ -307,7 +339,7 @@ Exit codes follow Nagios conventions:
 
 ---
 
-### ⭐ Verbose Mode (`-v` / `--verbose`)
+### 4.2 ⭐ Verbose Mode (`-v` / `--verbose`)
 
 Verbose mode provides a complete operator‑grade inspection:
 
@@ -328,7 +360,7 @@ Ideal for diagnostics and debugging.
 
 ---
 
-### ⭐ JSON Mode (`-j` / `--json`)
+### 4.3 ⭐ JSON Mode (`-j` / `--json`)
 
 Machine‑readable structured output with a **stable schema**:
 
@@ -371,7 +403,7 @@ Example (truncated):
 }
 ```
 
-## 🔒 Enforcement Model
+## 5. 🔒 Enforcement Model
 
 check_cert uses a unified enforcement engine shared across all output modes.
 
@@ -417,7 +449,7 @@ All modes share a deterministic enforcement block:
 }
 ```
 
-## 📜 Logging Subsystem
+## 6. 📜 Logging Subsystem
 check_cert writes deterministic log entries using canonical banners:
 
 [START]
@@ -456,7 +488,7 @@ Example:
 2026-03-28 12:19:11; [END]
 ```
 
-## 🔧 CLI Reference
+## 7. 🔧 CLI Reference
 
 usage: check_cert.py -H HOST [options]
 
@@ -481,7 +513,7 @@ Monitoring controls:
   --no-check-chain
   --no-check-ocsp
 
-## 📦 Installation
+## 8. 📦 Installation
 
 Clone the NMS_Tools repository:
 
@@ -496,7 +528,7 @@ Run directly:
 ./check_cert.py -H example.com
 ```
 
-## 📦 PythonTools Requirement (Script Mode)
+## 9. 📦 PythonTools Requirement (Script Mode)
 
 When running `check_cert.py` **as a Python script**, the `PythonTools` library must be installed.
 The frozen binary (`dist/check_cert`) bundles PythonTools internally, but the script version does not.
@@ -529,7 +561,7 @@ pip install -e .
 These modules are bundled into the frozen binary, but not into the script version.
 Therefore, PythonTools must be installed when running check_cert.py directly.
 
-## 📚 Documentation
+## 10. 📚 Documentation
 Documentation is available under:
 
 Code
@@ -544,7 +576,7 @@ Including:
 * [Roadmap.md](docs/Roadmap.md)
 * [Logging.md](docs/Logging.md)
 
-## 🛠 Roadmap
+## 11. 🛠 Roadmap
 
 * OCSP stapling enforcement
 * SCT extraction
@@ -554,6 +586,6 @@ Including:
 * Additional chain completeness heuristics
 * Add Logging.md documenting canonical log banners
 
-## 📄 License
+## 12l 📄 License
 
 Released under the MIT License.

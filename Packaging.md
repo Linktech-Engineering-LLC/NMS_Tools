@@ -9,19 +9,19 @@
 1. [Overview](#1-overview)
 2. [Build Outputs](#2-build-outputs)
 3. [Package Layout](#3-package-layout)
-  * [DEB Package](#deb-package-debianubuntu)
-  * [RPM Package](#rpm-package-fedorarhelopensuse)
-  * [Optional Nagios Plugin Installation](#optional-nagios-plugin-installation)
+    1. [3.1 DEB Package](#31-deb-package-debianubuntu)
+    2. [3.2 RPM Package](#32-rpm-package-fedorarhelopensuse)
+    3. [3.3 Optional Nagios Plugin Installation](#33-optional-nagios-plugin-installation)
 4. [Building Packages Locally](#4-building-packages-locally)
-  * [Build All Binaries](#build-all-binaries)
-  * [Build DEB Package](#build-deb-package)
-  * [Build RPM Package](#build-rpm-package)
+    1. [4.1 Build All Binaries](#41-build-all-binaries)
+    2. [4.2 Build DEB Package](#42-build-deb-package)
+    3. [4.3 Build RPM Package](#43-build-rpm-package)
 5. [Versioning](#5-versioning)
 6. [Nightly Builds](#6-nightly-builds)
 7. [Reproducibility](#7-reproducibility)
 8. [Customizing Installation Paths](#8-customizing-installation-paths)
-  * [DEB](#deb)
-  * [RPM](#rpm)
+    1. [8.1 DEB](#81-deb)
+    2. [8.2 RPM](#82-rpm)
 9. [Publishing Releases](#9-publishing-releases)
 10. [Notes](#10-notes)
 
@@ -61,7 +61,7 @@ check_weather
 
 ## 3. Package Layout
 
-### DEB Package (Debian/Ubuntu)
+### 3.1 DEB Package (Debian/Ubuntu)
 
 /usr/bin/check_cert
 /usr/bin/check_html
@@ -71,7 +71,7 @@ check_weather
 /usr/share/doc/nms-tools/
 /usr/share/licenses/nms-tools/
 
-### RPM Package (Fedora/RHEL/openSUSE)
+### 3.2 RPM Package (Fedora/RHEL/openSUSE)
 
 /usr/bin/check_cert
 /usr/bin/check_html
@@ -81,7 +81,7 @@ check_weather
 /usr/share/doc/nms_tools/
 /usr/share/licenses/nms_tools/
 
-### Optional Nagios Plugin Installation
+### 3.3 Optional Nagios Plugin Installation
 
 Packages may optionally install tools into:
 
@@ -97,7 +97,7 @@ This is controlled by the packaging spec and can be toggled per environment.
 
 ## 4. Building Packages Locally
 
-### Build all binaries
+### 4.1 Build all binaries
 
 ```bash
 ./scripts/build_all.sh
@@ -107,13 +107,13 @@ This produces:
 
 build/linux-x86_64/check_*
 
-### Build DEB package
+### 4.2 Build DEB package
 
 ```bash
 ./packaging/build_deb.sh
 ```
 
-### Build RPM package
+### 4.3 Build RPM package
 
 ```bash
 ./packaging/build_rpm.sh
@@ -174,11 +174,11 @@ Packaging is designed to be deterministic:
 
 To install tools into a Nagios plugin directory, modify:
 
-### DEB
+### 8.1 DEB
 
 [DEBIAN/install]
 
-### RPM
+### 8.2 RPM
 
 [nms_tools.spec]
 

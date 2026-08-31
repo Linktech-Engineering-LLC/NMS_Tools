@@ -46,8 +46,8 @@ Deterministic, operator‑grade monitoring utilities for Linux and Nagios enviro
 5. [Dashboards](#5-dashboards)
 6. [Downloads](#6-downloads)
 7. [Building From Source](#7-building-from-source)
-  * [Stage 1 — Freeze (PyInstaller)](#stage-1--freeze-all-tools-pyinstaller)
-  * [Stage 2 — Full Packaging](#stage-2--full-packaging-deb-rpm-tgz-zip)
+    1. [7.1 Stage 1 — Freeze (PyInstaller)](#71-stage-1--freeze-all-tools-pyinstaller)
+    2. [7.2 Stage 2 — Full Packaging](#72-stage-2--full-packaging-deb-rpm-tgz-zip)
 8. [Repository Structure](#8-repository-structure)
 9. [Quick Start](#9-quick-start)
 10. [Demos](#10-️-demos)
@@ -182,7 +182,7 @@ NMS_Tools uses a two‑stage build system:
 
 ---
 
-### Stage 1 — Freeze all tools (PyInstaller)
+### 7.1 Stage 1 — Freeze all tools (PyInstaller)
 
 The freeze step is performed by the executable build script:
 
@@ -215,7 +215,7 @@ cd ../PythonTools
 pip install .
 ```
 
-### Stage 2 — Full packaging (DEB, RPM, TGZ, ZIP)
+### 7.2 Stage 2 — Full packaging (DEB, RPM, TGZ, ZIP)
 
 The full packaging pipeline is executed via:
 

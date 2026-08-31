@@ -1,20 +1,46 @@
-# Metadata Schema — check_cert.py (Stabilized Architecture)
+# Metadata Schema — check_cert.py
+
+**Part of:** NMS_Tools Monitoring Suite  
+**Document:** Metadata Schema  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+  
+**Last Updated:** 2026‑08‑17
+
+## Table of Contents
+
+1. [Overview](#1-overview)
+2. [Top‑Level Structure](#2-top-level-structure)
+3. [Host & Connection Metadata](#3-host--connection-metadata)
+4. [TLS Session Metadata](#4-tls-session-metadata)
+5. [Certificate Metadata](#5-certificate-metadata)
+6. [Key Metadata](#6-key-metadata)
+7. [AIA Metadata](#7-aia-metadata)
+8. [OCSP Metadata](#8-ocsp-metadata)
+9. [Chain Metadata](#9-chain-metadata)
+10. [Warnings & Errors](#10-warnings--errors)
+11. [Enforcement Metadata](#11-enforcement-metadata)
+12. [Deterministic Ordering](#12-deterministic-ordering)
+13. [Example Full JSON Output](#13-example-full-json-output)
+
+---
+
+## 1. Overview
 
 This document defines the **canonical JSON schema** emitted by `check_cert.py` when using `--json`.
 
 The schema is:
-
-- **Deterministic** (stable ordering)
-- **Strict** (no surprise fields)
-- **Automation‑safe** (consistent structure)
-- **Aligned** with verbose output and log banners
-- **Versioned implicitly** by the tool version
+* **Deterministic** (stable ordering)
+* **Strict** (no surprise fields)
+* **Automation‑safe** (consistent structure)
+* **Aligned** with verbose output and log banners
+* **Versioned implicitly** by the tool version
 
 Any schema change requires a version bump and migration notes.
 
 ---
 
-# 1. Top‑Level Structure
+# 2. Top‑Level Structure
 
 The JSON output is a single object with the following top‑level keys, in **guaranteed canonical order**:
 
@@ -40,7 +66,7 @@ The JSON output is a single object with the following top‑level keys, in **gua
 }
 ```
 
-## 2. Host & Connection Metadata
+## 3. Host & Connection Metadata
 
 ```json
 "host": "example.com",
@@ -58,7 +84,7 @@ The JSON output is a single object with the following top‑level keys, in **gua
 | timeout |	Connection timeout (seconds) |
 | insecure |	Whether certificate verification was disabled |
 
-## 3. TLS Session Metadata
+## 4. TLS Session Metadata
 
 ```json
 "tls": {
@@ -78,7 +104,7 @@ The JSON output is a single object with the following top‑level keys, in **gua
 | cipher_is_cbc |	Whether cipher is CBC |
 | cipher_is_rc4 |	Whether cipher is RC4 |
 
-## 4. Certificate Metadata
+## 5. Certificate Metadata
 
 ```json
 "certificate": {
@@ -110,7 +136,7 @@ The JSON output is a single object with the following top‑level keys, in **gua
 | warning_days |	Warning threshold used |
 | critical_days |	Critical threshold used |
 
-## 5. Key Metadata
+## 6. Key Metadata
 
 ```json
 "key": {
@@ -126,7 +152,7 @@ The JSON output is a single object with the following top‑level keys, in **gua
 | rsa_bits |	RSA key size (null for ECDSA) |
 | ecc_curve |	Curve name (null for RSA) |
 
-## 6. AIA Metadata
+## 7. AIA Metadata
 
 ```json
 "aia": {
@@ -151,7 +177,7 @@ The JSON output is a single object with the following top‑level keys, in **gua
 | issuer_urls |	AIA “CA Issuers” URLs |
 | chain |	Reconstructed chain certificates (if any) |
 
-## 7. OCSP Metadata
+## 8. OCSP Metadata
 
 ```json
 "ocsp": {
@@ -167,7 +193,7 @@ The JSON output is a single object with the following top‑level keys, in **gua
 | status |	none, good, revoked, unknown |
 | reachable |	Whether OCSP responder was reachable |
 
-## 8. Chain Metadata
+## 9. Chain Metadata
 
 ```json
 "chain": {
@@ -185,7 +211,7 @@ The JSON output is a single object with the following top‑level keys, in **gua
 | valid |	Whether chain validated |
 | errors |	Array of chain errors (always present) |
 
-## 9. Warnings & Errors
+## 10. Warnings & Errors
 
 ```json
 "warnings": [],
@@ -199,7 +225,7 @@ The JSON output is a single object with the following top‑level keys, in **gua
 
 Both arrays are always present.
 
-## 10. Enforcement Metadata
+## 11. Enforcement Metadata
 
 ```json
 "enforcement": {
@@ -219,7 +245,7 @@ Both arrays are always present.
 | errors |	Internal enforcement errors |
 | state |	Nagios state (0 OK, 1 WARN, 2 CRIT, 3 UNKNOWN) |
 
-## 11. Deterministic Ordering
+## 12. Deterministic Ordering
 
 The canonical ordering of top‑level keys is:
 
@@ -240,7 +266,7 @@ The canonical ordering of top‑level keys is:
 
 This ordering is guaranteed for all JSON output.
 
-## 12. Example Full JSON Output
+## 13. Example Full JSON Output
 
 ```json
 {

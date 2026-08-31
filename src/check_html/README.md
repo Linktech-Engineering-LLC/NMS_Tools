@@ -1,14 +1,42 @@
 # check_html — HTTP/HTTPS Inspection & Content Validation Tool
-![Python Version](https://img.shields.io/badge/python-3.6%2B-blue)
+
+**Part of:** NMS_Tools Monitoring Suite  
+**Script:** `check_html.py`  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+  
+**Last Updated:** 2026‑08‑17
+
+![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-stable-brightgreen)
 ![Nagios Plugin](https://img.shields.io/badge/Nagios-plugin-success)
 ![NMS_Tools](https://img.shields.io/badge/NMS_Tools-check__html-blueviolet)
 
+## Table of Contents
+
+1. [Overview](#1-overview)
+2. [Features](#2-features)
+3. [Installation](#3-installation)
+4. [Usage](#4-usage)
+5. [Output Modes](#5-output-modes)  
+    1. [5.1 Nagios/Icinga Mode](#51-nagiosicinga-mode)  
+    2. [5.2 JSON Mode](#52-json-mode)  
+    3. [5.3 Verbose Mode](#53-verbose-mode)  
+    4. [5.4 Quiet Mode](#54-quiet-mode)
+6. [Enforcement Model](#6-enforcement-model)
+7. [Perfdata](#7-perfdata)
+8. [Exit Codes](#8-exit-codes)
+9. [License](#9-license)
+
+---
+
+## 1. Overview
+
 check_html.py is a deterministic HTTP/HTTPS inspection tool designed for monitoring environments.
 It performs endpoint validation, backend fingerprinting, and content checks while producing clean, predictable output across JSON, verbose, quiet, and Nagios/Icinga modes.
 
-## Features
+## 2. Features
 
 * Deterministic HTTP/HTTPS request pipeline with TLS awareness
 * Status code validation (--expect-status)
@@ -20,7 +48,7 @@ It performs endpoint validation, backend fingerprinting, and content checks whil
 * Nagios/Icinga‑compatible exit codes and perfdata
 * Fast, dependency‑light implementation
 
-## Installation
+## 3. Installation
 
 check_html.py requires:
 
@@ -35,7 +63,7 @@ pip install requests
 
 The tool is standalone and does not require system packages or external binaries.
 
-## Usage
+## 4. Usage
 Basic usage:
 
 ```bash
@@ -66,18 +94,18 @@ Nagios/Icinga mode (default) produces a single deterministic line:
 OK - 200 OK (text/html) | latency=0.0012s;;; size=331B;;;
 ```
 
-### Output Modes
+## 5. Output Modes
 
 check_html.py has four mutually exclusive output modes:
 
-**Nagios/Icinga Mode (default)**
+### 5.1 Nagios/Icinga Mode (default)
 
 * Activated when no other mode is selected
 * Prints exactly one clean line
 * Never writes logs (even if --log-dir is provided)
 * Designed for deterministic plugin behavior
 
-**JSON Mode (-j)**
+### 5.2 JSON Mode (-j)
 
 Machine‑readable structured output including:
 
@@ -88,7 +116,7 @@ Machine‑readable structured output including:
 * perfdata
 * final merged status
 
-**Verbose Mode (-v)**
+### 5.3 Verbose Mode (-v)
 
 Human‑readable diagnostic report including:
 
@@ -99,14 +127,14 @@ Human‑readable diagnostic report including:
 * enforcement summary
 * final result
 
-**Quiet Mode (-q)**
+### 5.4 Quiet Mode (-q)
 
 * Prints nothing
 * Performs full enforcement internally
 * Returns the correct Nagios exit code
 * Logging is allowed if --log-dir is provided
 
-### Enforcement Model
+## 6. Enforcement Model
 
 check_html.py applies deterministic validation rules:
 
@@ -119,7 +147,7 @@ Nagios severity precedence:
 
 **CRITICAL > WARNING > UNKNOWN > OK**
 
-### Perfdata
+## 7. Perfdata
 
 Perfdata fields include:
 
@@ -136,7 +164,7 @@ Perfdata is included in:
 
 Not included in Quiet mode (no output).
 
-## Exit Codes
+## 8. Exit Codes
 
 | Code | Meaning |
 | :---: | :--- |
@@ -147,7 +175,7 @@ Not included in Quiet mode (no output).
 
 Exit codes are determined by merged enforcement results.
 
-## License
+## 9. License
 
 This tool is part of the NMS_Tools suite.
 See the root project for licensing, documentation, and contributor guidelines.

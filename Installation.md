@@ -12,14 +12,14 @@
 2. [Installation Locations](#2-installation-locations)
 3. [Prerequisites](#3-prerequisites)
 4. [Installing the Full Suite](#4-installing-the-full-suite)
-  * [DEB Installation](#deb-installation-debianubuntu)
-  * [RPM Installation](#rpm-installation-fedorarhelopensuse)
+    1. [4.1 DEB Installation](#41-deb-installation-debianubuntu)
+    2. [4.2 RPM Installation](#42-rpm-installation-fedorarhelopensuse)
 5. [Installing Individual Tools](#5-installing-individual-tools)
 6. [Nightly Builds](#6-nightly-builds)
 7. [Uninstallation](#7-uninstallation)
-  * [DEB Removal](#deb-removal)
-  * [RPM Removal](#rpm-removal)
-  * [Manual Binary Removal](#manual-binary-removal)
+    1. [7.1 DEB Removal](#71-deb-removal)
+    2. [7.2 RPM Removal](#72-rpm-removal)
+    3. [7.3 Manual Binary Removal](#73-manual-binary-removal)
 8. [Notes](#8-notes)
 
 ---
@@ -67,13 +67,13 @@ No Python installation is required.
 
 ## 4. Installing the Full Suite
 
-### DEB Installation (Debian/Ubuntu)
+### 4.1 DEB Installation (Debian/Ubuntu)
 
 ```bash
 sudo dpkg -i nms-tools_<version>.deb
 ```
 
-### RPM Installation (Fedora/RHEL/openSUSE)
+### 4.2 RPM Installation (Fedora/RHEL/openSUSE)
 
 ```bash
 sudo rpm -i nms_tools-<version>-1.noarch.rpm
@@ -146,19 +146,19 @@ https://linktech-engineering-llc.github.io/NMS_Tools/
 
 ## 7. Uninstallation
 
-### DEB Removal
+### 7.1 DEB Removal
 
 ```bash
 sudo dpkg -r nms-tools
 ```
 
-### RPM Removal
+### 7.2 RPM Removal
 
 ```bash
 sudo rpm -e nms_tools
 ```
 
-### Manual binary removal
+### 7.3 Manual binary removal
 
 System‑wide:
 

@@ -1,11 +1,40 @@
-# check_html.py — Metadata Schema (Version 1, Final)
+# check_html.py — Metadata Schema
+
+**Part of:** NMS_Tools Monitoring Suite  
+**Document:** Metadata Schema  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+  
+**Last Updated:** 2026‑08‑17
+
+## Table of Contents
+
+1. [Overview](#1-overview)
+2. [Top‑Level Structure](#2-top-level-structure)
+3. [meta — Execution Metadata](#3-meta--execution-metadata)
+4. [capture — HTTP/TLS Capture Metadata](#4-capture--httptls-capture-metadata)
+5. [backend — Backend Detection Metadata](#5-backend--backend-detection-metadata)
+6. [enforcement — Subsystem Results](#6-enforcement--subsystem-results)  
+    1. [6.1 Status Enforcement](#61-status-enforcement)  
+    2. [6.2 Content‑Type Enforcement](#62-content-type-enforcement)  
+    3. [6.3 HTML Enforcement](#63-html-enforcement)  
+    4. [6.4 Backend Enforcement](#64-backend-enforcement)
+7. [perfdata — Performance Metrics](#7-perfdata--performance-metrics)
+8. [overall — Final Result](#8-overall--final-result)
+9. [Output Modes and Nagios/Icinga Behavior](#9-output-modes-and-nagiosicinga-behavior)
+10. [Schema Stability](#10-schema-stability)
+
+---
+
+## 1. Overview
+
 check_html.py produces a deterministic JSON object when --json is used.
 This schema defines the complete structure, field names, and data types used by automation systems, monitoring platforms, and downstream tooling.
 
 The schema is stable for Version 1.
 Future versions will increment the schema version and remain backward‑compatible.
 
-## 1. Top‑Level Structure
+## 2. Top‑Level Structure
 The JSON output contains five primary sections:
 
 ```json
@@ -20,7 +49,7 @@ The JSON output contains five primary sections:
 ```
 Each section is documented below.
 
-## 2. meta — Execution Metadata
+## 3. meta — Execution Metadata
 The meta object contains deterministic metadata describing the execution environment and runtime behavior.
 
 | Field | Type |	Description |
@@ -47,7 +76,7 @@ Example:
 }
 ```
 
-## 3. capture — HTTP/TLS Capture Metadata
+## 4. capture — HTTP/TLS Capture Metadata
 The capture object contains normalized metadata collected during the HTTP/HTTPS request.
 
 | Field | Type | Description |
@@ -76,7 +105,7 @@ Example:
 }
 ```
 
-## 4. backend — Backend Detection Metadata
+## 5. backend — Backend Detection Metadata
 The backend object contains the results of backend fingerprinting.
 
 | Field | Type | Description |
@@ -108,7 +137,7 @@ If TLS fails:
 }
 ```
 
-## 5. enforcement — Subsystem Results
+## 6. enforcement — Subsystem Results
 Each enforcement subsystem returns a structured result:
 
 ```json
@@ -130,7 +159,7 @@ Each subsystem object contains:
 | expected | string or number or null | Expected value (if applicable) |
 | actual | string or number or null | Actual observed value |
 
-### 5.1 Status Enforcement
+### 6.1 Status Enforcement
 
 ```json
 "status": {
@@ -142,7 +171,7 @@ Each subsystem object contains:
 }
 ```
 
-### 5.2 Content‑Type Enforcement
+### 6.2 Content‑Type Enforcement
 
 ```json
 "content_type": {
@@ -154,7 +183,7 @@ Each subsystem object contains:
 }
 ```
 
-### 5.3 HTML Enforcement
+### 6.3 HTML Enforcement
 
 ```json
 "html": {
@@ -166,7 +195,7 @@ Each subsystem object contains:
 }
 ```
 
-### 5.4 Backend Enforcement
+### 6.4 Backend Enforcement
 
 ```json
 "backend": {
@@ -178,7 +207,7 @@ Each subsystem object contains:
 }
 ```
 
-## 6. perfdata — Performance Metrics
+## 7. perfdata — Performance Metrics
 Perfdata fields are emitted for monitoring systems and graphing engines.
 
 | Field | Type | Description |
@@ -203,7 +232,7 @@ Example:
 }
 ```
 
-## 7. overall — Final Result
+## 8. overall — Final Result
 The overall object contains the merged Nagios status and final message.
 
 | Field | Type | Description |
@@ -229,7 +258,7 @@ TLS failure example:
 }
 ```
 
-## 8. Output Modes and Nagios/Icinga Behavior
+## 9. Output Modes and Nagios/Icinga Behavior
 
 check_html.py has **four mutually exclusive output modes**:
 
@@ -259,7 +288,7 @@ completely side‑effect‑free:
 Nagios/Icinga mode is activated automatically when no other output mode
 (`--json`, `--verbose`, `--quiet`) is selected.
 
-## 9. Schema Stability
+## 10. Schema Stability
 
 Version 1 guarantees:
 

@@ -1,21 +1,47 @@
 # Installation Guide — `check_cert.py`
 
+# Installation Guide — `check_cert.py`  
+**Part of:** NMS_Tools Monitoring Suite  
+**Document:** Installation Guide  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+  
+**Last Updated:** 2026‑08‑17
+
+## Table of Contents
+1. [Overview](#1-overview)
+2. [Requirements](#2-requirements)  
+    1. [2.1 Python Version](#21-python-version)  
+    2. [2.2 Python Packages](#22-python-packages)
+3. [Logging Requirements](#3-logging-requirements)
+4. [System‑Wide Installation](#4-system-wide-installation)
+5. [Nagios Plugin Installation](#5-nagios-plugin-installation)  
+    1. [5.1 Plugin Directory Paths](#51-plugin-directory-paths)  
+    2. [5.2 Installation Steps](#52-installation-steps)
+6. [SELinux Notes](#6-selinux-notes)
+7. [Hostname Resolution Requirement](#7-hostname-resolution-requirement)
+8. [Summary](#8-summary)
+
+---
+
+## 1. Overview
+
 This document describes how to install `check_cert.py` in two supported modes:
 system‑wide or as a Nagios plugin. Choose the installation path that matches
 your operational environment.
 
 ---
 
-## 1. Requirements
+## 2. Requirements
 
-### Python Version
+### 2.1 Python Version
 
 check_cert.py supports:
 
 * Python 3.6 or newer
 * Python 3.6–3.7 require typing_extensions
 
-### Python Packages
+### 2.2 Python Packages
 
 Required:
 
@@ -61,7 +87,7 @@ If you cloned the full NMS_Tools repository, you may install dependencies using 
 pip install -r requirements.txt
 ```
 
-## 2. Logging Requirements (Optional)
+## 3. Logging Requirements (Optional)
 
 Logging is enabled only when a log directory is provided:
 
@@ -88,7 +114,7 @@ mkdir -p /var/log/nms_tools
 chmod 755 /var/log/nms_tools
 ```
 
-## 3. System‑Wide Installation (General Use)
+## 4. System‑Wide Installation (General Use)
 
 Use this method when you want check_cert available as a normal system tool.
 
@@ -106,17 +132,17 @@ check_cert -H example.com
 
 This produces a single Nagios‑style status line by default.
 
-## 4. Nagios Plugin Installation (Monitoring Use)
+## 5. Nagios Plugin Installation (Monitoring Use)
 Use this method when Nagios or NRPE will execute the script.
 
-### Install into the Nagios plugin directory
+### 5.1 Install into the Nagios plugin directory
 
 Common paths:
 
 * /usr/lib/nagios/plugins/ (Debian/Ubuntu/openSUSE)
 * /usr/lib64/nagios/plugins/ (RHEL/CentOS/Rocky/Alma)
 
-Example:
+### 5.2 Installation Steps
 
 ```bash
 sudo cp check_cert.py /usr/lib/nagios/plugins/check_cert
@@ -132,14 +158,14 @@ Verify
 
 Nagios mode always emits a single clean line.
 
-## 5. SELinux Notes (RHEL‑based Systems)
+## 6. SELinux Notes (RHEL‑based Systems)
 If SELinux blocks execution:
 
 ```bash
 sudo chcon -t nagios_unconfined_plugin_exec_t /usr/lib64/nagios/plugins/check_cert
 ```
 
-## 6. Hostname Resolution Requirement
+## 7. Hostname Resolution Requirement
 
 All NMS_Tools plugins that accept -H require the hostname to be resolvable.
 
@@ -153,7 +179,7 @@ If the hostname cannot be resolved:
 UNKNOWN - Hostname resolution failed for '<host>'
 ```
 
-## 7. Summary
+## 8. Summary
 
 | Installation Type | Path | Purpose |
 | :--- | :--- | :--- |

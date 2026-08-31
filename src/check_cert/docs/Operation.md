@@ -1,12 +1,40 @@
 # Operation Guide — `check_cert.py`
 
+# Operation Guide — `check_cert.py`  
+**Part of:** NMS_Tools Monitoring Suite  
+**Document:** Operation Guide  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+  
+**Last Updated:** 2026‑08‑17
+
+## Table of Contents
+
+1. [Overview](#1-overview)
+2. [Default Behavior](#2-default-behavior)
+3. [Output Modes](#3-output-modes)
+4. [Verbose Mode](#4-verbose-mode)
+5. [JSON Mode](#5-json-mode)
+6. [Exit Codes](#6-exit-codes)
+7. [Thresholds](#7-thresholds)
+8. [Monitoring Checks](#8-monitoring-checks)
+9. [Policy Enforcement Rules](#9-policy-enforcement-rules)
+10. [Enforcement Behavior](#10-enforcement-behavior)
+11. [Logging Behavior](#11-logging-behavior)
+12. [Troubleshooting](#12-troubleshooting)
+13. [Network Requirements](#13-network-requirements)
+
+---
+
+## 1. Overview
+
 This document explains how `check_cert.py` behaves at runtime, how to interpret
 its output, and how enforcement, monitoring checks, and thresholds influence
 exit codes. All behavior is deterministic and consistent across the NMS_Tools suite.
 
 ---
 
-## 1. Default Behavior
+## 2. Default Behavior
 
 When run without `-v` or `--json`, the tool emits a **single Nagios‑style line**:
 
@@ -15,42 +43,39 @@ OK - 60 days remaining (2026-05-18 18:19:55 UTC)
 Code
 
 This mode is designed for:
-
-- Monitoring systems  
-- Cron jobs  
-- Shell scripts  
-- Automated pipelines  
+* Monitoring systems  
+* Cron jobs  
+* Shell scripts  
+* Automated pipelines  
 
 Nagios mode supports:
-
-- **OK**
-- **WARNING**
-- **CRITICAL**
-- **UNKNOWN**
+* **OK**
+* **WARNING**
+* **CRITICAL**
+* **UNKNOWN**
 
 Exit codes are determined by:
-
-- expiration thresholds  
-- monitoring checks  
-- policy enforcement rules  
+* expiration thresholds  
+* monitoring checks  
+* policy enforcement rules  
 
 Nagios mode **never** emits multiple lines.
 
 ---
 
-## 2. Output Modes
+## 3. Output Modes
 
 `check_cert.py` supports three output modes:
 
-- **Nagios (default)** — single line  
-- **Verbose (`-v`)** — human‑readable diagnostics  
-- **JSON (`-j`)** — structured machine‑readable output  
+* **Nagios (default)** — single line  
+* **Verbose (`-v`)** — human‑readable diagnostics  
+* **JSON (`-j`)** — structured machine‑readable output  
 
 Verbose and JSON modes are **opt‑in**.
 
 ---
 
-## 3. Verbose Mode (`-v` / `--verbose`)
+## 4. Verbose Mode (`-v` / `--verbose`)
 
 ```bash
 check_cert -H example.com -v
@@ -72,7 +97,7 @@ Verbose mode displays:
 
 Verbose mode is intended for operators, debugging, and incident analysis.
 
-## 4. JSON Mode (--json / -j)
+## 5. JSON Mode (--json / -j)
 
 ```bash
 check_cert -H example.com --json
@@ -100,7 +125,7 @@ JSON mode is ideal for:
 
 All fields appear in canonical order.
 
-## 5. Exit Codes
+## 6. Exit Codes
 
 | Code | Meaning |
 | :---: | :--- |
@@ -109,7 +134,7 @@ All fields appear in canonical order.
 | 2 | CRITICAL |
 | 3 | UNKNOWN |
 
-### Exit Code Rules
+### 6.1 Exit Code Rules
 
 * Expiration thresholds → OK/WARNING/CRITICAL
 * Any enforcement failure → CRITICAL
@@ -118,7 +143,7 @@ All fields appear in canonical order.
 * Timeout or connection failure → UNKNOWN
 * UNKNOWN always emits a single clean line.
 
-## 6. Thresholds
+## 7. Thresholds
 
 Expiration thresholds
 
@@ -141,7 +166,7 @@ Behavior
 
 Enforcement failures always override expiration thresholds.
 
-## 7. Monitoring Checks (Default‑On)
+## 8. Monitoring Checks (Default‑On)
 
 Monitoring checks validate core certificate and TLS properties.
 
@@ -155,7 +180,7 @@ They can be individually disabled:
 --no-check-self-signed
 ```
 
-### OCSP Monitoring
+### 8.1 OCSP Monitoring
 
 OCSP reachability is disabled by default and enabled with:
 
@@ -171,11 +196,11 @@ When enabled:
 
 This is a real network test, not placeholder behavior.
 
-## 8. Policy Enforcement Rules (Explicit‑On)
+## 9. Policy Enforcement Rules (Explicit‑On)
 
 Policy rules validate certificate, key, TLS, and OCSP properties beyond monitoring.
 
-### Certificate Rules
+### 9.1 Certificate Rules
 
 ```Code
 --require-wildcard
@@ -184,14 +209,14 @@ Policy rules validate certificate, key, TLS, and OCSP properties beyond monitori
 -A SIGALG, --sigalg SIGALG
 ```
 
-### Key Rules
+### 9.2 Key Rules
 
 ```Code
 --min-rsa BITS
 --require-curve CURVE
 ```
 
-### TLS Rules
+### 9.3 TLS Rules
 
 ```Code
 --min-tls VERSION
@@ -203,7 +228,7 @@ Policy rules validate certificate, key, TLS, and OCSP properties beyond monitori
 --forbid-rc4
 ```
 
-### OCSP Rules
+### 9.4 OCSP Rules
 
 ```Code
 --require-ocsp
@@ -219,7 +244,7 @@ OCSP status values include:
 * invalid
 * none (no OCSP URLs present)
 
-## 9. Enforcement Behavior
+## 10. Enforcement Behavior
 
 Enforcement results appear in:
 
@@ -241,7 +266,7 @@ Example JSON:
 
 Enforcement never short‑circuits — all rules are evaluated.
 
-## 10. Logging Behavior
+## 11. Logging Behavior
 
 Logging is enabled when a log directory is provided:
 
@@ -265,7 +290,7 @@ Features:
 * OCSP reachability
 * Enforcement evaluation
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 “tls_handshake_failed”
 
@@ -298,7 +323,7 @@ Chain validation warnings
 
 Chain warnings do not affect exit codes unless enforcement rules are used.
 
-## 12. Network Requirements
+## 13. Network Requirements
 
 * Outbound TCP to target host
 * Outbound HTTP for AIA retrieval
