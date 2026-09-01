@@ -1,13 +1,58 @@
 # Usage.md — CLI Reference & Examples
 
-## Synopsis
+**Part of:** NMS_Tools Monitoring Suite  
+**Document:** Usage Guide  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+  (development only; not required for frozen binary)
+**Last Updated:** 2026‑08‑17
 
-`check_interfaces.py -H <host> [options]`
-
+## Table of Contents
+1. [Overview](#1-overview)
+2. [Synopsis](#2-synopsis)
+3. [Required Arguments](#3-required-arguments)
+4. [Core Options](#4-core-options)
+5. [SNMP Options](#5-snmp-options)
+6. [Evaluation](#6-evaluation)
+    [1. Evaluation Attributes](#61-evaluation-attributes)
+7. [Perfdata Metrics](#7-perfdata-metrics)
+8. [Filtering & Selection](#8-filtering--selection)
+9. [Output Modes](#9-output-modes)
+10. [Logging](#10-logging)
+11. [General](#11-general)
+12. [Examples](#12-examples)
+13. [Exit Codes](#13-exit-codes)
+14. [See Also](#14-see-also)
 
 ---
 
-## Required Arguments
+## 1. Overview
+
+This document describes the command‑line interface for `check_interfaces`, including:
+* required and optional flags
+* SNMP parameters
+* evaluation attributes
+* filtering and selection rules
+* output modes
+* logging behavior
+* perfdata selection
+* complete usage examples
+
+For runtime behavior, see [Operation.md](Operation.md).
+For evaluation rules, see [Enforcement.md](Enforcement.md).
+For JSON schema, see [Metadata_schema.md](Metadata_schema.md).
+
+---
+
+## 2. Synopsis
+```bash
+check_interfaces.py -H <host> [options]
+```
+The -H target determines local vs SNMP mode automatically.
+
+---
+
+## 3. Required Arguments
 
 | Flag            | Description                                                            |
 |-----------------|------------------------------------------------------------------------|
@@ -15,7 +60,7 @@
 
 ---
 
-## Core Options
+## 4. Core Options
 
 | Flag                | Description                                      | Default |
 |---------------------|--------------------------------------------------|---------|
@@ -27,7 +72,7 @@ Logging is disabled in Nagios mode.
 
 ---
 
-## SNMP Options
+## 5. SNMP Options
 
 Required for remote hosts. Ignored when the target is detected as local.
 
@@ -39,13 +84,13 @@ Required for remote hosts. Ignored when the target is detected as local.
 
 ---
 
-## Evaluation
+## 6. Evaluation
 
 | Flag               | Description                                                        | Default        |
 |--------------------|--------------------------------------------------------------------|----------------|
 | --status <attr>    | Attribute to evaluate on each interface                            | oper-status    |
 
-### Evaluation Attributes
+### 6.1 Evaluation Attributes
 
 | Value          | Meaning                                                                |
 |----------------|------------------------------------------------------------------------|
@@ -63,29 +108,27 @@ There is no WARNING tier.
 
 ---
 
-## Perfdata Metrics
+## 7. Perfdata Metrics
 
 The `--perfdata` flag selects a single SNMP counter to output in Nagios perfdata.
 
 Valid values:
 
 Inbound:
-
-- in_octets  
-- in_ucast  
-- in_multicast  
-- in_broadcast  
-- in_discards  
-- in_errors  
+* in_octets  
+* in_ucast  
+* in_multicast  
+* in_broadcast  
+* in_discards  
+* in_errors  
 
 Outbound:
-
-- out_octets  
-- out_ucast  
-- out_multicast  
-- out_broadcast  
-- out_discards  
-- out_errors  
+* out_octets  
+* out_ucast  
+* out_multicast  
+* out_broadcast  
+* out_discards  
+* out_errors  
 
 Only one metric may be selected.
 
@@ -93,7 +136,7 @@ Perfdata is only emitted in Nagios mode.
 
 ---
 
-## Filtering & Selection
+## 8. Filtering & Selection
 
 | Flag                  | Description                                                              | Repeatable |
 |-----------------------|--------------------------------------------------------------------------|------------|
@@ -103,12 +146,12 @@ Perfdata is only emitted in Nagios mode.
 | --exclude-local       | Exclude loopback and local‑only interfaces (lo)                          | No         |
 | --include-aliases     | Include alias interfaces (excluded by default)                           | No         |
 
-Filtering always occurs before selection.  
-See Enforcement.md for full pipeline details.
+Filtering always occurs **before** selection.  
+See [Enforcement.md](Enforcement.md) for full pipeline details.
 
 ---
 
-## Output Modes
+## 9. Output Modes
 
 | Flag              | Mode    | Description                                                     |
 |-------------------|---------|-----------------------------------------------------------------|
@@ -123,11 +166,11 @@ Output mode precedence:
 2. Verbose  
 3. Nagios (default)  
 
-If both -j and -v are provided, JSON wins.
+If both `-j` and `-v` are provided, JSON wins.
 
 ---
 
-## Logging
+## 10. Logging
 
 Logging is opt‑in and only active in verbose and JSON modes.
 
@@ -140,7 +183,7 @@ Nagios mode never logs.
 
 ---
 
-## General
+## 11. General
 
 | Flag              | Description                                      | Default |
 |-------------------|--------------------------------------------------|---------|
@@ -149,106 +192,112 @@ Nagios mode never logs.
 
 ---
 
-## Examples
+## 12. Examples
 
 ### Local Host
 
 Check all local interfaces:
-
-`./check_interfaces.py -H localhost`
-
+```bash
+./check_interfaces -H localhost
+```
 
 Verbose diagnostics:
-
-`./check_interfaces.py -H localhost -v`
-
+```bash
+./check_interfaces -H localhost -v
+```
 
 ### Remote Host (SNMP)
-
-`/check_interfaces.py -H switch01 -C public`
-
+```bash
+./check_interfaces -H switch01 -C public
+```
 
 ### Targeted Interfaces
 
 Literal list:
-
-`./check_interfaces.py -H switch01 -C public --ifaces "eth0,eth1"`
-
+```bash
+./check_interfaces -H switch01 -C public --ifaces "eth0,eth1"
+```
 
 Regex:
-
-`./check_interfaces.py -H switch01 -C public --ifaces "GigabitEthernet0/[0-3]"`
-
+```bash
+./check_interfaces -H switch01 -C public --ifaces "GigabitEthernet0/[0-3]"
+```
 
 ### Attribute Checks
 
 Linkspeed:
-
-`./check_interfaces.py -H switch01 -C public --status linkspeed`
-
+```bash
+./check_interfaces -H switch01 -C public --status linkspeed
+```
 
 Duplex:
-
-`./check_interfaces.py -H switch01 -C public --status duplex`
-
+```bash
+./check_interfaces -H switch01 -C public --status duplex
+```
 
 MTU:
-
-`./check_interfaces.py -H switch01 -C public --status mtu`
-
+```bash
+./check_interfaces -H switch01 -C public --status mtu
+```
 
 Alias identity:
-
-`./check_interfaces.py -H switch01 -C public --status alias`
-
+```bash
+./check_interfaces -H switch01 -C public --status alias
+```
 
 ### Filtering
 
 Exclude virtual and local interfaces:
-
-`./check_interfaces.py -H linux01 --ignore-virtual --exclude-local`
-
+```bash
+./check_interfaces -H linux01 --ignore-virtual --exclude-local
+```
 
 Ignore patterns:
-
-`./check_interfaces.py -H switch01 -C public --ignore "vnet.*" --ignore "docker0"`
-
+```bash
+./check_interfaces -H switch01 -C public --ignore "vnet.*" --ignore "docker0"
+```
 
 Include alias interfaces:
-
-`./check_interfaces.py -H switch01 -C public --include-aliases`
-
+```bash
+./check_interfaces -H switch01 -C public --include-aliases
+```
 
 ### Combined Filtering + Selection
-
-`./check_interfaces.py -H switch01 -C public --ignore "mgmt" --ifaces "GigabitEthernet0/[0-9]"`
+```bash
+./check_interfaces -H switch01 -C public --ignore "mgmt" --ifaces "GigabitEthernet0/[0-9]"
+```
 
 
 ### JSON Output
-
-`/check_interfaces.py -H switch01 -C public -j`
+```bash
+./check_interfaces -H switch01 -C public -j
+```
 
 ### Logging
-
-`./check_interfaces.py -H switch01 -C public -v --log-dir /var/log/nms_tools`
+```bash
+./check_interfaces -H switch01 -C public -v --log-dir /var/log/nms_tools
+```
 
 Custom rotation:
-
-`./check_interfaces.py -H switch01 -C public -v --log-dir /var/log/nms_tools --log-max-mb 100`
+```bash
+./check_interfaces -H switch01 -C public -v --log-dir /var/log/nms_tools --log-max-mb 100
+```
 
 ### SNMP Options
 
 Non‑standard port:
-
-`./check_interfaces.py -H switch01 -C public -p 1161`
+```bash
+./check_interfaces -H switch01 -C public -p 1161
+```
 
 Extended timeout:
-
-`./check_interfaces.py -H switch01 -C public -T 30`
+```bash
+./check_interfaces -H switch01 -C public -T 30
+```
 
 ---
 
-## Exit Codes
+## 13. Exit Codes
 
 | Code | Status   | Meaning                                                                  |
 |------|----------|--------------------------------------------------------------------------|
@@ -260,7 +309,7 @@ There is no WARNING tier.
 
 ---
 
-## See Also
+## 14. See Also
 
 [Installation.md](Installation.md)
 [Enforcement.md](Enforcement.md)

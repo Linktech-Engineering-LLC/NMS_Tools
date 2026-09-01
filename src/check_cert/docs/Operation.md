@@ -1,11 +1,10 @@
 # Operation Guide — `check_cert.py`
 
-# Operation Guide — `check_cert.py`  
 **Part of:** NMS_Tools Monitoring Suite  
 **Document:** Operation Guide  
 **Author:** Leon McClatchey, Linktech Engineering LLC  
 **License:** MIT  
-**Requires:** Python 3.12+  
+**Requires:** Python 3.12+ (development only; not required for frozen binary) 
 **Last Updated:** 2026‑08‑17
 
 ## Table of Contents

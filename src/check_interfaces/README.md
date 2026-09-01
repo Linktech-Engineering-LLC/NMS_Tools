@@ -1,174 +1,175 @@
 # check_interfaces — Network Interface State & Attribute Monitoring Tool
 
+**Part of:** NMS_Tools Monitoring Suite  
+**Script:** `check_interfaces.py`  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+  
+**Last Updated:** 2026-08-17
+
 ![Python Version](https://img.shields.io/badge/python-3.6%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-stable-brightgreen)
 ![Nagios Plugin](https://img.shields.io/badge/Nagios-plugin-success)
 ![NMS_Tools](https://img.shields.io/badge/NMS_Tools-check__interfaces-blueviolet)
 
-`check_interfaces.py` is an operator‑grade network interface monitoring plugin for Nagios and compatible monitoring systems.  
+## Table of Contents
+1. [Overview](#1-overview)
+2. [Deterministic Behavior Guarantees](#2-deterministic-behavior-guarantees)
+3. [Backend Parity (Local + SNMP)](#3-backend-parity-local--snmp)
+4. [Capabilities](#4-capabilities)
+5. [Quick Start](#5-quick-start)
+5. [CLI Summary](#6-cli-summary)
+6. [Output Modes](#7-output-modes)
+8. [Filtering Pipeline](#8-filtering-pipeline)
+9. [Evaluation Logic](#9-evaluation-logic)
+10. [Perfdata](#10-perfdata)
+11. [Logging](#11-logging)
+12. [Exit Codes](#12-exit-codes)
+13. [Requirements](#13-requirements)
+14. [Documents](#14-documents)
+15. [License](#15-license)
+
+## 1. Overview
+
+`check_interfaces` is an operator‑grade network interface monitoring plugin for Nagios and compatible monitoring systems.  
 It provides deterministic interface discovery, attribute evaluation, and perfdata emission across both **local Linux hosts** and **remote SNMP devices**, using a unified, normalized interface schema.
 
 The tool supports three output modes — **Nagios**, **verbose**, and **JSON** — making it equally suitable for alerting, diagnostics, and automation.
 
 ---
 
-## Features
+## 2. Deterministic Behavior Guarantees
 
-### ✔ Unified SNMP + Local Interface Discovery
-- Local mode uses kernel interface data (`/sys/class/net`, psutil).
-- Remote mode uses SNMPv2c (IF‑MIB).
-- All interfaces are normalized into a consistent schema.
+`check_interfaces` follows the NMS_Tools determinism contract:
+* **Deterministic enumeration**
+  Interfaces are discovered in a stable, reproducible order.
+* **Deterministic filtering**
+  All filters (--ifaces, --ignore, --exclude-local, etc.) apply in a fixed sequence.
+* **Deterministic evaluation**
+  Each interface produces a stable evaluation result for the selected attribute.
+* **Deterministic exit codes**
+  Global state is derived from evaluation failures using Nagios‑standard semantics.
+* **Deterministic perfdata emission**
+  Perfdata is always raw, Nagios‑safe, and emitted in a stable order.
 
-### ✔ Multiple Output Modes
-- **Nagios single‑line** (default)
-- **Verbose diagnostic mode** (`-v`)
-- **JSON structured mode** (`-j`)
-- **Quiet mode** (`-q`)
+---
 
-### ✔ Perfdata Mode
-Select a single counter to emit as perfdata:
+## 3. Backend Parity (Local + SNMP)
 
---perfdata in_octets
---perfdata out_errors
---perfdata in_errors
---perfdata out_errors
---perfdata in_discards
---perfdata out_discards
---perfdata in_ucast
---perfdata out_ucast
---perfdata in_multicast
---perfdata out_multicast
---perfdata in_broadcast
---perfdata out_broadcast
+Local and SNMP modes produce **identical normalized interface objects**, including:
+* MTU
+* MAC
+* speed
+* duplex
+* flags
+* counters
+* admin/oper state
 
-Perfdata is always raw (Nagios‑safe) and always included in single‑line output.
+All counters follow the IF‑MIB model.
 
-### ✔ Attribute‑Based Evaluation
+---
+
+## 4. Capabilities
+
+### Unified SNMP + Local Interface Discovery
+* Local mode uses `/sys/class/net` and psutil.
+* Remote mode uses SNMPv2c (IF‑MIB).
+* All interfaces normalized into a consistent schema.
+
+### Multiple Output Modes
+* Nagios single‑line
+* Verbose diagnostic (`-v`/`--verbose`)
+* JSON structured (`-j`/`--json`)
+* Quiet (`-q`/'--quiet`)
+
+### Attribute‑Based Evaluation
+
 Evaluate interfaces using:
+* `oper-status` (default)
+* `linkspeed`
+* `duplex`
+* `mtu`
+* `flags`
 
-- `oper-status` (default)
-- `linkspeed`
-- `duplex`
-- `mtu`
-- `flags`
+### Canonical Filtering Pipeline
 
-Each interface produces an evaluation result; the global state is derived from failures.
+Deterministic, backend‑agnostic filtering using:
+* `--ifaces` (literal + regex)
+* `--ignore` (repeatable)
+* `--exclude-local`
+* `--ignore-virtual`
+* `--include-aliases`
 
-### ✔ Canonical Filtering Pipeline
-Operators can control which interfaces are evaluated using:
+### Normalized Counters (IF‑MIB)
+* Octets
+* Ucast
+* Multicast
+* Broadcast
+* Discards
+* Errors
+* Unknown protocols
 
-- `--ifaces` (explicit list or regex)
-- `--ignore` (repeatable)
-- `--exclude-local`
-- `--include-aliases`
+### Clean Speed Normalization
 
-Filtering is deterministic and backend‑agnostic.
-
-### ✔ Normalized Counters (IF‑MIB)
-All counters follow the IF‑MIB model:
-
-- Octets (in/out)
-- Ucast (in/out)
-- Multicast (in/out)
-- Broadcast (in/out)
-- Discards (in/out)
-- Errors (in/out)
-- Unknown protocols
-
-### ✔ Clean Speed Normalization
-Speeds are normalized to Mbps and displayed as:
-
-- `10G`
-- `1G`
-- `100M`
-- `10M`
-- `-` (unknown)
-
-### ✔ Nagios‑Compatible Exit Codes
-Returns standard plugin exit codes:
-
-- `0` OK  
-- `1` WARNING  
-- `2` CRITICAL  
-- `3` UNKNOWN  
+Speeds normalized to Mbps:
+* `10G`, `1G`, `100M`, `10M`, `-`
 
 ---
 
-## Requirements
-
-- Python 3.6+
-- `pysnmp` (required for SNMP mode)
-- SNMPv2c access for remote hosts
-- Target hostname must be resolvable
-
----
-
-## Quick Start
+## 5. Quick Start
 
 ### Local Host
-
-```bash
-./check_interfaces.py -H localhost
-```
+./check_interfaces -H localhost
 
 ### Remote Host (SNMP)
-
-```bash
-./check_interfaces.py -H switch01 -C public
-```
+./check_interfaces -H switch01 -C public
 
 ### Evaluate Link Speed
-
-```bash
-./check_interfaces.py -H switch01 -C public --status linkspeed
-```
+./check_interfaces -H switch01 -C public --status linkspeed
 
 ### Select Perfdata Metric
-
-```bash
-./check_interfaces.py -H switch01 -C public --perfdata in_octets
-```
+./check_interfaces -H switch01 -C public --perfdata in_octets
 
 ### Verbose Diagnostic Output
-
-```bash
-./check_interfaces.py -H switch01 -C public -v
-```
+./check_interfaces -H switch01 -C public -v
 
 ### JSON Output
+./check_interfaces -H switch01 -C public -j | jq
 
-```bash
-./check_interfaces.py -H switch01 -C public -j | jq
-```
+---
 
-### Exclude Local Interfaces
+## 6. CLI Summary
+| Flag | Description |
+| --- | --- |
+| ``-H`` | Hostname (local or SNMP) |
+| ``-C`` | SNMP community |
+| ``--status`` | Evaluation attribute |
+| ``--perfdata`` | Select perfdata counter |
+| ``--ifaces`` | Literal/regex interface selection |
+| ``--ignore`` | Ignore interfaces (repeatable) |
+| ``--exclude-local`` | Remove loopback/local-only |
+| ``--ignore-virtual`` | Remove virtual interfaces |
+| ``--include-aliases`` | Include SNMP alias interfaces |
+| ``-v`` | Verbose mode |
+| ``-j`` | JSON mode |
+| ``-q`` | Quiet mode |
+| ``--log-dir`` | Enable logging |
 
-```bash
-./check_interfaces.py -H switch01 -C public --exclude-local
-```
+---
 
-### Ignore Interfaces by Pattern
+## 7. Output Modes
 
-```bash
-./check_interfaces.py -H switch01 -C public --ignore "vnet.*" --ignore docker0
-```
-
-## Output Modes
-
-### ✔ Nagios Mode (default)
+### Nagios Mode (default)
 
 Single‑line output with perfdata:
-
-```Code
+```code
 OK: all interfaces oper-status | eth0_in_octets=12345c br0_in_octets=67890c
 ```
 
-### ✔ Verbose Mode (-v)
+### Verbose Mode (-v)
 
-Human‑readable diagnostic output:
-
-```Code
+```code
 Interface: eth0
   MAC: 98:4b:e1:60:65:a8
   MTU: 1500
@@ -182,12 +183,14 @@ Interface: eth0
   IPv6: none
   Counters:
     Octets:     In=1170978183  Out=2859282825
-    Ucast:      In=34768217   Out=28905155
-    ...
+    Ucast:      In=34768217    Out=28905155
+    Multicast:  In=182         Out=0
+    Broadcast:  In=0           Out=0
+    Errors:     In=0           Out=0
+    Discards:   In=0           Out=0
 ```
 
-### ✔ JSON Mode (-j)
-Structured output for automation:
+### JSON Mode (-j)
 
 ```json
 {
@@ -199,59 +202,113 @@ Structured output for automation:
       "duplex": "full",
       "admin_up": true,
       "oper_up": true,
-      "counters": { ... }
+      "flags": ["UP", "RUNNING"],
+      "counters": {
+        "in_octets": 1170978183,
+        "out_octets": 2859282825,
+        "in_ucast": 34768217,
+        "out_ucast": 28905155,
+        "in_multicast": 182,
+        "out_multicast": 0,
+        "in_broadcast": 0,
+        "out_broadcast": 0,
+        "in_errors": 0,
+        "out_errors": 0,
+        "in_discards": 0,
+        "out_discards": 0
+      },
+      "eval": "OK"
     }
   },
-  "status": { ... },
-  "meta": { ... }
+  "status": {
+    "global": "OK",
+    "failed": []
+  },
+  "meta": {
+    "host": "switch01",
+    "mode": "snmp",
+    "timestamp": "2026-08-17T14:22:05Z"
+  }
 }
 ```
 
-## Filtering
+---
 
-`check_interfaces.py` uses a canonical filtering pipeline to determine which interfaces are evaluated.  
-Filtering is deterministic, backend‑agnostic, and applied identically in both SNMP and local modes.
+## 8. Filtering Pipeline
+Filtering is deterministic and applied identically in both SNMP and local modes.
 
-### `--ifaces`
-Select specific interfaces to evaluate. Supports:
-
-- **Literal names**
-
-```--ifaces eth0,eth1,br0```
-
-
-- **Regex patterns**
-
+`--ifaces`
+Literal + regex selection:
+```code
+--ifaces eth0,eth1,^vnet[0-9]+$
 ```
---ifaces "eth[0-2]"
---ifaces "^br[0-9]+$"
-```
-
-
-- **Mixed literal + regex**
-
-```--ifaces "eth0,eth1,^vnet[0-9]+$"```
-
-
-The argument is parsed as a **single comma‑delimited expression**, where each element may be a literal or a regex.  
-If any regex metacharacters are detected, that element is treated as a pattern.
 
 ### Additional Filters
 
-| Flag               | Purpose                                                                    |
-|--------------------|----------------------------------------------------------------------------|
-| `--ignore`         | Ignore interfaces matching a substring or regex (repeatable)               |
-| `--exclude-local`  | Exclude loopback and local‑only interfaces                                 |
-| `--ignore-virtual` | Exclude virtual interfaces (e.g., `vnet*`, `virbr*`, `docker0`)            |
-| `--include-aliases`| Include SNMP alias interfaces (e.g., `eth0:1`, `br0:backup`)               |
+| Flag | Purpose |
+| --- | --- |
+| ``--ignore`` | Ignore interfaces matching substring/regex |
+| ``--exclude-local`` | Remove loopback/local-only |
+| ``--ignore-virtual`` | Remove vnet*, virbr*, docker0 |
+| ``--include-aliases`` | Include SNMP alias interfaces |
 
-Filters are applied in a deterministic order to ensure consistent, reproducible results regardless of enumeration sequence.
+---
 
+## 9. Evaluation Logic
 
-## Exit Codes
+Each interface produces an evaluation result based on the selected attribute:
+* `oper-status`
+* `linkspeed`
+* `duplex`
+* `mtu`
+* `flags`
+
+Global state is derived from failures:
+* any CRITICAL → CRITICAL
+* any WARNING → WARNING
+* none → OK
+
+---
+
+## 10. Perfdata
+
+Select a single counter:
+* `in_octets`
+* `out_octets`
+* `in_errors`
+* `out_errors`
+* `in_discards`
+* `out_discards`
+* `in_ucast`
+* `out_ucast`
+* `in_multicast`
+* `out_multicast`
+* `in_broadcast`
+* `out_broadcast`
+
+Perfdata is always raw and Nagios‑safe.
+
+---
+
+## 11. Logging
+
+Logging is opt‑in:
+
+```code
+./check_interfaces -H switch01 -C public -v --log-dir /var/log/nms_tools
+```
+
+Logging follows NMS_Tools conventions:
+* single‑line entries
+* size‑based rotation
+* no logging in default Nagios mode
+
+---
+
+## 12. Exit Codes
 
 | Code | Meaning |
-| :---: | :--- |
+| --- | --- |
 | 0 | All interfaces OK |
 | 1 | Non‑critical issues |
 | 2 | Critical failure |
@@ -259,23 +316,17 @@ Filters are applied in a deterministic order to ensure consistent, reproducible 
 
 SNMP failures return CRITICAL or UNKNOWN.
 
-## Logging
+---
 
-Logging is **opt‑in** and disabled in default mode.
+## 13. Requirements
+* Python 3.12+
+* `pysnmp` (for SNMP mode)
+* SNMPv2c access for remote hosts
+* Hostname must be resolvable
 
-Enable logging:
+---
 
-```bash
-./check_interfaces.py -H switch01 -C public -v --log-dir /var/log/nms_tools
-```
-
-Logging follows NMS_Tools conventions:
-
-* Single‑line, timestamped entries
-* Size‑based rotation
-* No logging in default Nagios mode
-
-## Document
+## 14. Documents
 
 | Document | Description |
 |----------|-------------|
@@ -285,7 +336,9 @@ Logging follows NMS_Tools conventions:
 | [Enforcement.md](docs/Enforcement.md)  | Status evaluation and filtering logic |
 | [Metadata_schema.md](docs/Metadata_schema.md) | Normalized interface schema |
 
-## License
+---
+
+## 15. License
 
 Part of the **NMS_Tools** suite by Linktech Engineering LLC.
 Licensed under MIT.
@@ -293,17 +346,3 @@ Licensed under MIT.
 See the suite‑wide README for contributor guidelines and community standards.
 
 ---
-
-# 🎯 **This README is now fully aligned with the tool’s current behavior**
-
-It reflects:
-
-- perfdata mode  
-- verbose diagnostic output  
-- JSON schema  
-- normalized counters  
-- speed formatting  
-- SNMP/local parity  
-- filtering pipeline  
-- evaluation logic  
-- logging behavior  

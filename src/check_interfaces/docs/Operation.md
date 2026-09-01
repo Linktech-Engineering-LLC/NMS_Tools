@@ -1,16 +1,49 @@
 # Operation.md — Runtime Behavior, Output & Logging
 
-## Overview
+**Part of:** NMS_Tools Monitoring Suite  
+**Document:** Operation Guide  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+ (development only; not required for frozen binary) 
+**Last Updated:** 2026‑08‑17
 
-This document describes the internal runtime lifecycle of `check_interfaces.py` — how it discovers interfaces, retrieves counters, applies filters, produces output, manages logs, and determines exit state.
-
-For CLI usage, see Usage.md.  
-For the filter pipeline and evaluation rules, see Enforcement.md.  
-For the JSON output schema, including counters, see Metadata_schema.md.
+## Table of Contents
+1. [Overview](#1-overview)
+2. [Runtime Lifecycle](#2-runtime-lifecycle)
+3. [Host Detection](#3-host-detection)
+4. [Discovery](#4-discovery)
+  1. [Local Discovery](#41-local-discovery)
+  2. [SNMP Discovery](#42-snmp-discovery)
+5. [Counter Retrieval (SNMP Only)](#5-counter-retrieval-snmp-only)
+6. [Filtering and Selection](#6-filtering-and-selection)
+7. [Evaluation](#7-evaluation)
+8. [Output Modes](#8-output-modes)
+  1. [JSON Mode](#81-json-mode--j--json)
+  2. [Verbose Mode](#82-verbose-mode--v--verbos)
+  3. [Nagios Mode](#83-nagios-mode-default)
+9. [Logging](#9-logging)
+  1. [Activation](#91-activation)
+  2. [Directory Behavior](#92-log-directory-behavior)
+  3. [Log File Naming](#93-log-file-naming)
+  4. [Log Rotation](#94-log-rotation)
+  5. [Log Content](#95-log-content)
+10. [Error Handling](#10-error-handling)
+11. [Exit Code Determination](#11-exit-code-determination)
+12. [See Also](#12-see-also)
 
 ---
 
-## Runtime Lifecycle
+## 1. Overview
+
+This document describes the internal runtime lifecycle of `check_interfaces.py` — how it discovers interfaces, retrieves counters, applies filters, produces output, manages logs, and determines exit state.
+
+For CLI usage, see [Usage.md](Usage.md).  
+For the filter pipeline and evaluation rules, see [Enforcement.md](Enforcement.md).  
+For the JSON output schema, including counters, see [Metadata_schema.md](Metadata_schema.md).
+
+---
+
+## 2. Runtime Lifecycle
 
  1. Parse arguments  
  2. Detect host type (local or SNMP)  
@@ -25,7 +58,7 @@ For the JSON output schema, including counters, see Metadata_schema.md.
 
 ---
 
-## Host Detection
+## 3. Host Detection
 
 The tool automatically determines whether the target is local or remote based on the `-H` value.
 
@@ -40,63 +73,63 @@ SNMP flags (`-C`, `-p`, `-T`) are ignored when the host is detected as local.
 
 ---
 
-## Discovery
+## 4. Discovery
 
-### Local Discovery
+### 4.1 Local Discovery
 
 Local mode retrieves:
 
-- interface names  
-- MAC addresses  
-- MTU  
-- flags  
-- admin/oper status  
-- IPv4/IPv6 addresses  
-- speed (if available)  
+* interface names  
+* MAC addresses  
+* MTU  
+* flags  
+* admin/oper status  
+* IPv4/IPv6 addresses  
+* speed (if available)  
 
 Local mode **does not** retrieve counters.
 
-### SNMP Discovery
+### 4.2 SNMP Discovery
 
 SNMP mode retrieves:
 
-- all fields retrieved in local mode  
-- SNMP IF‑MIB counters  
-- SNMP ifType  
-- SNMP‑reported speed  
+* all fields retrieved in local mode  
+* SNMP IF‑MIB counters  
+* SNMP ifType  
+* SNMP‑reported speed  
 
 SNMP parameters:
 
-- Port: `-p` (default 161)  
-- Timeout: `-T` (default 5 seconds)  
-- Community: `-C` (required)  
+* Port: `-p` (default 161)  
+* Timeout: `-T` (default 5 seconds)  
+* Community: `-C` (required)  
 
-SNMP failures (timeout, unreachable host, authentication failure) result in CRITICAL or UNKNOWN.
+SNMP failures (timeout, unreachable host, authentication failure) result in **CRITICAL** or **UNKNOWN**.
 
 ---
 
-## Counter Retrieval (SNMP Only)
+## 5. Counter Retrieval (SNMP Only)
 
 When operating in SNMP mode, the tool retrieves the following counters per interface:
 
 Inbound:
 
-- in_octets  
-- in_ucast  
-- in_multicast  
-- in_broadcast  
-- in_discards  
-- in_errors  
-- in_unknown (if supported by device)
+* in_octets  
+* in_ucast  
+* in_multicast  
+* in_broadcast  
+* in_discards  
+* in_errors  
+* in_unknown (if supported by device)
 
 Outbound:
 
-- out_octets  
-- out_ucast  
-- out_multicast  
-- out_broadcast  
-- out_discards  
-- out_errors  
+* out_octets  
+* out_ucast  
+* out_multicast  
+* out_broadcast  
+* out_discards  
+* out_errors  
 
 Counters appear in JSON output under:
 
@@ -107,7 +140,7 @@ Counters are **not displayed** in verbose mode.
 
 ---
 
-## Filtering and Selection
+## 6. Filtering and Selection
 
 Filtering and selection follow the deterministic pipeline described in Enforcement.md:
 
@@ -123,38 +156,38 @@ Unmatched `--ifaces` patterns are injected as synthetic failures.
 
 ---
 
-## Evaluation
+## 7. Evaluation
 
 Each surviving interface is evaluated against the attribute selected via `--status`.
 
 Evaluation is binary:
 
-- pass → OK  
-- fail → CRITICAL  
+* pass → OK  
+* fail → CRITICAL  
 
 There is no WARNING tier.
 
-Evaluation rules are defined in Enforcement.md.
+Evaluation rules are defined in [Enforcement.md](Enforcement.md).
 
 ---
 
-## Output Modes
+## 8. Output Modes
 
 Output mode is determined in this order:
 
-1. JSON (`-j`)  
-2. Verbose (`-v`)  
+1. JSON (`-j`|`--json`)  
+2. Verbose (`-v`|`--verbose`)  
 3. Nagios (default)  
 
 Only one mode is active per invocation.
 
-### JSON Mode (`-j`)
+### 8.1 JSON Mode (`-j`|`--json`)
 
 JSON mode emits:
 
-- interfaces (full metadata including counters)  
-- meta (host, mode, filters, log settings, warnings)  
-- status (results, failures, state)  
+* interfaces (full metadata including counters)  
+* meta (host, mode, filters, log settings, warnings)  
+* status (results, failures, state)  
 
 Speed is raw integer Mbps.  
 Counters are included for SNMP mode.
@@ -163,84 +196,81 @@ Warnings appear only when present.
 
 Logging is active when `--log-dir` is specified.
 
-### Verbose Mode (`-v`)
+### 8.2 Verbose Mode (`-v`|`--verbos`)
 
 Verbose mode emits:
 
-- header block  
-- table of interfaces  
-- evaluation results  
-- warnings (if any)  
+* header block  
+* table of interfaces  
+* evaluation results  
+* warnings (if any)  
 
 Verbose mode **does not** display counters.
 
 Logging is active when `--log-dir` is specified.
 
-### Nagios Mode (default)
+### 8.3 Nagios Mode (default)
 
 Nagios mode emits a single line:
 
 `INTERFACES OK - 7 interfaces checked, 0 failures | ifaces=7 failures=0`
 
-
 Nagios mode:
 
-- does not log  
-- does not show counters  
-- does not show warnings  
-- is always single‑line  
+* does not log  
+* does not show counters  
+* does not show warnings  
+* is always single‑line  
 
 Perfdata includes:
 
-- ifaces  
-- failures  
+* ifaces  
+* failures  
 
 ---
 
-## Logging
+## 9. Logging
 
 Logging is **opt‑in** and only active in verbose and JSON modes.
 
-### Activation
+### 9.1 Activation
 
 Logging is enabled when:
 
-- `--log-dir` is specified  
-- AND output mode is verbose or JSON  
+* `--log-dir` is specified  
+* AND output mode is verbose or JSON  
 
 Nagios mode never logs.
 
-### Log Directory Behavior
+### 9.2 Log Directory Behavior
 
-- The tool attempts to create the directory if missing  
-- Parent directory must be writable  
-- If creation fails:
+* The tool attempts to create the directory if missing  
+* Parent directory must be writable  
+* If creation fails:
+  * Verbose mode prints a `[WARN]` line  
+  * JSON mode adds a warning to `meta.warnings`  
+  * Logging is disabled for the run  
 
-  - Verbose mode prints a `[WARN]` line  
-  - JSON mode adds a warning to `meta.warnings`  
-  - Logging is disabled for the run  
-
-### Log File Naming
+### 9.3 Log File Naming
 
 `<log-dir>/check_interfaces.log`
 
-
-### Log Rotation
+### 9.4 Log Rotation
 
 Logs rotate when exceeding `--log-max-mb` (default 50 MB).
 
-### Log Content
+### 9.5 Log Content
 
 Each log entry is a single‑line timestamped record containing:
 
-- interface evaluation results  
-- SNMP connection events  
-- filter decisions  
-- unmatched pattern notices  
+* interface evaluation results  
+* SNMP connection events  
+* filter decisions  
+* unmatched pattern notices  
 
 ---
 
-## Error Handling
+## 10 Error Handling
 
 ### SNMP Failures
 
@@ -263,13 +293,13 @@ Invalid or conflicting arguments → UNKNOWN (exit code 3).
 
 Unmatched patterns:
 
-- are injected into results  
-- appear in `status.failures`  
-- force CRITICAL  
+* are injected into results  
+* appear in `status.failures`  
+* force CRITICAL  
 
 ---
 
-## Exit Code Determination
+## 11. Exit Code Determination
 
 | Condition                                | Exit Code | Status     |
 |------------------------------------------|-----------|------------|
@@ -281,7 +311,7 @@ There is no WARNING tier.
 
 ---
 
-## See Also
+## 12. See Also
 
 [Installation.md](Installation.md)
 [Usage.md](Usage.md)

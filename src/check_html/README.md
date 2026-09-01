@@ -4,7 +4,7 @@
 **Script:** `check_html.py`  
 **Author:** Leon McClatchey, Linktech Engineering LLC  
 **License:** MIT  
-**Requires:** Python 3.12+  
+**Requires:** Python 3.12+  (development only; not required for frozen binary)
 **Last Updated:** 2026‑08‑17
 
 ![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)
@@ -27,13 +27,14 @@
 6. [Enforcement Model](#6-enforcement-model)
 7. [Perfdata](#7-perfdata)
 8. [Exit Codes](#8-exit-codes)
-9. [License](#9-license)
+9. [Documents](#9-documents)
+10. [License](#10-license)
 
 ---
 
 ## 1. Overview
 
-check_html.py is a deterministic HTTP/HTTPS inspection tool designed for monitoring environments.
+check_html is a deterministic HTTP/HTTPS inspection tool designed for monitoring environments.
 It performs endpoint validation, backend fingerprinting, and content checks while producing clean, predictable output across JSON, verbose, quiet, and Nagios/Icinga modes.
 
 ## 2. Features
@@ -67,7 +68,7 @@ The tool is standalone and does not require system packages or external binaries
 Basic usage:
 
 ```bash
-./check_html.py -H <host>
+./check_html -H <host>
 ```
 
 Common options:
@@ -96,7 +97,7 @@ OK - 200 OK (text/html) | latency=0.0012s;;; size=331B;;;
 
 ## 5. Output Modes
 
-check_html.py has four mutually exclusive output modes:
+check_html has four mutually exclusive output modes:
 
 ### 5.1 Nagios/Icinga Mode (default)
 
@@ -136,7 +137,7 @@ Human‑readable diagnostic report including:
 
 ## 6. Enforcement Model
 
-check_html.py applies deterministic validation rules:
+check_html applies deterministic validation rules:
 
 * **Status Enforcement** — validates status code and expected value
 * **Content-Type Enforcement** — validates presence and expected type
@@ -175,7 +176,22 @@ Not included in Quiet mode (no output).
 
 Exit codes are determined by merged enforcement results.
 
-## 9. License
+## 9. Documents
+Documentation is available under:
+
+check_html/docs/
+Including:
+
+* [Installation.md](docs/Installation.md)
+* [Usage.md](docs/Usage.md)
+* [Enforcement.md](docs/Enforcement.md)
+* [Metadata_Schema.md](docs/Metadata_schema.md)
+* [Operation.md](docs/Operation.md)
+* [Roadmap.md](docs/Roadmap.md)
+* [Logging.md](docs/Logging.md)
+
+
+## 10. License
 
 This tool is part of the NMS_Tools suite.
 See the root project for licensing, documentation, and contributor guidelines.

@@ -1,18 +1,44 @@
 # Metadata_schema.md — JSON Output Schema Reference
 
-## Overview
+**Part of:** NMS_Tools Monitoring Suite  
+**Document:** Metadata Schema  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+  (development only; not required for frozen binary)
+**Last Updated:** 2026‑08‑17
 
-This document defines the JSON output schema produced by `check_interfaces.py` when invoked with -j or --json. The output is a single JSON object with three top‑level keys: interfaces, meta, and status.
+## Table of Contents
+1. [Overview](#1-overview)
+2. [Top‑Level Structure](#2-toplevel-structure)
+3. [Interfaces](#3-interfaces)
+  1. [Interface Object](#31-interface-object)
+  2. [Address Object](#32-address-object)
+  3. [Counters Object](#33-counters-object)
+4. [Meta](#4-meta)
+  1. [Meta Fields](#41-meta-fields)
+5. [Status](#5-status)
+  1. [Status Fields](#51-status-fields)
+  2. [Result Object](#52-result-object)
+  3. [State Determination](#53-state-determination)
+6. [Example — Clean Run](#6-example--clean-run)
+7. [See Also](#7-see-also)
 
 ---
 
-## Top‑Level Structure
+## 1. Overview
+This document defines the JSON output schema produced by `check_interfaces` when invoked with `-j` or `--json`.
+The output is a single JSON object with three top‑level keys: **interfaces**, **meta**, and **status**.
 
+---
+
+## 2. Top‑Level Structure
+```json
 {
   "interfaces": { ... },
   "meta": { ... },
   "status": { ... }
 }
+```
 
 | Key        | Type   | Description                                          |
 |------------|--------|------------------------------------------------------|
@@ -22,18 +48,19 @@ This document defines the JSON output schema produced by `check_interfaces.py` w
 
 ---
 
-## interfaces
+## 3. Interfaces
 
 An object where each key is an interface name and each value is an interface metadata object.
 
 Example:
-
+```json
 "interfaces": {
   "eth0": { ... },
   "br0": { ... }
 }
+```
 
-### Interface Object
+### 3.1 Interface Object
 
 | Field     | Type             | Description                                                        |
 |-----------|------------------|--------------------------------------------------------------------|
@@ -50,7 +77,7 @@ Example:
 | ipv6      | array of objects | IPv6 addresses; see Address Object                                 |
 | counters  | object           | Traffic counters; see Counters Object                              |
 
-### Address Object
+### 3.2 Address Object
 
 | Field     | Type            | Description                                                    |
 |-----------|-----------------|----------------------------------------------------------------|
@@ -58,7 +85,7 @@ Example:
 | netmask   | string          | Subnet mask                                                    |
 | broadcast | string or null  | Broadcast address or null                                      |
 
-### Counters Object
+### 3.3 Counters Object
 
 These counters come directly from IF‑MIB and EtherLike‑MIB.
 
@@ -78,16 +105,16 @@ These counters come directly from IF‑MIB and EtherLike‑MIB.
 | out_discards   | integer | Outbound discards                           |
 | out_errors     | integer | Outbound errors                             |
 
-Note: Some devices omit in_unknown; the field may be absent.
+Note: Some devices omit `in_unknown`; the field may be absent.
 
 ---
 
-## meta
+## 4. Meta
 
 Operational metadata describing the invocation context, host detection, and active filters.
 
 Example:
-
+```json
 "meta": {
   "host": "mom",
   "ip": "192.168.0.2",
@@ -101,34 +128,35 @@ Example:
   "log_dir": null,
   "log_max_mb": 50
 }
+```
 
-### Meta Fields
+### 4.1 Meta Fields
 
-| Field           | Type             | Description                                                          |
-|-----------------|------------------|----------------------------------------------------------------------|
-| host            | string           | Target hostname from -H                                              |
-| ip              | string           | Resolved IP address                                                  |
-| mode            | string           | "local" or "snmp"                                                    |
-| script_name     | string           | Basename of the script                                               |
-| status_target   | string           | Attribute selected via --status                                      |
-| interface_count | integer          | Number of interfaces after filtering                                 |
-| exclude_local   | boolean          | Whether --exclude-local was used                                     |
-| include_aliases | boolean          | Whether --include-aliases was used                                   |
-| ignore          | array or null    | List of ignore patterns, or null                                     |
-| log_dir         | string or null   | Log directory path, or null                                          |
-| log_max_mb      | integer          | Log rotation threshold                                               |
-| warnings        | array of strings | Present only when warnings were emitted                              |
+| Field | Type | Description |
+| --- | --- | --- |
+| host | string | Target hostname from ``-H`` |
+| ip | string | Resolved IP address |
+| mode | string | ``"local"`` or ``"snmp"`` |
+| script_name | string | Basename of the script |
+| status_target | string | Attribute selected via ``--status`` |
+| interface_count | integer | Number of interfaces after filtering |
+| exclude_local | boolean | Whether ``--exclude-local`` was used |
+| include_aliases | boolean | Whether ``--include-aliases`` was used |
+| ignore | array or null | List of ignore patterns, or null |
+| log_dir | string or null | Log directory path, or null |
+| log_max_mb | integer | Log rotation threshold |
+| warnings | array of strings | Present only when warnings were emitted |
 
 Note: warnings is omitted entirely when no warnings occur.
 
 ---
 
-## status
+## 5. Status
 
 Evaluation results and overall state for the selected attribute.
 
 Example:
-
+```json
 "status": {
   "state": "OK",
   "failures": [],
@@ -136,8 +164,9 @@ Example:
     "eth0": { "ok": true, "value": "up" }
   }
 }
+```
 
-### Status Fields
+### 5.1 Status Fields
 
 | Field     | Type             | Description                                                      |
 |-----------|------------------|------------------------------------------------------------------|
@@ -145,14 +174,14 @@ Example:
 | failures  | array of strings | Names of interfaces or patterns that failed                     |
 | results   | object           | Per‑interface evaluation results                                |
 
-### Result Object
+### 5.2 Result Object
 
 | Field | Type    | Description                                                                  |
 |-------|---------|------------------------------------------------------------------------------|
 | ok    | boolean | Whether the interface passed the selected attribute check                    |
 | value | string  | Evaluated value ("up", "down", "full", "not found", etc.)                    |
 
-### State Determination
+### 5.3 State Determination
 
 | Condition                            | state        | Exit Code |
 |--------------------------------------|--------------|-----------|
@@ -162,8 +191,8 @@ Example:
 
 ---
 
-## Example — Clean Run
-
+## 6. Example — Clean Run
+```json
 {
   "interfaces": {
     "eth0": {
@@ -218,11 +247,13 @@ Example:
     "state": "OK"
   }
 }
+```
 
 ---
 
-## See Also
+## 7. See Also
 
 [Usage.md](Usage.md)
 [Operation.md](Operation.md)  
 [Enforcement.md](Enforcement.md)
+[Installation](Installation.md)

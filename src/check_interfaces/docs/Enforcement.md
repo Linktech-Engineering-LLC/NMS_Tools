@@ -1,14 +1,35 @@
 # Enforcement.md — Filter Pipeline, Precedence & Edge Cases
 
-## Overview
+**Part of:** NMS_Tools Monitoring Suite  
+**Document:** Enforcement Model  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+  (development only; not required for frozen binary)
+**Last Updated:** 2026‑08‑17
 
-`check_interfaces.py` uses a two‑phase pipeline — **filtering** then **selection** — to determine which interfaces are discovered, evaluated, and reported. Phases are applied in a deterministic order to ensure consistent, reproducible results regardless of interface enumeration sequence.
+## Table of Contents
+1. [Overview](#1-overview)
+2. [Discovery Model](#2-discovery-model)
+3. [Pipeline](#3-pipeline)
+4. [Filtering Phase](#4-filtering-phase)
+5. [Selection Phase](#5-selection-phase)
+6. [Attribute Evaluation](#6-attribute-evaluation)
+7. [Exit Code Mapping](#7-exit-code-mapping)
+8. [JSON Output Behavior](#8-json-output-behavior)
+9. [Verbose Output Behavior](#9-verbose-output-behavior)
+10. [Edge Cases](#10-edge-cases)
+11. [Filter Interaction Summary](#11-filter-interaction-summary)
+12. [Design Principles](#12-design-principles)
+
+## 1. Overview
+
+`check_interfaces` uses a two‑phase pipeline — **filtering** then **selection** — to determine which interfaces are discovered, evaluated, and reported. Phases are applied in a deterministic order to ensure consistent, reproducible results regardless of interface enumeration sequence.
 
 This document describes the pipeline phases, the precedence rules that govern their interaction, attribute evaluation behavior, and edge cases.
 
 ---
 
-## Discovery Model
+## 2. Discovery Model
 
 Before any filtering or selection is applied, `check_interfaces.py` builds a complete interface inventory from the target host:
 
@@ -21,7 +42,7 @@ The tool determines whether the target is local or remote automatically based on
 
 ---
 
-## Pipeline
+## 3. Pipeline
 
 The pipeline has two phases: **filtering** applies exclusion rules to the full inventory, and **selection** narrows the surviving set to explicitly targeted interfaces.
 
@@ -65,7 +86,7 @@ If a filter removes an interface, `--ifaces` cannot re‑include it.
 
 ---
 
-## Filtering Phase
+## 4. Filtering Phase
 
 Filtering is handled by `apply_filters()`. Each stage is cumulative and subtractive.
 
@@ -73,8 +94,8 @@ Filtering is handled by `apply_filters()`. Each stage is cumulative and subtract
 
 Alias interfaces (e.g., `eth0:1`, `br0:backup`) are excluded unless:
 
-- `--include-aliases` is specified, or
-- `--status alias` is selected (alias filtering is skipped entirely)
+* `--include-aliases` is specified, or
+* `--status alias` is selected (alias filtering is skipped entirely)
 
 This ensures alias evaluation is performed on the full inventory.
 
@@ -84,10 +105,10 @@ This ensures alias evaluation is performed on the full inventory.
 
 Removes virtual interfaces such as:
 
-- `vnet*`
-- `virbr*`
-- `docker0`
-- hypervisor/container‑managed devices
+* `vnet*`
+* `virbr*`
+* `docker0`
+* hypervisor/container‑managed devices
 
 Virtual detection is performed by `is_virtual()`.
 
@@ -104,10 +125,10 @@ Detection is performed by `is_local()`.
 
 Removes interfaces matching substring or regex patterns.
 
-- Flag is **repeatable**
-- Regex is detected automatically when metacharacters are present
-- Substring match is case‑insensitive
-- Regex uses `re.search(..., IGNORECASE)`
+* Flag is **repeatable**
+* Regex is detected automatically when metacharacters are present
+* Substring match is case‑insensitive
+* Regex uses `re.search(..., IGNORECASE)`
 
 Examples:
 
@@ -119,7 +140,7 @@ Examples:
 
 ---
 
-## Selection Phase
+## 5. Selection Phase
 
 Handled by `apply_iface_selection()` after all filters have been applied.
 
@@ -152,7 +173,7 @@ This occurs even if other interfaces pass evaluation.
 
 ---
 
-## Attribute Evaluation
+## 6. Attribute Evaluation
 
 After the pipeline produces the evaluation candidate set, each surviving interface is validated by `evaluate_status()` against the attribute selected by `--status`. Defaults to `oper-status` if not specified.
 
@@ -183,7 +204,7 @@ When `--status alias` is used, the evaluation checks whether an interface **is**
 
 ---
 
-## Exit Code Mapping
+## 7. Exit Code Mapping
 
 | Code | Status   | Trigger                                                                  |
 |------|----------|--------------------------------------------------------------------------|
@@ -205,7 +226,7 @@ When `--status alias` is used, the evaluation checks whether an interface **is**
 
 ---
 
-## JSON Output Behavior
+## 8. JSON Output Behavior
 
 JSON mode (-j, --json) includes:
 
@@ -218,7 +239,7 @@ Filtered interfaces do not appear in JSON.
 
 ---
 
-## Verbose Output Behavior
+## 9. Verbose Output Behavior
 
 Verbose mode (-v, --verbose) logs:
 
@@ -232,7 +253,7 @@ Verbose output is suppressed in default Nagios mode unless -v is used.
 
 ---
 
-## Edge Cases
+## 10. Edge Cases
 
 ### Empty Candidate Set
 
@@ -246,9 +267,9 @@ Verbose output is suppressed in default Nagios mode unless -v is used.
 
 When `--ifaces` is specified, the tool evaluates every pattern independently:
 
-- **Matched patterns** proceed through evaluation normally.
-- **Unmatched patterns** are injected into the evaluation result as synthetic interfaces with status="not found".
-- **Unmatched patterns** are injected into the final result as CRITICAL failures with a value of `"not found"`.
+* **Matched patterns** proceed through evaluation normally.
+* **Unmatched patterns** are injected into the evaluation result as synthetic interfaces with status="not found".
+* **Unmatched patterns** are injected into the final result as CRITICAL failures with a value of `"not found"`.
 
 The overall state is forced to CRITICAL if any pattern goes unmatched, regardless of whether the matched interfaces pass evaluation. Unmatched interfaces are logged when logging is enabled.
 
@@ -308,7 +329,7 @@ If a pattern in `--ifaces` is not valid regex, the regex match tier is silently 
 
 ---
 
-## Filter Interaction Summary
+## 11. Filter Interaction Summary
 
 | Scenario                                             | Result                                              |
 |------------------------------------------------------|-----------------------------------------------------|
@@ -323,7 +344,7 @@ If a pattern in `--ifaces` is not valid regex, the regex match tier is silently 
 
 ---
 
-## Design Principles
+## 12. Design Principles
 
 1. **Deterministic** — The same input always produces the same output, regardless of enumeration order.
 2. **Subtractive by default** — Filters remove interfaces from evaluation. The only additive flag is `--include-aliases`.

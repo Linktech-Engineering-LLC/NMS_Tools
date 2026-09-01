@@ -1,11 +1,11 @@
 # Enforcement Guide — `check_cert.py`
 
 **Part of:** NMS_Tools Monitoring Suite  
-**Script:** `check_cert.py`  
+**Document:** Enforcement Model  
 **Author:** Leon McClatchey, Linktech Engineering LLC  
 **License:** MIT  
-**Requires:** Python 3.12+  
-**Last Updated:** 2026-08-17
+**Requires:** Python 3.12+  (development only; not required for frozen binary)
+**Last Updated:** 2026‑08‑17
 
 ## Table of Contents
 

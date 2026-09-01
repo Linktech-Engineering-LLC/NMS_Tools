@@ -1,12 +1,11 @@
 md
 # Usage Guide — check_cert.py
 
-# Usage Guide — `check_cert.py`  
 **Part of:** NMS_Tools Monitoring Suite  
 **Document:** Usage Guide  
 **Author:** Leon McClatchey, Linktech Engineering LLC  
 **License:** MIT  
-**Requires:** Python 3.12+  
+**Requires:** Python 3.12+  (development only; not required for frozen binary)
 **Last Updated:** 2026‑08‑17
 
 ## Table of Contents
@@ -42,7 +41,7 @@ md
 
 ## 1. Overview
 
-This guide explains how to invoke `check_cert.py`, how each flag behaves, and how to combine modes, thresholds, and enforcement rules. All behavior is deterministic and consistent across the NMS_Tools suite.
+This guide explains how to invoke `check_cert`, how each flag behaves, and how to combine modes, thresholds, and enforcement rules. All behavior is deterministic and consistent across the NMS_Tools suite.
 
 ---
 
@@ -491,7 +490,7 @@ Chain warnings never affect Nagios output
 
 ## 19. Logging
 
-check_cert.py includes a deterministic, operator‑grade logging system consistent with the 2026 NMS_Tools architecture.
+check_cert includes a deterministic, operator‑grade logging system consistent with the 2026 NMS_Tools architecture.
 
 Logging is enabled automatically when the tool runs and writes to the suite‑standard log directory defined in the unified NMS_Tools configuration file.
 
@@ -541,7 +540,7 @@ check_cert --version
 Outputs:
 
 ```Code
-check_cert.py VERSION (NMS_Tools SUITE_VERSION)
+check_cert VERSION (NMS_Tools SUITE_VERSION)
 ```
 
 Versioning follows semantic versioning with JSON schema stability guarantees.
@@ -592,7 +591,7 @@ check_cert -H example.com --json | jq '.expiration.days_remaining'
 
 ## 22. NMS_Tools Integration Notes
 
-check_cert.py follows all NMS_Tools suite standards:
+check_cert follows all NMS_Tools suite standards:
 
 * Deterministic behavior
 * Canonical JSON

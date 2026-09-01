@@ -4,7 +4,7 @@
 **Script:** `check_cert.py`  
 **Author:** Leon McClatchey, Linktech Engineering LLC  
 **License:** MIT  
-**Requires:** Python 3.12+  
+**Requires:** Python 3.12+  (development only; not required for frozen binary)
 **Last Updated:** 2026-08-17
 
 ![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)
@@ -294,27 +294,27 @@ Machine‑readable structured output with a stable schema.
 
 Check a certificate:
 
-`./check_cert.py -H example.com`
+`./check_cert -H example.com`
 
 
 Check with insecure mode (skip TLS verification):
 
-`./check_cert.py -H example.com --insecure`
+`./check_cert -H example.com --insecure`
 
 
 Verbose inspection:
 
-`./check_cert.py -H example.com -v`
+`./check_cert -H example.com -v`
 
 
 JSON output:
 
-`./check_cert.py -H example.com -j`
+`./check_cert -H example.com -j`
 
 
 Nagios thresholds:
 
-`./check_cert.py -H example.com -w 14 -c 7`
+`./check_cert -H example.com -w 14 -c 7`
 
 
 ---
@@ -490,7 +490,7 @@ Example:
 
 ## 7. 🔧 CLI Reference
 
-usage: check_cert.py -H HOST [options]
+usage: check_cert -H HOST [options]
 
 Connection:
   -H, --host HOST
@@ -525,12 +525,12 @@ cd NMS_Tools/check_cert
 Run directly:
 
 ```bash
-./check_cert.py -H example.com
+./check_cert -H example.com
 ```
 
 ## 9. 📦 PythonTools Requirement (Script Mode)
 
-When running `check_cert.py` **as a Python script**, the `PythonTools` library must be installed.
+When running `check_cert` **as a Python script**, the `PythonTools` library must be installed.
 The frozen binary (`dist/check_cert`) bundles PythonTools internally, but the script version does not.
 
 ### Install PythonTools
@@ -564,7 +564,6 @@ Therefore, PythonTools must be installed when running check_cert.py directly.
 ## 10. 📚 Documentation
 Documentation is available under:
 
-Code
 check_cert/docs/
 Including:
 
