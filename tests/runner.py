@@ -17,76 +17,114 @@ Description: Description of this module
 
 import os
 import sys
+import inspect
+import json
 import traceback
 import time
 import platform
+from dataclasses import dataclass
+from pathlib import Path
+from _pytest.monkeypatch import MonkeyPatch
+
+# Add project root to sys.path
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 # Import the LoggerFactory
 from PythonTools.log_helpers.factory import LoggerFactory
+from PythonTools.nagios import BaseNagiosParser
+from PythonTools.color import colorize, Color
+from PythonTools.test import display_results
 
 # Import test modules explicitly
 # (You will add more as you expand the harness)
-from check_weather.test_indexes import (
-    test_heat_index_valid,
-    test_heat_index_invalid_low_rh,
-    test_heat_index_invalid_low_temp,
-    test_humidex_valid,
-    test_compute_all_indexes,
-    test_wet_bulb_valid,
-    test_wind_chill_invalid_high_temp,
-    test_wind_chill_invalid_low_wind,
-    test_wind_chill_valid,
-)
+from check_html.init import HTML
+from check_ticker.init import TICKER
+from check_weather.init import WEATHER
 
-WEATHER = {
-    "valid_heat": test_heat_index_valid,
-    "heat_low_rh": test_heat_index_invalid_low_rh,
-    "heat_low_temp": test_heat_index_invalid_low_temp,
-    "valid_humidex": test_humidex_valid,
-    "all_indexes": test_compute_all_indexes,
-    "valid_wet_bulb": test_wet_bulb_valid,
-    "wind_chill_high_temp": test_wind_chill_invalid_high_temp,
-    "wind_chill_low_wind": test_wind_chill_invalid_low_wind,
-    "valid_wind_chill": test_wind_chill_valid,
-}
+@dataclass
+class TestResult:
+    name: str
+    group: str
+    passed: bool
+    duration: float
+    error: str | None = None
+        
 HARNESS = {
     "Weather Index": WEATHER,
-    # "HTML": HTML,
+    "HTML Core": HTML,
+    "Ticker API Keys": TICKER,
     # "Interfaces": INTERFACES,
     # "Cert": CERT,
 }
+def parse_cli() -> BaseNagiosParser:
+    parser = BaseNagiosParser(
+        prog="runner",
+        description="NMS_Tools Deterministic Test Harness"
+    )
 
+    # Use add_group(), just like check_ticker
+    group = parser.add_group("Harness Options")
+
+    group.add_argument(
+        "--group",
+        default=None,
+        help="Run only a specific test group (Weather, HTML, Ticker)"
+    )
+
+    group.add_argument(
+        "--list",
+        action="store_true",
+        help="List available test groups"
+    )
+    group.add_argument(
+        "--fail-fast",
+        action="store_true",
+        help="Stop after the first failed test"
+    )
+
+    group.add_argument(
+        "--pattern",
+        help="Run only tests whose names contain this substring"
+    )
+
+    args, flags, mode = parser.parse()
+    return args, flags, mode
 # ---------------------------------------------------------------------------
 # Logger Initialization
 # ---------------------------------------------------------------------------
-def initialize_harness_logger():
+def initialize_harness_logger(args):
     """
     Deterministic logger for the NMS_Tools test harness.
-    Uses the same LoggerFactory identity as all tools.
+    Mirrors the structure of tool loggers but without Nagios mode.
+    Falls back to harness defaults when no log-dir is provided.
     """
 
-    script_name = os.path.splitext(os.path.basename(__file__))[0]
-
-    log_dir = os.path.join(os.getcwd(), "logs")
+    # If user did not specify a log-dir, use harness default
+    log_dir = args.log_dir or os.path.join(os.getcwd(), "logs")
     os.makedirs(log_dir, exist_ok=True)
+
+    script_name = "runner"
 
     log_cfg = {
         "path": os.path.join(log_dir, f"{script_name}.log"),
         "log_level": "INFO",
-        "log_max_mb": 5,
+        "log_max_mb": args.log_max_mb or 5,
         "archive_mode": "zip",
         "backup_count": 5,
 
-        # Harness always logs to console
+        # Console output only when verbose AND not quiet
         "console_stream": sys.stderr,
-        "console_enabled": True,
+        "console_enabled": args.verbose and not args.quiet,
 
-        # Harness does not use color
+        # Color only when user requests it
+        #"color": args.color,
         "color": False,
     }
 
     factory = LoggerFactory(log_cfg, script_name)
     return factory.get_logger("harness")
+
 def log_environment(logger):
     logger.info(f"Python: {platform.python_version()}")
     logger.info(f"OS: {platform.system()} {platform.release()}")
@@ -96,62 +134,103 @@ def log_environment(logger):
 # ---------------------------------------------------------------------------
 # Test Runner Helpers
 # ---------------------------------------------------------------------------
-def run_group(logger, group_name, tests):
-    logger.info(f"=== Running {group_name} Tests ===")
+def run_group(group_name, tests, args, logger):
+    logger.info("=== Running {group_name} Tests ===")
     results = []
 
     for name, func in tests.items():
-        results.append(run_test(name, func, logger))
 
-    passed = sum(1 for r in results if r)
+        # Pattern filtering
+        if args.pattern and args.pattern not in name:
+            continue
+
+        # Run the test → returns TestResult
+        result = run_test(name, func, group_name)
+        results.append(result)
+
+        # Fail-fast
+        if args.fail_fast and not result.passed:
+            logger.error("Fail-fast enabled: stopping early")
+            break
+
+    # Compute group summary
+    passed = sum(1 for r in results if r.passed)
     failed = len(results) - passed
 
+    # Log summary (plain text only)
     logger.info(f"=== {group_name} Summary: {passed} passed, {failed} failed ===")
+
     return results
 
-def run_test(name, func, logger):
+def run_test(name, func, group_name):
     start = time.perf_counter()
-    logger.info(f"Running test: {name}")
 
     try:
-        func()
+        sig = inspect.signature(func)
+        params = sig.parameters
+
+        if "monkeypatch" in params:
+            mp = MonkeyPatch()
+            func(mp)
+            mp.undo()
+        else:
+            func()
+
         duration = time.perf_counter() - start
-        logger.info(f"PASS: {name} ({duration:.4f}s)")
-        return True
+        return TestResult(name=name, group=group_name, passed=True, duration=duration)
 
     except Exception as e:
         duration = time.perf_counter() - start
-        logger.error(f"FAIL: {name} ({duration:.4f}s) error={e}")
-        logger.error(traceback.format_exc())
-        return False
+        return TestResult(name=name, group=group_name, passed=False, duration=duration, error=str(e))
 
+   
 
 # ---------------------------------------------------------------------------
 # Main Harness Execution
 # ---------------------------------------------------------------------------
 
 def main():
-    
-    logger = initialize_harness_logger()
+    args, flags, mode = parse_cli()
+    if mode == "nagios":
+        mode = "quiet"
+    logger = initialize_harness_logger(args)
     logger.info("=== Starting NMS_Tools Test Harness ===")
     log_environment(logger)
+    logger.info(f"Command Line: {' '.join(sys.argv)}")
     
-    results = []
+    if args.list:
+        logger.info("Available test groups:")
+        for name in HARNESS.keys():
+            logger.info(f" - {name}")
+        os._exit(0)
 
-    for group_name, tests in HARNESS.items():
-        results.extend(run_group(logger, group_name, tests))
+    all_results = []
+    # Determine which groups to run
+    if args.group:
+        if args.group not in HARNESS:
+            logger.error(f"Unknown group: {args.group}")
+            os._exit(1)
 
-    # Add more tests here as you expand the harness
-    # results.append(run_test("check_html.test_structure", test_structure))
-    # results.append(run_test("check_interfaces.test_parsing", test_parsing))
+        groups_to_run = {args.group: HARNESS[args.group]}
+    else:
+        groups_to_run = HARNESS
 
-    # Summary
-    passed = sum(1 for r in results if r)
-    failed = len(results) - passed
+    for group_name, tests in groups_to_run.items():
+        group_results = run_group(group_name, tests, args, logger)
+        all_results.extend(group_results)
+
+        if args.fail_fast and any(not r.passed for r in group_results):
+            break
+
+    passed = sum(1 for r in all_results if r.passed)
+    failed = len(all_results) - passed
+
+    display_results(all_results, args)
 
     logger.info(f"=== Harness Complete: {passed} passed, {failed} failed ===")
 
-    # Exit code for CI or operator use
+
+    # Always exit with a code
     os._exit(0 if failed == 0 else 1)
 
 
