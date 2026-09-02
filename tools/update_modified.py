@@ -16,7 +16,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 # PythonTools logging
-from PythonTools.log_helpers.helpers import resolve_paths, initialize_universal_logging
+from PythonTools.log_helpers.factory import LoggerFactory
 
 # ------------------------------------------------------------
 # Enhanced Argparse (consistent with check_html.py)
@@ -150,25 +150,40 @@ def walk_project(project_root: Path, preview: bool) -> list[str]:
 # GLOBAL LOGGER INITIALIZATION
 # ------------------------------------------------------------
 
-def init_logging_for_universal_script():
-    # Resolve paths for this script
-    paths = resolve_paths(__file__)
-     # Universal scripts usually have no CLI args
-    args = argparse.Namespace()
+def initialize_logger(args, mode):
+    """
+    Unified LoggerFactory initialization for update_modified.
+    Matches the model used by other NMS_Tools tools.
+    """
 
-    # Build the context expected by initialize_universal_logging()
-    context = {
-        "PROJECT_NAME": "update_modified",
-        "args": args,
-        "paths": paths,
-        "secrets": {},
-    }
+    # update_modified has no Nagios mode, but we preserve the pattern
+    if not args.log_dir:
+        return None
 
-    logging_ctx = initialize_universal_logging(context)
-    return logging_ctx["logger"]
+    try:
+        os.makedirs(args.log_dir, exist_ok=True)
 
+        log_cfg = {
+            "path": os.path.join(args.log_dir, "update_modified.log"),
+            "log_level": "INFO",
+            "log_max_mb": args.log_max_mb,
+            "archive_mode": "zip",
+            "backup_count": 7,
 
-logger = init_logging_for_universal_script()
+            # Console output only when verbose AND not quiet
+            "console_stream": sys.stderr,
+            "console_enabled": not args.quiet and args.verbose,
+
+            # update_modified does not use color flags, but we keep the field
+            "color": args.color if hasattr(args, "color") else False,
+        }
+
+        logger_factory = LoggerFactory(log_cfg, "update_modified")
+        return logger_factory.get_logger("main")
+
+    except Exception as e:
+        print(f"Failed to initialize LoggerFactory: {e}")
+        return None
 
 
 # ------------------------------------------------------------
@@ -178,7 +193,12 @@ logger = init_logging_for_universal_script()
 def main():
     parser = build_parser()
     args = parser.parse_args()
+    mode = "normal"
 
+    logger = initialize_logger(args, mode)
+
+    if logger:
+        logger.info("Starting update_modified")
     # Determine project root
     if args.path:
         project_root = Path(args.path).expanduser().resolve()
@@ -189,13 +209,15 @@ def main():
         # Default: parent folder of this script
         project_root = Path(__file__).resolve().parent.parent
 
-    logger.info(f"Scanning project root: {project_root}")
+    if logger:
+        logger.info(f"Scanning project root: {project_root}")
     print(f"Scanning project root: {project_root}, {args.preview}")
 
     updated_files = walk_project(project_root, args.preview)
     summary = build_summary(updated_files, args.preview)
     print(summary)
-    logger.info(summary)
+    if logger:
+        logger.info(summary)
 
 
 if __name__ == "__main__":

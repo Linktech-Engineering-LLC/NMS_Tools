@@ -66,6 +66,7 @@ def test_compute_all_indexes():
         dewpoint_c=22,
         rh=70,
         wind_mph=10,
+        pressure_hpa=1013.25,   # standard atmospheric pressure
     )
 
     assert idx.heat_index is not None

@@ -10,7 +10,8 @@ venv/
 .venv/
 
 # Logs
-*.log
+logs
+var
 
 # Editor files
 *.swp

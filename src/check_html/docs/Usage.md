@@ -21,7 +21,7 @@
 11. [Hostname Resolution](#11-hostname-resolution)
 
 ## 1. Overview
-check_html.py is a deterministic HTTP/HTTPS inspection and content‑validation tool.
+check_html is a deterministic HTTP/HTTPS inspection and content‑validation tool.
 It supports JSON, verbose, and Nagios output modes, and is designed for operators, automation systems, and monitoring platforms.
 
 This guide describes the command‑line interface, output modes, examples, and Nagios integration.
@@ -29,24 +29,24 @@ This guide describes the command‑line interface, output modes, examples, and N
 ## 2. Basic Usage
 **HTTP check**
 ```bash
-./check_html.py -H example.com
+./check_html -H example.com
 ```
 **HTTPS check**
 ```bash
-./check_html.py -H example.com --https
+./check_html -H example.com --https
 ```
 **Explicit port**
 ```bash
-./check_html.py -H example.com -p 8080
+./check_html -H example.com -p 8080
 ```
 ## 3. Output Modes
-check_html.py supports three deterministic output modes.
+check_html supports three deterministic output modes.
 
 ### 3.1 JSON Mode (-j / --json)
 Structured output for automation:
 
 ```bash
-./check_html.py -H example.com --json
+./check_html -H example.com --json
 ```
 Produces a canonical JSON object containing:
 
@@ -59,7 +59,7 @@ Produces a canonical JSON object containing:
 Human‑readable, multi‑section output:
 
 ```bash
-./check_html.py -H example.com -v
+./check_html -H example.com -v
 ```
 
 Sections include:
@@ -76,7 +76,7 @@ Sections include:
 No flags required:
 
 ```bash
-./check_html.py -H example.com
+./check_html -H example.com
 ``` 
 Example OK:
 
@@ -94,12 +94,12 @@ This mode is used for Nagios/Icinga integration.
 
 **Force HTTPS**
 ```bash
-./check_html.py -H example.com --https
+./check_html -H example.com --https
 ```
 
 **Force HTTP**
 ```bash
-./check_html.py -H example.com --http
+./check_html -H example.com --http
 ```
 
 **Auto‑detect (default)**
@@ -115,40 +115,41 @@ This behavior is deterministic and consistent across all output modes.
 **Expected HTTP status**
 
 ```bash
-./check_html.py -H example.com --expect-status 200
+./check_html -H example.com --expect-status 200
 ```
 
 **Require HTML body**
 ```bash
-./check_html.py -H example.com --require-html
+./check_html -H example.com --require-html
 ```
 
 **Require specific content‑type**
 ```bash
-./check_html.py -H example.com --require-type text/html
+./check_html -H example.com --require-type text/html
 ```
 
 **Backend enforcement**
 ```bash
-./check_html.py -H example.com --require-backend nginx
+./check_html -H example.com --require-backend nginx
 ```
 Backend detection is based on server headers and known patterns.
 
 ## 6. Timeout and Redirects
 
 **Set timeout (seconds)**
-```bash./check_html.py -H example.com -t 10
+```bash
+./check_html -H example.com -t 10
 ```
 Default timeout is 10 seconds.
 
 **Limit redirects**
 ```bash
-./check_html.py -H example.com -t 5
+./check_html -H example.com -t 5
 ```
 
 Limit redirects
 ```bash
-./check_html.py -H example.com --max-redirects 3
+./check_html -H example.com --max-redirects 3
 ```
 
 Redirects are followed deterministically up to the specified limit.
@@ -157,37 +158,37 @@ Redirects are followed deterministically up to the specified limit.
 
 **Check a normal website**
 ```bash
-./check_html.py -H example.com
+./check_html -H example.com
 ```
 
 **Check an HTTPS site with verbose output**
 ```bash
-./check_html.py -H example.com --https -v
+./check_html -H example.com --https -v
 ```
 
 **Enforce HTML and content‑type**
 ```bash
-./check_html.py -H example.com --require-html --require-type text/html
+./check_html -H example.com --require-html --require-type text/html
 ```
 
 **Enforce backend fingerprint**
 ```bash
-./check_html.py -H example.com --require-backend nginx
+./check_html -H example.com --require-backend nginx
 ```
 
 **JSON output for automation**
 ```bash
-./check_html.py -H api.example.com --json
+./check_html -H api.example.com --json
 ```
 
 ## 8. Nagios Integration
 
 **Command definition**
 
-```Code
+```Cfg
 define command {
     command_name    check_html
-    command_line    /usr/local/nagios/libexec/check_html.py -H $ARG1$
+    command_line    /usr/local/nagios/libexec/check_html -H $ARG1$
 }
 ```
 
@@ -209,7 +210,7 @@ OK - 200 OK (text/html)
 ``` 
 
 ## 9. Exit Codes
-check_html.py uses standard Nagios exit codes:
+check_html uses standard Nagios exit codes:
 
 | Code | Meaning |
 | :---: | :--- |
@@ -226,7 +227,7 @@ Exit codes are determined by the enforcement subsystem using Nagios‑aware seve
 View all flags:
 
 ```bash
-./check_html.py --help
+./check_html --help
 ```
 
 The CLI parser is noise‑free, grouped, and deterministic.
