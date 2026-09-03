@@ -25,27 +25,27 @@ All NMS_Tools binaries share the same installation and deployment model.
 ## 2. Tool Verification
 After installation, verify check_html using the following commands.
 
-### Universal Location Check (Recommended)
-`-l` accepts any supported location format:
-ZIP, city/state, or latitude/longitude.
-Additional flags are available and documented in check_weather `-h`.
+### Basic Port Check
 ```bash
-check_weather -l "New York, NY"
-check_weather -l 10001
-check_weather -l "40.7128,-74.0060"
+check_ports -H http://example.com -p 22
+```
+
+### Multiple Ports
+```bash
+check_ports -H example.com -p 22,80,443
 ```
 
 ### Verbose Mode
 ```bash
-check_weather -l "New York, NY" -v
+check_ports -H example.com -p 443 -v
 ```
 
 ### JSON Mode
 ```bash
-check_weather -l "New York, NY" -j 
+check_ports -H example.com -p 443 -j | jq
 ```
 
 ### Version Check
 ```bash
-check_weather -V
+check_ports -V
 ```

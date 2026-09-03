@@ -5,7 +5,7 @@
 **Author:** Leon McClatchey, Linktech Engineering LLC  
 **License:** MIT  
 **Requires:** Python 3.12+  (development only; not required for frozen binary)
-**Last Updated:** 2026‑08‑17
+**Last Updated:** 2026‑09-03
 
 ## Table of Contents
 1. Installation
@@ -49,7 +49,7 @@ check_interfaces -H switch01 -C public --perfdata in_octets
 
 ### JSON Mode
 ```bash
-check_interfaces -H switch01 -C public -j | jq
+check_interfaces -H switch01 -C public -j
 ```
 
 ### Version Check

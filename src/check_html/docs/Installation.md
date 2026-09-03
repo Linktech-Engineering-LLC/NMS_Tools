@@ -42,7 +42,7 @@ check_html -H https://example.com -v
 
 ### JSON Mode
 ```bash
-check_html -H https://example.com -j | jq
+check_html -H https://example.com -j
 ```
 
 ### Version Check

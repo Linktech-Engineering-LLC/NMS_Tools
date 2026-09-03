@@ -28,11 +28,10 @@
 5. [Enforcement Model](#5--enforcement-model)
 6. [Logging Subsystem](#6--logging-subsystem)
 7. [CLI Reference](#7--cli-reference)
-8. [Installation](#8--installation)
-9. [PythonTools Requirement](#9--pythontools-requirement-script-mode)
-10. [Documentation](#10--documentation)
-11. [Roadmap](#11--roadmap)
-12. [License](#12l--license)
+8. [PythonTools Requirement](#8--pythontools-requirement-script-mode)
+9. [Documentation](#9--documentation)
+10. [Roadmap](#10--roadmap)
+11. [License](#11--license)
 
 ---
 
@@ -513,22 +512,7 @@ Monitoring controls:
   --no-check-chain
   --no-check-ocsp
 
-## 8. 📦 Installation
-
-Clone the NMS_Tools repository:
-
-```bash
-git clone https://github.com/LinktechEngineering/NMS_Tools
-cd NMS_Tools/check_cert
-```
-
-Run directly:
-
-```bash
-./check_cert -H example.com
-```
-
-## 9. 📦 PythonTools Requirement (Script Mode)
+## 8. 📦 PythonTools Requirement (Script Mode)
 
 When running `check_cert` **as a Python script**, the `PythonTools` library must be installed.
 The frozen binary (`dist/check_cert`) bundles PythonTools internally, but the script version does not.
@@ -561,7 +545,7 @@ pip install -e .
 These modules are bundled into the frozen binary, but not into the script version.
 Therefore, PythonTools must be installed when running check_cert.py directly.
 
-## 10. 📚 Documentation
+## 9. 📚 Documentation
 Documentation is available under:
 
 check_cert/docs/
@@ -575,7 +559,7 @@ Including:
 * [Roadmap.md](docs/Roadmap.md)
 * [Logging.md](docs/Logging.md)
 
-## 11. 🛠 Roadmap
+## 10. 🛠 Roadmap
 
 * OCSP stapling enforcement
 * SCT extraction
@@ -585,6 +569,6 @@ Including:
 * Additional chain completeness heuristics
 * Add Logging.md documenting canonical log banners
 
-## 12l 📄 License
+## 11 📄 License
 
 Released under the MIT License.

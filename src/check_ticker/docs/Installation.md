@@ -25,27 +25,32 @@ All NMS_Tools binaries share the same installation and deployment model.
 ## 2. Tool Verification
 After installation, verify check_html using the following commands.
 
-### Universal Location Check (Recommended)
-`-l` accepts any supported location format:
-ZIP, city/state, or latitude/longitude.
-Additional flags are available and documented in check_weather `-h`.
+### Basic Ticker Check
 ```bash
-check_weather -l "New York, NY"
-check_weather -l 10001
-check_weather -l "40.7128,-74.0060"
+check_ticker AAPL
+```
+
+### Trend Analysis
+```bash
+check_ticker AAPL --trend
+```
+
+### History Window
+```bash
+check_ticker AAPL --history 5
 ```
 
 ### Verbose Mode
 ```bash
-check_weather -l "New York, NY" -v
+check_ticker AAPL -v
 ```
 
 ### JSON Mode
 ```bash
-check_weather -l "New York, NY" -j 
+check_ticker AAPL -j
 ```
 
 ### Version Check
 ```bash
-check_weather -V
+check_ticker -V
 ```

@@ -1,41 +1,73 @@
-```markdown
-# check_ports.py  
-Deterministic multi-port connectivity checker for Nagios and operator workflows.
+# check_ports.py — Deterministic Multi‑Port Connectivity Checker
+Fast, deterministic TCP port checking for Nagios, operators, and automation workflows.
 
-<p align="center">
+**Part of:** NMS_Tools Monitoring Suite  
+**Script:** `check_ports.py`  
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+  (development only; not required for frozen binary)
+**Last Updated:** 2026‑08‑17
 
-  <img src="https://img.shields.io/badge/status-stable-brightgreen?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/python-3.6%2B-blue?style=for-the-badge&logo=python&logoColor=white" />
-  <img src="https://img.shields.io/badge/platform-linux-lightgrey?style=for-the-badge&logo=linux&logoColor=white" />
-  <img src="https://img.shields.io/badge/Linktech_Engineering-Tools_Suite-8A2BE2?style=for-the-badge" />
+![Python Version](https://img.shields.io/badge/python-3.6%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/status-stable-brightgreen)
+![Nagios Plugin](https://img.shields.io/badge/Nagios-plugin-success)
+![NMS_Tools](https://img.shields.io/badge/NMS_Tools-check__ports-blueviolet)
 
-</p>
+## Table of Contents
 
+1. [Overview](#1-overview)  
+2. [Features](#2-features)  
+3. [Usage](#3-usage)  
+    1. [3.1 Required Arguments](#31-required-arguments)
+    2. [3.2 Port / Service Selection](#32-port--service-selection)
+    3. [3.3 CLI Flags](#33-cli-flags)
+4. [Output Modes](#4-output-modes)  
+    1. [4.1 Nagios/Icinga Mode](#41-nagiosicinga-mode)  
+    2. [4.2 JSON Mode](#42-json-mode)  
+    3. [4.3 Verbose Mode](#43-verbose-mode)  
+    4. [4.4 Quiet Mode](#44-quiet-mode)
+5. [Enforcement Model](#5-enforcement-model) 
+6. [Logging](#6-logging)  
+7. [Exit Codes](#7-exit-codes)  
+8. [Examples](#8-examples)
+9. [Logging Directory Structure](#9-logging-directory-structure)
+10. [Future Enhancements](#10-future-enhancements)
+11. [Documents](#11-documents)  
+12. [License](#12-license)
+
+---
+
+## 1. Overview
 `check_ports.py` performs fast, deterministic TCP connectivity checks against one or more ports on a target host. It supports mixed port lists, ranges, JSON output, verbose/quiet modes, and operator‑grade logging with rotation. The tool is designed for reliability, reproducibility, and clean integration into monitoring systems.
 
 ---
 
-## Features
+## 2. Features
 
-* Deterministic TCP port checking (open / closed / timeout / unreachable)
-* Supports individual ports, comma‑separated lists, and ranges (e.g., `22,80,8000-8010`)
-* JSON output for automation and dashboards
-* Verbose and quiet modes for operator workflows
-* Nagios‑compliant exit codes and single‑line output
-* Operator‑grade logging with rotation and structured banners
-* Zero side effects in Nagios mode
-* Consistent with the NMS_Tools suite architecture
+* Deterministic TCP availability checking (open / closed / timeout / unreachable)
+* Supports numeric ports, comma‑lists, and ranges (`22`,`80`,`8000-8010`)
+* **Supports service‑name resolution via** `/etc/services` and `socket.getservbyname()`
+    * Examples: `--service http,https,ssh,mysql`
+    * Service‑aware labels appear in verbose, JSON, and logs (`ssh(22)`, `mysql(3306)`)
+* Deterministic expansion of mixed numeric + service‑name inputs
+* JSON output for automation, dashboards, and test harness integration
+* Verbose mode for operator workflows (one line per port with service‑aware labels)
+* Quiet mode for Nagios (exit code only)
+* Nagios‑compatible single‑line output (default mode)
+* Nagios evaluation filters: `--require-all`, `--require-any`, `--fail-only`
+* Operator‑grade logging with rotation, structured banners, and service‑aware entries
+* Zero side effects in Nagios mode (no logs, no files, no color, no banners)
+* Fully aligned with NMS_Tools suite architecture and enforcement model
 
 ---
 
-## Usage
+## 3. Usage
 
 ```bash
-check_ports.py -H <host> -p <ports> [options]
+check_ports -H <host> (--ports <ports> | --service <name>) [options]
 ```
-
-## Required Arguments
+### 3.1 Required Arguments
 
 At least one of the following must be provided:
 
@@ -48,80 +80,91 @@ At least one of the following must be provided:
 You must specify **either** `--ports` or `--service` (or both).  
 If neither is provided, the tool returns `UNKNOWN`.
 
----
+### 3.2 Port / Service Selection
 
-## CLI Flags
-
-These flags control output mode and evaluation behavior.
-
-| Flag | Description |
-| --- | --- |
-| ``-j``, ``--json`` | Emit structured JSON output |
-| ``-v``, ``--verbose`` | One line per port with status |
-| ``-q``, ``--quiet`` | Suppress all output; exit code only |
-| ``--require-all`` | All ports must be open to return OK |
-| ``--require-any`` | At least one port must be open to return OK |
-| ``--fail-only`` | Suppress open ports in verbose output; logs and JSON always include all ports |
-| ``--timeout ``<seconds>`` | Per‑port timeout (default: 5 seconds) |
-| ``--log-dir ``<path>`` | Enable logging and write logs to the specified directory |
-| ``--log-max-mb ``<size>`` | Maximum log file size before rotation (default: 50 MB) |
-| ``--version`` | Show version and exit |
-
----
-
-## Port Parsing
-
-The `--ports` argument accepts:
-
+#### Numeric Ports (`--ports`)
+Supports:
 * Single ports: `22`
-* Comma‑separated lists: `22,80,443`
+* Comma‑lists: `22`,`80`,`443`
 * Ranges: `8000-8010`
-* Mixed lists and ranges: `22,2222,8080,5000-5004`
+* Mixed lists: `22`,`2222`,`8080`,`5000-5004`
 
-All ports are expanded into a deterministic, sorted list before scanning.
+All ports are expanded into a deterministic, sorted list.
 
-## Service Resolution (Internal)
-check_ports.py includes an internal service map used for labeling and logging.
-This feature is not exposed as a CLI flag.
+#### Service Names (`--service`)
+Service names are resolved using:
+* /etc/services
+* socket.getservbyname()
 
-Examples of internal mappings:
-
-```Code
-ssh   → 22
-http  → 80
-https → 443
-mysql → 3306
+Examples:
+```bash
+--service http,https,ssh
+--service smtp,pop3,imap
 ```
 
-If a port corresponds to a known service, verbose mode and logs display service‑aware labels:
+Service‑aware labels appear in:
+* verbose output
+* JSON output
+* logs
 
-```Code
+Examples:
+```code
 ssh(22)
 mysql(3306)
 http(80)
 ```
 
-Explicit ports (from --ports) are always shown as raw numbers.
+Explicit ports always appear as raw numbers.
+
+### 3.3 CLI Flags
+
+| Flag | Description |
+| --- | --- |
+| ``-v``, ``--verbose`` | Verbose output mode |
+| ``-j``, ``--json`` | JSON output mode |
+| ``-q``, ``--quiet`` | Quiet mode (exit code only) |
+| ``--color`` | Colorize terminal output (verbose/JSON) |
+| ``--output ``FILE`` | Write output to FILE instead of stdout |
+| ``--log-dir ``DIR`` | Directory for logs |
+| ``--log-max-mb ``SIZE`` | Max log size before rotation (default: 50 MB) |
+| ``--require-all`` | All ports must be open |
+| ``--require-any`` | At least one port must be open |
+| ``--fail-only`` | Only report failed ports in verbose/JSON |
+| ``-t``, ``--timeout`` | Per‑port timeout (default: 5 seconds) |
+| ``-V``, ``--version`` | Show version and exit |
+
+[Full flag documentation:](docs/FLAGS.md)
 
 ---
 
-## Output Modes
+## 4. Output Modes
 
 Only one output mode is active at a time. Priority order:
+1. JSON
+2. Verbose
+3. Quiet
+4. Nagios (default)
 
-1. `--json`
-2. `--verbose`
-3. `--quiet`
-4. *(default)* Nagios single‑line output
+### 4.1 Nagios/Icinga Mode
+Default mode when no other output flag is provided.
 
-### JSON Mode
+Example:
+```code
+CRITICAL - Problem ports: 80
+```
+
+Nagios state is determined by:
+* `--require-all`
+* `--require-any`
+* default mixed‑state logic
+
+### 4.2 JSON Mode
 
 ```bash
 check_ports.py -H server -p 22,80 -j
 ```
 
 Produces:
-
 ```json
 {
   "host": "server",
@@ -136,7 +179,13 @@ Produces:
 }
 ```
 
-### Verbose Mode
+Service‑aware JSON:
+```json
+{"port": "ssh(22)", "status": "open"}
+```
+
+
+### 4.3 Verbose Mode
 
 Verbose mode shows a human‑readable breakdown of what the tool resolved and the status of each port check.
 It prints:
@@ -175,37 +224,34 @@ Each per‑port result also includes the service name when applicable:
 Explicit ports (those provided via -p) are always shown as raw port numbers.
 Verbose mode is intended for operators who want to see exactly what the tool resolved and how each port responded. It does not output JSON or Nagios‑formatted text.
 
-### Quiet Mode
+### 4.4 Quiet Mode
 
 No output — exit code only.
 
-### Nagios Mode (default)
-
-```
-CRITICAL - Problem ports: 80
-```
-
 ---
 
-## Internal Flags (Bitmask)
+## 5. Enforcement Model
+check_ports.py uses the standard NMS_Tools enforcement engine:
+* Bitmask flags (VERBOSE, JSON, QUIET, REQUIRE_ALL, REQUIRE_ANY, FAIL_ONLY)
+* Deterministic evaluation rules
+* Unified state resolution for Nagios, JSON, verbose, and quiet modes
 
-`check_ports.py` uses the standard NMS_Tools bitmask flag engine.  
-These flags are not user‑facing CLI options — they control internal behavior and evaluation logic.
+Internal flags:
 
 | Flag | Bit | Description |
-|------|-----|-------------|
-| `VERBOSE` | `0x01` | Enables verbose per‑port output (used internally when `--verbose` is active) |
-| `JSON` | `0x02` | Enables JSON output mode |
-| `QUIET` | `0x04` | Suppresses all output except exit code |
-| `REQUIRE_ALL` | `0x08` | All ports must be open to return OK |
-| `REQUIRE_ANY` | `0x10` | At least one port must be open to return OK |
-| `FAIL_ONLY` | `0x20` | Only log failing ports (used by operator workflows) |
-
-These flags are combined into a single integer mask and evaluated by the enforcement object.
+| --- | --- | --- |
+| ``VERBOSE`` | ``0x01`` | Verbose output |
+| ``JSON`` | ``0x02`` | JSON mode |
+| ``QUIET`` | ``0x04`` | Quiet mode |
+| ``REQUIRE_ALL`` | ``0x08`` | All ports must be open |
+| ``REQUIRE_ANY`` | ``0x10`` | At least one port must be open |
+| ``FAIL_ONLY`` | ``0x20`` | Only log failing ports |
 
 ---
 
-## Logging
+---
+
+## 6. Logging
 
 Logging is enabled if:
 
@@ -270,26 +316,17 @@ Log rotation is automatic when the file exceeds `--log-max-mb` (default: 50 MB).
 
 ---
 
-## Nagios Exit Codes
-
+## 7. Exit Codes
 | Code | Meaning |
-| :---: | :--- |
+| --- | --- |
 | 0 | OK |
 | 1 | WARNING |
 | 2 | CRITICAL |
 | 3 | UNKNOWN |
 
-Nagios state is determined by:
-
-* `--require-all` → all ports must be open  
-* `--require-any` → at least one port must be open  
-* default
-  * WARNING if some ports are open and some are closed
-  * CRITICAL if all ports fail
-
 ---
 
-## Examples
+## 8. Examples
 
 ### Check a single port
 
@@ -317,7 +354,7 @@ check_ports.py -H server -p 22,80 -q
 
 ---
 
-## Logging Directory Structure
+## 9. Logging Directory Structure
 
 ```
 <log_dir>/
@@ -325,7 +362,7 @@ check_ports.py -H server -p 22,80 -q
     check_ports_20260420_112955.log.zip
 ```
 
-## Future Enhancements
+## 10. Future Enhancements
 
 The following improvements are planned for future releases of `check_ports.py`:
 
@@ -350,7 +387,21 @@ The following improvements are planned for future releases of `check_ports.py`:
 
 ---
 
-## License
+## 11. Documents
+Documentation is available under:
+
+check_html/docs/
+Including:
+* [FLAGS](docs/FLAGS.md)
+* [Enforcement](docs/Enforcement.md)
+* [Installation](docs/Installation.md)
+* [Metadata_schema](docs/Metadata_schema.md)
+* [Operation](docs/Operation.md)
+* [Usage](docs/Usage.md)
+
+---
+
+## 12. License
 
 MIT License — see LICENSE.md in the repository root.
-```
+
