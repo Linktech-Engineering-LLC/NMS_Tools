@@ -25,9 +25,12 @@
     4. [5.4 Quiet Mode](#44-quiet-mode)
 5. [Enforcement Model](#5-enforcement-model)
 6. [Perfdata](#6-perfdata)
-7. [Exit Codes](#7-exit-codes)
-8. [Documents](#8-documents)
-9. [License](#9-license)
+7. [CLI Reference](#7--cli-reference)
+    1. [7.1 CLI Flags](#71-cli-flags)
+8. [Exit Codes](#8-exit-codes)
+9. [Documents](#9-documents)
+10. [Tools in the Suite](#10-tools-in-this-suite)
+11. [License](#11-license)
 
 ---
 
@@ -55,7 +58,7 @@ Basic usage:
 ./check_html -H <host>
 ```
 
-Common options:
+The following are the most commonly used options. For the full flag reference, see [Section 7.1](#71-cli-flags).
 
 ```Code
 -H, --host           Target hostname or IP
@@ -149,7 +152,108 @@ Perfdata is included in:
 
 Not included in Quiet mode (no output).
 
-## 7. Exit Codes
+## 7. 🔧 CLI Reference
+
+usage: check_html -H <host> [options]
+
+### 7.1 CLI Flags
+These are the **user‑facing CLI flags** for `check_html`.
+Internal bitmask flags used by the enforcement engine are documented globally in `FLAGS.md`.
+
+#### Output Modes
+| Flag | Description |
+| --- | --- |
+| ``-v``, ``--verbose`` | Verbose output mode |
+| ``-j``, ``--json`` | JSON output mode |
+| ``-q``, ``--quiet`` | Quiet mode (exit code only) |
+| ``--color`` | Colorize terminal output (verbose/JSON) |
+| ``--output ``FILE`` | Write output to FILE instead of stdout |
+
+#### Logging
+| Flag | Description |
+| --- | --- |
+| ``--log-dir ``DIR`` | Directory to store logs |
+| ``--log-max-mb ``SIZE`` | Maximum log size before rotation (default: 50 MB) |
+
+#### Core Options
+| Flag | Description |
+| --- | --- |
+| ``-H ``HOST``, ``--host ``HOST`` | Target hostname or URL |
+| ``-p ``PORT``, ``--port ``PORT`` | Port to connect to (default: 80) |
+| ``--timeout ``SECONDS`` | Connection timeout (default: 5 seconds) |
+
+#### Connection Options
+| Flag | Description |
+| --- | --- |
+| ``--https`` | Force HTTPS request |
+| ``--http`` | Force HTTP request |
+| ``--no-redirect`` | Do not follow redirects |
+| ``--max-redirects ``N`` | Maximum redirects allowed (default: 5) |
+
+#### HTTP Status Requirements
+| Flag | Description |
+| --- | --- |
+| ``--expect-status ``CODE`` | Expected HTTP status (default: 200) |
+| ``--expect-family ``FAMILY`` | Expected status family (e.g., ``2xx``) |
+| ``--forbid-status ``CODE`` | Fail if this status is returned |
+
+#### Content-Type Requirements
+| Flag | Description |
+| --- | --- |
+| ``--require-content-type ``TYPE`` | Required Content-Type (default: ``text/html``) |
+| ``--forbid-content-type ``TYPE`` | Fail if this Content-Type is returned |
+
+#### HTML Requirements
+| Flag | Description |
+| --- | --- |
+| ``--require-tag ``TAG`` | Require specific HTML tag (repeatable) |
+| ``--forbid-tag ``TAG`` | Forbid specific HTML tag (repeatable) |
+| ``--require-text ``TEXT`` | Require specific text (repeatable) |
+| ``--forbid-text ``TEXT`` | Forbid specific text (repeatable) |
+| ``--max-size ``BYTES`` | Maximum allowed page size |
+
+#### Backend Fingerprinting
+| Flag | Description |
+| --- | --- |
+| ``--require-tomcat`` | Require Apache Tomcat backend |
+| ``--forbid-tomcat`` | Fail if backend is Tomcat |
+| ``--require-apache`` | Require Apache HTTPD backend |
+| ``--forbid-apache`` | Fail if backend is Apache |
+| ``--require-nginx`` | Require Nginx backend |
+| ``--forbid-nginx`` | Fail if backend is Nginx |
+| ``--require-iis`` | Require Microsoft IIS backend |
+| ``--forbid-iis`` | Fail if backend is IIS |
+| ``--require-jetty`` | Require Jetty backend |
+| ``--forbid-jetty`` | Fail if backend is Jetty |
+| ``--require-express`` | Require Node.js/Express backend |
+| ``--forbid-express`` | Fail if backend is Express |
+| ``--require-gunicorn`` | Require Gunicorn backend |
+| ``--forbid-gunicorn`` | Fail if backend is Gunicorn |
+| ``--require-backend ``TYPE`` | Require backend from list (repeatable) |
+| ``--forbid-backend ``TYPE`` | Forbid backend from list (repeatable) |
+
+#### Security Requirements
+| Flag | Description |
+| --- | --- |
+| ``--require-https`` | Fail if HTTPS is not used |
+| ``--require-https-redirect`` | Require HTTP→HTTPS redirect |
+| ``--require-hsts`` | Require Strict-Transport-Security header |
+| ``--require-header ``HEADER:VALUE`` | Require specific header |
+
+#### Nagios Thresholds
+| Flag | Description |
+| --- | --- |
+| ``--warning-rt ``SECONDS`` | Warning threshold for response time (default: 0.5s) |
+| ``--critical-rt ``SECONDS`` | Critical threshold for response time (default: 1.0s) |
+| ``--warning-size ``BYTES`` | Warning threshold for page size (default: 204800) |
+| ``--critical-size ``BYTES`` | Critical threshold for page size (default: 512000) |
+
+#### Internal Flags
+Internal bitmask flags used by the enforcement engine (JSON/VERBOSE/QUIET priority, FAIL_ONLY behavior, REQUIRE_ALL/REQUIRE_ANY semantics, etc.) are documented globally:
+
+See: [FLAGS](../../docs/FLAGS.md)
+
+## 8. Exit Codes
 
 | Code | Meaning |
 | :---: | :--- |
@@ -160,7 +264,7 @@ Not included in Quiet mode (no output).
 
 Exit codes are determined by merged enforcement results.
 
-## 8. Documents
+## 9. Documents
 Documentation is available under:
 
 check_html/docs/
@@ -174,8 +278,18 @@ Including:
 * [Roadmap.md](docs/Roadmap.md)
 * [Logging.md](docs/Logging.md)
 
+## 10. Tools in This Suite
 
-## 9. License
+| Tool | Description | Documentation |
+|------|-------------|---------------|
+| **check_cert** | TLS certificate inspection and expiration validation | [../check_cert/README.md](../check_cert/README.md) |
+| **check_html** | HTTP/HTTPS content validation and deterministic HTML checks | - |
+| **check_interfaces** | Network interface inspection and operational state reporting | [../check_interfaces/README.md](../check_interfaces/README.md) |
+| **check_ports** | Port and service availability inspection | [../check_ports/README.md](../check_ports/README.md) |
+| **check_weather** | Deterministic weather client for monitoring pipelines | [../check_weather/README.md](../check_weather/README.md) |
+| **check_ticker** | Deterministic market/ticker client using PythonTools finance providers | [README.md](README.md) |
 
-This tool is part of the NMS_Tools suite.
-See the root project for licensing, documentation, and contributor guidelines.
+
+## 11. License
+* Source code: MIT [LICENSE](../../LICENSE) for details.
+* Frozen binary: Proprietary [LICENSE_BINARY](../../LICENSE_BINARY.txt)

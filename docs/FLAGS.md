@@ -20,13 +20,10 @@
 
 ## 1. Overview
 
-`check_ports.py` uses the standard NMS_Tools bitmask flag engine.  
-These flags are **internal**, not user‑facing CLI options.  
-They control evaluation logic, output modes, and operator workflows.
+The NMS_Tools suite uses a shared **bitmask flag engine** to control internal behavior across all monitoring and automation plugins. These flags are **internal**, not user‑facing CLI options, and they define evaluation logic, output modes, formatting rules, and operator workflows.
 
-Each flag corresponds to a single bit in the mask.  
-Flags may be combined using bitwise OR (`|`).
-
+Each flag corresponds to a single bit in the mask, and multiple flags may be combined using bitwise OR (`|`).
+The resulting mask is passed into the tool’s enforcement or output subsystem, ensuring deterministic and reproducible behavior across the entire suite.
 ---
 
 ## 2. Flag Table

@@ -15,7 +15,6 @@ Fast, deterministic TCP port checking for Nagios, operators, and automation work
 ![NMS_Tools](https://img.shields.io/badge/NMS_Tools-check__ports-blueviolet)
 
 ## Table of Contents
-
 1. [Overview](#1-overview)  
 2. [Features](#2-features)  
 3. [Usage](#3-usage)  
@@ -33,8 +32,9 @@ Fast, deterministic TCP port checking for Nagios, operators, and automation work
 8. [Examples](#8-examples)
 9. [Logging Directory Structure](#9-logging-directory-structure)
 10. [Future Enhancements](#10-future-enhancements)
-11. [Documents](#11-documents)  
-12. [License](#12-license)
+11. [Documents](#11-documents)
+12. [Tools in this Suite](#12-tools-in-this-suite)  
+13. [License](#13-license)
 
 ---
 
@@ -118,6 +118,8 @@ Explicit ports always appear as raw numbers.
 
 ### 3.3 CLI Flags
 
+These are the **user‑facing CLI flags** for `check_ports`. Internal bitmask flags used by the enforcement engine are documented globally in `FLAGS.md`.
+
 | Flag | Description |
 | --- | --- |
 | ``-v``, ``--verbose`` | Verbose output mode |
@@ -133,7 +135,7 @@ Explicit ports always appear as raw numbers.
 | ``-t``, ``--timeout`` | Per‑port timeout (default: 5 seconds) |
 | ``-V``, ``--version`` | Show version and exit |
 
-[Full flag documentation:](docs/FLAGS.md)
+[Full flag documentation:](../../docs/FLAGS.md)
 
 ---
 
@@ -401,7 +403,20 @@ Including:
 
 ---
 
-## 12. License
+## 12. Tools in This Suite
+
+| Tool | Description | Documentation |
+|------|-------------|---------------|
+| **check_cert** | TLS certificate inspection and expiration validation | [../check_cert/README.md](../check_cert/README.md) |
+| **check_html** | HTTP/HTTPS content validation and deterministic HTML checks | [../check_html/README.md](../check_html/README.md) |
+| **check_interfaces** | Network interface inspection and operational state reporting | [../check_interfaces/README.md](../check_interfaces/README.md) |
+| **check_ports** | Port and service availability inspection | - |
+| **check_weather** | Deterministic weather client for monitoring pipelines | [../check_weather/README.md](../check_weather/README.md) |
+| **check_ticker** | Deterministic market/ticker client using PythonTools finance providers | [README.md](README.md) |
+
+---
+
+## 13. License
 
 MIT License — see LICENSE.md in the repository root.
 

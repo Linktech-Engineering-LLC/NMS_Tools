@@ -28,10 +28,12 @@
 5. [Enforcement Model](#5--enforcement-model)
 6. [Logging Subsystem](#6--logging-subsystem)
 7. [CLI Reference](#7--cli-reference)
+    1. [7.1 CLI Flags](#71-cli-flags)
 8. [PythonTools Requirement](#8--pythontools-requirement-script-mode)
 9. [Documentation](#9--documentation)
 10. [Roadmap](#10--roadmap)
-11. [License](#11--license)
+11. [Tools in this Suite](#11-tools-in-this-suite)
+12. [License](#12--license)
 
 ---
 
@@ -315,7 +317,6 @@ Nagios thresholds:
 
 `./check_cert -H example.com -w 14 -c 7`
 
-
 ---
 
 ## 4. 🧭 Output Modes
@@ -491,26 +492,85 @@ Example:
 
 usage: check_cert -H HOST [options]
 
-Connection:
-  -H, --host HOST
-  -p, --port PORT
-  --sni NAME
-  --timeout SECONDS
-  --insecure
+### 7.1 CLI Flags
 
-Nagios thresholds:
-  -w, --warning DAYS
-  -c, --critical DAYS
+These are the user‑facing CLI flags for check_cert.
+Internal bitmask flags used by the enforcement engine are documented globally in FLAGS.md.
 
-Output modes:
-  -v, --verbose
-  -j, --json
+#### Output Modes
+| Flag | Description |
+| --- | --- |
+| ``-v``, ``--verbose`` | Verbose output mode |
+| ``-j``, ``--json`` | JSON output mode |
+| ``-q``, ``--quiet`` | Quiet mode (exit code only) |
+| ``--color`` | Colorize terminal output (verbose/JSON) |
+| ``--output ``FILE`` | Write output to FILE instead of stdout |
 
-Monitoring controls:
-  --no-check-san
-  --no-check-self-signed
-  --no-check-chain
-  --no-check-ocsp
+#### Logging
+| Flag | Description |
+| --- | --- |
+| ``--log-dir ``DIR`` | Directory to store logs |
+| ``--log-max-mb ``SIZE`` | Maximum log size before rotation (default: 50 MB) |
+
+#### Connection Options
+| Flag | Description |
+| --- | --- |
+| ``-H ``HOST``, ``--host ``HOST`` | Target hostname or IP |
+| ``-p ``PORT``, ``--port ``PORT`` | Port to connect to (default: 443) |
+| ``--sni ``NAME`` | Override SNI value (default: host) |
+| ``--timeout ``SECONDS`` | Connection timeout (default: 5 seconds) |
+| ``--insecure`` | Skip certificate validation during handshake |
+
+#### TLS Requirements
+| Flag | Description |
+| --- | --- |
+| ``--min-tls ``VERSION`` | Minimum allowed TLS version (``TLSv1``–``TLSv1.3``) |
+| ``--require-tls ``VERSION`` | Require exact TLS version |
+| ``--require-cipher ``NAME`` | Require exact cipher suite |
+| ``--forbid-cipher ``NAME`` | Forbid exact cipher suite |
+| ``--require-aead`` | Require AEAD cipher |
+| ``--forbid-cbc`` | Forbid CBC-mode ciphers |
+| ``--forbid-rc4`` | Forbid RC4 ciphers |
+
+#### Certificate Requirements
+| Flag | Description |
+| --- | --- |
+| ``-E``, ``--enforce-san`` | Require host to appear in SAN list |
+| ``-I ``SUBSTR``, ``--issuer ``SUBSTR`` | Require issuer CN substring |
+| ``-A ``ALG``, ``--sigalg ``ALG`` | Require signature algorithm |
+| ``--min-rsa ``BITS`` | Minimum RSA key size |
+| ``--require-curve ``NAME`` | Require ECC curve |
+| ``--require-wildcard`` | Require wildcard certificate |
+| ``--forbid-wildcard`` | Forbid wildcard certificate |
+
+#### Monitoring Checks
+| Flag | Description |
+| --- | --- |
+| ``--no-check-expiration`` | Disable expiration enforcement |
+| ``--no-check-chain`` | Disable chain validation |
+| ``--no-check-hostname`` | Disable hostname enforcement |
+| ``--no-check-san`` | Disable SAN enforcement |
+| ``--no-check-self-signed`` | Allow self-signed certificates |
+| ``--check-ocsp`` | Enable OCSP reachability enforcement |
+
+#### Nagios Thresholds
+| Flag | Description |
+| --- | --- |
+| ``-w ``DAYS``, ``--warning ``DAYS`` | Warning threshold (default: 30 days) |
+| ``-c ``DAYS``, ``--critical ``DAYS`` | Critical threshold (default: 15 days) |
+
+#### OCSP Options
+| Flag | Description |
+| --- | --- |
+| ``--require-ocsp`` | OCSP responder must be reachable |
+| ``--forbid-ocsp`` | OCSP responder must NOT be reachable |
+| ``--ocsp-status ``STATUS`` | Require specific OCSP status (``good``, ``revoked``, ``unknown``, ``invalid``) |
+
+#### Internal Flags
+
+Internal bitmask flags used by the enforcement engine (JSON/VERBOSE/QUIET priority, FAIL_ONLY behavior, REQUIRE_ALL/REQUIRE_ANY semantics, etc.) are documented globally:
+
+See: [FLAGS](../../docs/FLAGS.md)
 
 ## 8. 📦 PythonTools Requirement (Script Mode)
 
@@ -569,6 +629,18 @@ Including:
 * Additional chain completeness heuristics
 * Add Logging.md documenting canonical log banners
 
-## 11 📄 License
+## 11. Tools in This Suite
 
-Released under the MIT License.
+| Tool | Description | Documentation |
+|------|-------------|---------------|
+| **check_cert** | TLS certificate inspection and expiration validation | - |
+| **check_html** | HTTP/HTTPS content validation and deterministic HTML checks | [../check_html/README.md](../check_html/README.md) |
+| **check_interfaces** | Network interface inspection and operational state reporting | [../check_interfaces/README.md](../check_interfaces/README.md) |
+| **check_ports** | Port and service availability inspection | [../check_ports/README.md](../check_ports/README.md) |
+| **check_weather** | Deterministic weather client for monitoring pipelines | [../check_weather/README.md](../check_weather/README.md) |
+| **check_ticker** | Deterministic market/ticker client using PythonTools finance providers | [README.md](README.md) |
+
+
+## 12. 📄 License
+* Source code: MIT [LICENSE](../../LICENSE) for details.
+* Frozen binary: Proprietary [LICENSE_BINARY](../../LICENSE_BINARY.txt)

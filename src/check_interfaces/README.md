@@ -19,8 +19,10 @@
 3. [Backend Parity (Local + SNMP)](#3-backend-parity-local--snmp)
 4. [Capabilities](#4-capabilities)
 5. [Quick Start](#5-quick-start)
-5. [CLI Summary](#6-cli-summary)
-6. [Output Modes](#7-output-modes)
+6. [CLI Summary](#6-cli-summary)
+    1. [6.1 CLI Reference](#61-cli-reference)
+    2. [6.2 CLI Flags](#62-cli-flags)
+7. [Output Modes](#7-output-modes)
 8. [Filtering Pipeline](#8-filtering-pipeline)
 9. [Evaluation Logic](#9-evaluation-logic)
 10. [Perfdata](#10-perfdata)
@@ -28,7 +30,8 @@
 12. [Exit Codes](#12-exit-codes)
 13. [Requirements](#13-requirements)
 14. [Documents](#14-documents)
-15. [License](#15-license)
+15. [Tools in this Suite](#15-tools-in-this-suite)
+16. [License](#16-license)
 
 ## 1. Overview
 
@@ -155,6 +158,73 @@ Speeds normalized to Mbps:
 | ``-j`` | JSON mode |
 | ``-q`` | Quiet mode |
 | ``--log-dir`` | Enable logging |
+
+### 6.1 CLI Reference
+
+usage: check_interfaces -H <host> [options]
+
+### 6.2 CLI Flags
+
+These are the **user‑facing CLI flags** for `check_interfaces`.
+Internal bitmask flags used by the enforcement engine are documented globally in `FLAGS.md`.
+
+#### Output Modes
+| Flag | Description |
+| --- | --- |
+| ``-v``, ``--verbose`` | Verbose output mode |
+| ``-j``, ``--json`` | JSON output mode |
+| ``-q``, ``--quiet`` | Quiet mode (exit code only) |
+| ``--color`` | Colorize terminal output (verbose/JSON) |
+| ``--output ``FILE`` | Write output to FILE instead of stdout |
+
+#### Logging
+| Flag | Description |
+| --- | --- |
+| ``--log-dir ``DIR`` | Directory to store logs |
+| ``--log-max-mb ``SIZE`` | Maximum log size before rotation (default: 50 MB) |
+
+#### Core Options
+| Flag | Description |
+| --- | --- |
+| ``-H ``HOST``, ``--host ``HOST`` | Target hostname or IP address |
+| ``-t ``SECONDS``, ``--timeout ``SECONDS`` | Connection timeout (default: 5 seconds) |
+
+#### SNMP Options (SNMPv2c)
+| Flag | Description |
+| --- | --- |
+| ``-C ``STRING``, ``--community ``STRING`` | SNMPv2c community string (required for remote hosts) |
+| ``-p ``PORT``, ``--snmp-port ``PORT`` | SNMP port (default: 161) |
+| ``-T ``SECONDS``, ``--snmp-timeout ``SECONDS`` | SNMP timeout (defaults to ``--timeout``; ignored in local mode) |
+
+#### SNMPv3 Options
+| Flag | Description |
+| --- | --- |
+| ``--v3-user ``NAME`` | SNMPv3 security name |
+| ``--v3-auth ``{MD5,SHA}`` | SNMPv3 authentication protocol |
+| ``--v3-auth-pass ``PASS`` | SNMPv3 authentication password |
+| ``--v3-priv ``{DES,AES}`` | SNMPv3 privacy protocol |
+| ``--v3-priv-pass ``PASS`` | SNMPv3 privacy password |
+
+#### Interface Filtering Options
+| Flag | Description |
+| --- | --- |
+| ``--include-aliases`` | Include alias interfaces (e.g., ``eth0:1``, ``br0:backup``) |
+| ``--ignore-virtual`` | Ignore virtual interfaces (e.g., ``vnet*``, ``virbr*``, ``docker0``) |
+| ``--exclude-local`` | Exclude local-only interfaces such as ``lo`` |
+| ``--ignore ``PATTERN`` | Ignore interfaces matching substring or regex (repeatable) |
+
+#### Targeting Options
+| Flag | Description |
+| --- | --- |
+| ``--status ``ATTR`` | Interface attribute to evaluate (``oper-status``, ``admin-status``, ``linkspeed``, ``duplex``, ``mtu``, ``alias``, ``flags``, ``iftype``) |
+| ``--perfdata ``METRIC`` | Perfdata metric to output (``in_octets``, ``out_octets``, ``in_errors``, ``out_errors``, ``in_discards``, ``out_discards``, ``in_ucast``, ``out_ucast``, ``in_multicast``, ``out_multicast``, ``in_broadcast``, ``out_broadcast``) |
+| ``--ifaces ``LIST`` | Comma-delimited list or regex pattern of interfaces to evaluate |
+
+#### Internal Flags
+Internal bitmask flags used by the enforcement engine (JSON/VERBOSE/QUIET priority, FAIL_ONLY behavior, REQUIRE_ALL/REQUIRE_ANY semantics, etc.) are documented globally:
+
+See: [FLAGS](../../docs/FLAGS.md)
+
 
 ---
 
@@ -338,11 +408,18 @@ SNMP failures return CRITICAL or UNKNOWN.
 
 ---
 
-## 15. License
+## 15. Tools in This Suite
 
-Part of the **NMS_Tools** suite by Linktech Engineering LLC.
-Licensed under MIT.
-
-See the suite‑wide README for contributor guidelines and community standards.
+| Tool | Description | Documentation |
+|------|-------------|---------------|
+| **check_cert** | TLS certificate inspection and expiration validation | [../check_cert/README.md](../check_cert/README.md) |
+| **check_html** | HTTP/HTTPS content validation and deterministic HTML checks | [../check_html/README.md](../check_html/README.md) |
+| **check_interfaces** | Network interface inspection and operational state reporting | - |
+| **check_ports** | Port and service availability inspection | [../check_ports/README.md](../check_ports/README.md) |
+| **check_weather** | Deterministic weather client for monitoring pipelines | [../check_weather/README.md](../check_weather/README.md) |
+| **check_ticker** | Deterministic market/ticker client using PythonTools finance providers | [README.md](README.md) |
 
 ---
+## 16. License
+* Source code: MIT [LICENSE](../../LICENSE) for details.
+* Frozen binary: Proprietary [LICENSE_BINARY](../../LICENSE_BINARY.txt)

@@ -41,8 +41,8 @@ Deterministic multi‑port TCP connectivity checker.
 * JSON, verbose, quiet, and Nagios modes  
 * Operator‑grade logging with rotation  
 * Deterministic evaluation rules  
-* Tool documentation: [`check_ports/README.md`](../check_ports/README.md)  
-* Flags reference: [`check_ports/FLAGS.md`](../check_ports/FLAGS.md)
+* Tool documentation: [check_ports/README.md](../src/check_ports/README.md)  
+* Flags reference: [FLAGS.md](docs/FLAGS.md)
 
 ---
 
@@ -52,8 +52,8 @@ Rule‑based weather condition evaluator using deterministic JSON schemas.
 * Supports temperature, wind, visibility, precipitation, and condition rules  
 * JSON, verbose, quiet, and Nagios modes  
 * Deterministic rule engine  
-* Tool documentation: [`check_weather/README.md`](../check_weather/README.md)  
-* Flags reference: [`check_weather/FLAGS.md`](../check_weather/FLAGS.md)
+* Tool documentation: [check_weather/README.md](../src/check_weather/README.md)  
+* Flags reference: [FLAGS.md](docs/FLAGS.md)
 
 ---
 
@@ -64,7 +64,7 @@ Deterministic TLS certificate inspection and policy enforcement.
 * TLS version, cipher, SAN, issuer, signature algorithm, and key metadata  
 * AIA chain reconstruction and OCSP metadata extraction  
 * Deterministic JSON schema for automation  
-* Tool documentation: [`check_cert/README.md`](../src/check_cert/README.md)
+* Tool documentation: [check_cert/README.md](../src/check_cert/README.md)
 
 ---
 
@@ -75,7 +75,7 @@ Deterministic HTTP/HTTPS inspection and content‑validation tool.
 * HTTP status, headers, content‑type, and HTML body capture  
 * Backend fingerprinting and enforcement  
 * Deterministic JSON schema for automation  
-* Tool documentation: [`check_html/README.md`](../src/check_html/README.md)
+* Tool documentation: [check_html/README.md](../src/check_html/README.md)
 
 ---
 
@@ -85,7 +85,7 @@ Network interface state and SNMP‑based status checker.
 * Deterministic interface enumeration  
 * SNMP‑based operational state evaluation  
 * JSON, verbose, and Nagios modes  
-* Tool documentation: [`check_interfaces/README.md`](../src/check_interfaces/README.md)
+* Tool documentation: [check_interfaces/README.md](../src/check_interfaces/README.md)
 
 ---
 
@@ -96,32 +96,55 @@ Deterministic ticker ingestion and movement analysis.
 * DOM‑driven demo frontend
 * Rolling update loop
 * Color‑coded movement indicators
-* Tool documentation: [`check_ticker/README.md`](../src/check_ticker/README.md)
+* Tool documentation: [check_ticker/README.md](../src/check_ticker/README.md)
 
 ---
 
 ## 3. Documentation Suite
 
-### Core Guides
-* **Installation Guide** — [`Installation.md`](../Installation.md)  
+### Global Documentation (under `/docs`)
+* **Installation Guide** — [Installation.md](Installation.md)
+* **Suite Layout** — [suite_layout.md](suite_layout.md)
+* **Logging Guide** — [Logging.md](Logging.md)
+* **Monitoring Guide** — [monitoring.md](Monitoring.md)
+* **Bitmask Flag Engine (Internal)** — [FLAGS.md](FLAGS.md)
+* **Roadmap** — [Roadmap.md](Roadmap.md)
 
-### Project
-* **Roadmap** — [`roadmap.md`](roadmap.md)  
-* **Contributing Guidelines** — [`CONTRIBUTING.md`](../CONTRIBUTING.md)
-* **Changelog** — [`CHANGELOG.md`](../CHANGELOG.md)
+### Project Governance (repo root)
 
-Each document has a single responsibility:
+The following files reside at the repository root and define project‑level governance, licensing, packaging, and release metadata. They are included here for completeness, but they are **not part of the documentation navigation tree** and therefore are not linked from this index. These documents support the development, distribution, and maintenance of NMS_Tools, while the technical documentation itself lives under the `/docs` directory.
+
+* **README** — Project overview and quick start
+* **Packaging** — Build and distribution details
+* **Release Notes** — Version‑specific changes
+* **Requirements** — Python dependencies
+* **License** — MIT license and binary license
+* **Contributing Guidelines** — Contributor workflow
+* **Code of Conduct** — Community standards
+* **Security Policy** — Vulnerability reporting
+* **Makefile** — Build automation
+* **Version** — Current suite version
+
+### Document Responsibilities
 
 | Document | Purpose |
 |----------|---------|
-| Installation | How to install and run the suite |
-| Usage | CLI flags, examples, Nagios integration |
-| Operation | Runtime behavior, exit codes, troubleshooting |
-| Enforcement | Policy engine, rule semantics, failure behavior |
-| Metadata Schema | Canonical JSON structure for automation |
+| Installation | How to install and configure the suite |
+| Suite Layout | Directory structure and packaging conventions |
+| Logging | Logging architecture and rotation |
+| Monitoring | Integration with monitoring systems |
+| FLAGS | Shared bitmask engine used across all tools |
 | Roadmap | Planned enhancements and future tools |
+| README | Project overview and usage |
+| Packaging | Build and distribution process |
+| Release Notes | Version‑specific changes |
+| Requirements | Dependency list |
+| LICENSE / LICENSE_BINARY | Legal and binary licensing |
 | CONTRIBUTING | Guidelines for contributors |
-| CHANGELOG | Version history and schema changes |
+| CODE_OF_CONDUCT | Community standards |
+| SECURITY | Vulnerability reporting |
+| Makefile | Build automation |
+| VERSION | Current suite version |
 
 ---
 
@@ -158,4 +181,4 @@ NMS_Tools follows Linktech Engineering’s deterministic engineering principles:
 ## 6. Status
 
 Active development.  
-See [`roadmap.md`](roadmap.md) for planned enhancements and upcoming tools.
+See [Roadmap.md](Roadmap.md) for planned enhancements and upcoming tools.

@@ -80,6 +80,8 @@ This ensures consistent behavior across distributions, monitoring systems, and a
 
 ## 2. Tools in This Suite
 
+The NMS_Tools suite contains the following deterministic monitoring tools:
+
 | Tool | Description | Documentation |
 |------|-------------|---------------|
 | **check_cert** | TLS certificate inspection and expiration validation | [src/check_cert/README.md](src/check_cert/README.md) |
@@ -477,7 +479,5 @@ See [CONTRIBUTING](CONTRIBUTING.md) for details.
 ---
 
 ## 15. License
-
-MIT License  
-See [LICENSE](LICENSE) for details.
-
+* Source code: MIT [LICENSE](LICENSE) for details.
+* Frozen binary: Proprietary [LICENSE_BINARY](LICENSE_BINARY.txt)
