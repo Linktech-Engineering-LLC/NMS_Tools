@@ -16,7 +16,7 @@
 6. [Nagios/Icinga Examples](#6-nagiosicinga-examples)
 7. [Logging Examples](#7-logging-examples)
 8. [Vault and API Key Examples](#8-vault-and-api-key-examples)
-10. [Documents](#9-documents)
+10. [See Also](#9-see-also)
 
 ---
 
@@ -276,7 +276,7 @@ check_ticker AAPL --finnhub-key $FINNHUB_KEY
 
 ---
 
-## 9. Documents
+## 9. See Also
 * [Installation.md](Installation.md)
 * [FLAGS.md](../../../docs/FLAGS.md)
 * [Enforcement.md](Enforcement.md)

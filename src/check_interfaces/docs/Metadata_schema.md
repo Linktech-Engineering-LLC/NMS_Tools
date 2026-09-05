@@ -252,8 +252,8 @@ Example:
 ---
 
 ## 7. See Also
-
-[Usage.md](Usage.md)
-[Operation.md](Operation.md)  
-[Enforcement.md](Enforcement.md)
-[Installation](Installation.md)
+* [Installation](Installation.md)
+* [Operation](Operation.md)
+* [Enforcement](Enforcement.md)
+* [Usage](Usage.md)
+* [FLAGS.md](../../../docs/FLAGS.md)

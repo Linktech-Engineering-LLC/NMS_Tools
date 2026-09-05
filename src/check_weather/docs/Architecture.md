@@ -1,35 +1,36 @@
 # Architecture — check_weather v3.0.0
 
 **Part of:** NMS_Tools Monitoring Suite  
-**Script:** `check_weather.py` 
+**Document:** Architecture 
 **Version:** 3.0.0 
 **Author:** Leon McClatchey, Linktech Engineering LLC  
 **License:** MIT  
-**Requires:** Python 3.10+  
+**Requires:** Python 3.12+  (development only; not required for frozen binary)
 **Last Updated:** 2026-08-16
 
 ---
 
 ## Table of Contents
 
-1. [Overview](#overview)
-2. [High-Level Data Flow](#high-level-data-flow)
-3. [Provider Architecture](#provider-architecture)
-4. [Location Resolution](#location-resolution)
-5. [Mode Architecture](#mode-architecture)
-6. [Normalization](#normalization)
-7. [Merge Logic](#merge-logic)
-8. [Index Engine](#index-engine)
-9. [Unit Conversion](#unit-conversion)
-10. [Caching](#caching)
-11. [Output Schema](#output-schema)
-12. [Logging](#logging)
-13. [PythonTools Dependencies](#pythontools-dependencies)
-14. [Upcoming Features](#upcoming-features)
+1. [Overview](#1-overview)
+2. [High-Level Data Flow](#2-high-level-data-flow)
+3. [Provider Architecture](#3-provider-architecture)
+4. [Location Resolution](#4-location-resolution)
+5. [Mode Architecture](#5-mode-architecture)
+6. [Normalization](#6-normalization)
+7. [Merge Logic](#7-merge-logic)
+8. [Index Engine](#8-index-engine)
+9. [Unit Conversion](#9-unit-conversion)
+10. [Caching](#10-caching)
+11. [Output Schema](#11-output-schema)
+12. [Logging](#12-logging)
+13. [PythonTools Dependencies](#13-pythontools-dependencies)
+14. [Upcoming Features](#14-upcoming-features)
+15. [See Also](#15-see-also)
 
 ---
 
-## Overview
+## 1. Overview
 
 `check_weather` is a deterministic, Nagios-compatible weather monitoring tool that is part of the
 NMS_Tools suite. Version 2.2.0 replaces the legacy icon-classification pipeline — which depended on
@@ -46,7 +47,7 @@ The new architecture:
 
 ---
 
-## High-Level Data Flow
+## 2. High-Level Data Flow
 
 ```
 CLI args
@@ -92,7 +93,7 @@ output_and_exit()
 
 ---
 
-## Provider Architecture
+## 3. Provider Architecture
 
 Providers are registered at startup by `register_providers()` from
 `PythonTools.weather.providers`. After registration they are accessible through the
@@ -152,7 +153,7 @@ No pre-fetch steps. Open-Meteo requires no station metadata.
 
 ---
 
-## Location Resolution
+## 4. Location Resolution
 
 Exactly one location input is required; the parser raises `ValueError` if zero or more than one is
 provided.
@@ -196,7 +197,7 @@ After resolution, `get_timezone(lat, lon)` from `PythonTools.datetime` populates
 
 ---
 
-## Mode Architecture
+## 5. Mode Architecture
 
 Four weather modes are available, selected by mutually exclusive flags:
 
@@ -237,7 +238,7 @@ weather_mode = (
 
 ---
 
-## Normalization
+## 6. Normalization
 
 All raw provider responses pass through `convert_units_mode_aware()` from `PythonTools.weather`
 before being cached or returned.
@@ -277,7 +278,7 @@ data = convert_units_mode_aware(live, units, mode, meta, logging_enabled, logger
 
 ---
 
-## Merge Logic
+## 7. Merge Logic
 
 ### Weekly Mode — Daily + Hourly Enrichment
 
@@ -306,7 +307,7 @@ index 0 is always the current hour. The result is always exactly 24 entries.
 
 ---
 
-## Index Engine
+## 8. Index Engine
 
 Threshold evaluation runs **only in `current` mode**. `hourly`, `weekly`, and `full` always return
 `(OK, "{mode} forecast retrieved")` without inspecting any values.
@@ -357,7 +358,7 @@ returns `OK`.
 
 ---
 
-## Unit Conversion
+## 9. Unit Conversion
 
 Selected by `--units {metric,imperial}` (default: `metric`).
 
@@ -379,7 +380,7 @@ Format helpers from `PythonTools.weather`:
 
 ---
 
-## Caching
+## 10. Caching
 
 Two independent cache stores, both managed via `PythonTools.cache`.
 
@@ -434,7 +435,7 @@ Cache metadata fields emitted in `data` (visible in all output modes):
 
 ---
 
-## Output Schema
+## 11. Output Schema
 
 ### Top-Level Payload Structure
 
@@ -480,7 +481,7 @@ Example: `temp=32.10;35;40 wind=20.00;50;70 humidity=55.00;;`
 
 ---
 
-## Logging
+## 12. Logging
 
 Managed by `PythonTools.log_helpers.factory.LoggerFactory`. Logging is **disabled** when running
 in Nagios mode or when `--log-dir` is not set.
@@ -508,7 +509,7 @@ in Nagios mode or when `--log-dir` is not set.
 
 ---
 
-## PythonTools Dependencies
+## 13. PythonTools Dependencies
 
 | Module | Symbols imported |
 |--------|-----------------|
@@ -524,7 +525,7 @@ in Nagios mode or when `--log-dir` is not set.
 
 ---
 
-## Upcoming Features
+## 14. Upcoming Features
 
 - **`--full` mode output renderer** — `verbose_full()` combining current + hourly + weekly output in
   a single pass (flag wired; renderer not yet implemented)
@@ -536,3 +537,15 @@ in Nagios mode or when `--log-dir` is not set.
   standard `fetch_{mode}` signature and registering via `register_providers()`
 - **International location defaults** — NWS is US-only; planned logic to auto-select `open-meteo`
   when `--country` is not `US`
+
+---
+
+## 15. See Also
+* [CHANGELOG](CHANGELOG.md)
+* [Enforcement](Enforcement.md)
+* [FLAGS.md](../../../docs/FLAGS.md)
+* [Installation](Installation.md)
+* [Logging](Logging.md)
+* [Operation](Operation.md)
+* [Provider_Architecture](Provider_Architecture.md)
+* [Usage](Usage.md)

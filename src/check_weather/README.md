@@ -27,21 +27,27 @@
 
 ## Table of Contents
 1. [Overview](#1-overview)
-2. [Icon System](#2-icon-system)
-3. [Icon Mapping Table (WMO → Context → Icon)](#3-icon-mapping-table-wmo--context--icon)
-4. [Design Rationale: Backend‑Driven Icon Selection](#4-design-rationale-backenddriven-icon-selection)
-5. [Icon Classification & Recoloring Pipeline](#5-icon-classification--recoloring-pipeline)
-6. [Weather Demo](#6-weather-demo)
-7. [What’s New in v2.2.0 (2026‑04‑27)](#7-whats-new-in-v220-20260427)
-8. [Features](#8-features)
-9. [Usage](#9-usage)
-10. [Provider Architecture](#10-provider-architecture)
-11. [Inclusion Flags](#11-inclusion-flags)
-12. [Cache Flags](#12-cache-flags)
-13. [Logging](#13-logging)
-14. [Example Outputs](#14-example-outputs)
-15. [Upcoming Enhancements](#15-upcoming-enhancements)
-16. [Notes](#16-notes)
+2. [Quick Start](#2-quick-start)
+3. [Provider Architecture (Open‑Meteo + NWS)](#3-provider-architecture-openmeteo--nws)
+4. [Deterministic Behavior Guarantees](#4-deterministic-behavior-guarantees)
+5. [Icon System](#5-icon-system)
+6. [Icon Mapping Table](#6-icon-mapping-table-wmo--context--icon)
+7. [Scientific Index Engine](#7-scientific-index-engine)
+8. [Output Modes](#8-output-modes)
+9. [Usage Examples (All Modes)](#9-usage-examples-all-modes)
+10. [Inclusion Flags](#10-inclusion-options)
+11. [Cache & Logging](#11-cache--logging)
+12. [Frozen Binary Notes](#12-frozen-binary-notes)
+13. [Example JSON Schemas](#13-example-json-schemas)
+14. [Troubleshooting](#14-troubleshooting)
+15. [Features](#15-features)
+16. [Current Status](#16-current-status)
+17. [Documents](#17-documents)
+18. [Tools in This Suite](#18-tools-in-this-suite)
+19. [Notes](#19-notes)
+20. [License](#20-license)
+
+---
 
 ## 1. Overview
 `check_weather.py` is an operator‑grade weather monitoring plugin designed for Nagios, Icinga, Thruk, and the broader NMS_Tools suite.
@@ -63,34 +69,164 @@ The tool supports:
 * Deterministic caching and logging
 * Frozen binary JSON export (--output FILE)
 
-## 2. Icon System
+---
 
-check_weather.py uses a deterministic, backend‑driven icon mapping based on the
-**Weather Icons** project by Erik Flowers:
+## 2. Quick Start
 
-- Project: https://erikflowers.github.io/weather-icons/
-- License: SIL OFL 1.1 (fonts), MIT (CSS)
-- Icon files used: SVG variants (e.g., `wi-day-sunny.svg`, `wi-night-cloudy.svg`)
+### Basic
+```bash
+./check_weather.py --location "Saint John, KS"
+```
 
-### How Icons Are Selected
+### Imperial units
+```bash
+./check_weather.py --location 67576 --units imperial
+```
+
+### JSON output
+```bash
+./check_weather.py --location 67576 -j
+```
+
+### Verbose
+```bash
+./check_weather.py --location "Saint John, KS" -v
+```
+
+### Hourly (Rolling 24 Hours)
+```bash
+./check_weather.py --location 67576 -H -v
+```
+
+### Weekly (7 Days Starting Today)
+```bash
+./check_weather.py --location 67576 -W -v
+```
+
+---
+
+## 3. Provider Architecture (Open‑Meteo + NWS)
+
+check_weather v3.0.0 uses **two weather providers**:
+
+### A. Open‑Meteo — Primary Forecast Provider
+
+Used for:
+* hourly forecast
+* daily/weekly forecast
+* sunrise/sunset
+* WMO weather codes
+* cloud cover
+* precipitation
+* temperature baseline
+* wind baseline
+
+Endpoints:
+```Code
+https://api.open-meteo.com/v1/forecast
+https://geocoding-api.open-meteo.com/v1/search
+```
+
+### B. NWS — Live Observation Provider
+
+NWS provides **station‑level real‑time observations**, merged into the unified dataset.
+
+NWS contributes:
+* temperature
+* dewpoint
+* humidity
+* wind speed
+* wind gust
+* barometric pressure
+* station metadata
+* observation timestamps
+
+#### NWS Endpoints Used
+
+check_weather v3.0.0 uses multiple NWS URLs:
+
+1. Points API (lat/lon → grid + station metadata)
+```Code
+https://api.weather.gov/points/<lat>,<lon>
+```
+
+2. Observation Stations (nearest stations)
+```Code
+https://api.weather.gov/points/<lat>,<lon>/stations
+```
+
+3. Latest Observation (primary NWS data source)
+```Code
+https://api.weather.gov/stations/<stationId>/observations/latest
+```
+
+4. Forecast Grid (optional augmentation)
+
+```Code
+https://api.weather.gov/gridpoints/<office>/<gridX>,<gridY>/forecast
+```
+
+### C. Hybrid Merge Layer
+
+The backend merges Open‑Meteo + NWS into a single normalized dataset.
+
+#### Merge Rules
+
+NWS overrides Open‑Meteo for:
+* temperature
+* dewpoint
+* humidity
+* wind speed
+* wind gust
+* pressure
+
+Open‑Meteo remains authoritative for:
+* WMO weather codes
+* sunrise/sunset
+* cloud cover
+* precipitation
+* hourly/daily forecast arrays
+* Feels‑like selection uses the merged dataset.
+
+#### D. Provider Selection Flag
+
+`--provider` {open-meteo,nws}
+
+This flag is validated but non-functional in v3.0.0.
+The backend always uses both providers.
+
+---
+
+## 4. Deterministic Behavior Guarantees
+
+`check_weather` enforces deterministic output across all modes:
+* Timestamp alignment
+* Rolling hourly slicing (next hour ≥ local time → +24h)
+* Weekly slicing (always 7 days starting today)
+* Normalized condition text
+* Backend‑selected icons
+* Rounded numeric values
+* Unified feels‑like selection
+* Predictable caching
+* Operator‑grade logging
+
+---
+
+## 5. Icon System
+
+`check_weather` uses a deterministic, backend‑driven icon mapping based on a curated SVG icon set derived from the **Weather Icons** project by Erik Flowers.
+The icons are fully embedded within NMS_Tools and processed through the v3.0.0 classification and recoloring pipeline.
 
 Icons are selected entirely in the backend using:
-
-1. **WMO weather codes** from Open‑Meteo  
-2. **Sunrise/sunset timestamps** to determine day vs. night  
+1. **WMO weather codes**
+2. **Sunrise/sunset timestamps**
 3. A deterministic mapping table that resolves each WMO code to:
-   - a normalized condition text (`context`)
-   - a specific icon filename (`icon`)
+    * a normalized condition text (`context`)
+    * a specific icon filename (`icon`)
 
-### Why This Matters
-
-- The UI does not perform any weather logic.
-- The UI only renders the icon filename provided by the backend.
-- All modes (current, hourly, weekly) use the same mapping.
-- Icons are guaranteed to be consistent across all output formats.
+The UI does not perform any weather logic. It simply renders the icon filename provided by the backend.
 
 ### Example (JSON)
-
 ```json
 {
   "context": "Clear sky",
@@ -98,234 +234,49 @@ Icons are selected entirely in the backend using:
 }
 ```
 
-### Night Icon Behavior
-Nighttime icons are selected using the local sunrise/sunset times returned by Open‑Meteo.
-The backend supports expressive “alt” night icons (e.g., wi-night-alt-showers.svg)
-for improved clarity.
+### Day/Night Behavior
 
-## 3. Icon Mapping Table (WMO → Context → Icon)
+Day/night variants are selected using local sunrise/sunset times returned by Open‑Meteo.
+Night icons use expressive “alt” variants (e.g., `wi-night-alt-showers.svg`) for clarity.
 
-check_weather.py uses a deterministic mapping from **WMO weather codes** to:
+### Icon Classification & Recoloring
 
-- a normalized condition text (`context`)
-- a specific icon filename (`icon`)
+All icons are processed through the v3.0.0 classification pipeline:
+* **Filename semantics** (sun, moon, cloud, rain, snow, thunder, fog, wind)
+* **Geometry analysis** (sun/moon/cloud detection)
+* **Merged classification groups**
+* **Deterministic recoloring** via recolor.py
 
-This ensures consistent behavior across current, hourly, and weekly modes.
+This ensures consistent visual behavior across all modes (current, hourly, weekly) and across all output formats.
 
-### Core WMO Mappings
+### Credit
 
-| WMO Code | Meaning                         | Context Text               | Icon Filename               |
-|----------|----------------------------------|-----------------------------|------------------------------|
-| 0        | Clear sky                        | Clear sky                  | wi-day-sunny.svg / wi-night-clear.svg |
-| 1        | Mainly clear                     | Mainly clear               | wi-day-sunny.svg / wi-night-clear.svg |
-| 2        | Partly cloudy                    | Partly cloudy              | wi-day-cloudy.svg / wi-night-alt-cloudy.svg |
-| 3        | Overcast                         | Overcast                   | wi-cloudy.svg / wi-night-cloudy.svg |
-| 45, 48   | Fog / Depositing rime fog        | Fog                        | wi-fog.svg / wi-night-fog.svg |
-| 51–55    | Drizzle (light–dense)            | Drizzle                    | wi-sprinkle.svg / wi-night-alt-sprinkle.svg |
-| 61–65    | Rain (light–heavy)               | Rain                       | wi-rain.svg / wi-night-alt-rain.svg |
-| 80–82    | Rain showers (light–violent)     | Rain showers               | wi-showers.svg / wi-night-alt-showers.svg |
-| 71–75    | Snow (light–heavy)               | Snow                       | wi-snow.svg / wi-night-alt-snow.svg |
-| 85–86    | Snow showers                     | Snow showers               | wi-snow.svg / wi-night-alt-snow.svg |
-| 95       | Thunderstorm                     | Thunderstorm               | wi-thunderstorm.svg / wi-night-alt-thunderstorm.svg |
-| 96–99    | Thunderstorm w/ hail             | Thunderstorm (hail)        | wi-hail.svg / wi-night-alt-hail.svg |
+The base icon shapes originate from the open‑source **Weather Icons** project by Erik Flowers (MIT/SIL OFL).
+NMS_Tools ships its own recolored, reclassified SVG variants embedded directly within the system.
 
-### Day vs. Night Icons
+---
 
-The backend determines day/night using:
+## 6. Icon Mapping Table (WMO → Context → Icon)
 
-- `sunrise`
-- `sunset`
-- the timestamp of the forecast entry
+| WMO | Meaning | Context | Icon |
+| --- | --- | --- | --- |
+| 0 | Clear sky | Clear sky | wi-day-sunny.svg / wi-night-clear.svg |
+| 1 | Mainly clear | Mainly clear | wi-day-sunny.svg / wi-night-clear.svg |
+| 2 | Partly cloudy | Partly cloudy | wi-day-cloudy.svg / wi-night-alt-cloudy.svg |
+| 3 | Overcast | Overcast | wi-cloudy.svg / wi-night-cloudy.svg |
+| 45,48 | Fog | Fog | wi-fog.svg / wi-night-fog.svg |
+| 51–55 | Drizzle | Drizzle | wi-sprinkle.svg / wi-night-alt-sprinkle.svg |
+| 61–65 | Rain | Rain | wi-rain.svg / wi-night-alt-rain.svg |
+| 80–82 | Rain showers | Rain showers | wi-showers.svg / wi-night-alt-showers.svg |
+| 71–75 | Snow | Snow | wi-snow.svg / wi-night-alt-snow.svg |
+| 85–86 | Snow showers | Snow showers | wi-snow.svg / wi-night-alt-snow.svg |
+| 95 | Thunderstorm | Thunderstorm | wi-thunderstorm.svg / wi-night-alt-thunderstorm.svg |
+| 96–99 | Thunderstorm w/ hail | Thunderstorm (hail) | wi-hail.svg / wi-night-alt-hail.svg |
 
-This ensures correct icon selection even for:
+---
 
-- hourly forecasts crossing midnight  
-- weekly forecasts with sunrise/sunset per day  
-- verbose and JSON modes  
+## 7. Scientific Index Engine
 
-### Why Only These Icons?
-
-The Weather Icons project includes hundreds of icons, but check_weather uses a **minimal, deterministic subset** to avoid ambiguity and ensure consistent UI rendering.
-
-## 4. Design Rationale: Backend‑Driven Icon Selection
-
-### Why the Backend Selects Icons
-
-Weather icons are not a UI concern — they are a **data normalization concern**.
-
-The backend selects icons because:
-
-1. **WMO codes require interpretation**  
-   The UI should not need to understand meteorology or WMO classification.
-
-2. **Day/night logic requires sunrise/sunset timestamps**  
-   Only the backend has access to:
-   - the location’s timezone  
-   - the day’s sunrise/sunset  
-   - the forecast timestamp  
-
-3. **Consistency across modes**  
-   Current, hourly, and weekly modes all use the same mapping table.
-
-4. **Deterministic output**  
-   The UI receives:
-   ```json
-   { "context": "Clear sky", "icon": "wi-day-sunny.svg" }
-   ```
-
-5. Separation of concerns
-  * Backend: meteorology, normalization, mapping
-  * UI: display only
-
-### Why Weather Icons?
-
-The Weather Icons project was chosen because:
-
-* It is open‑source (MIT + SIL OFL 1.1)
-* It provides a complete set of day/night variants
-* It is widely used and stable
-* It matches the operator‑grade aesthetic of NMS_Tools
-* SVG format ensures crisp rendering at any size
-
-### Why Not Use Provider Icons?
-
-Open‑Meteo does not provide icons.
-
-Other providers (e.g., OpenWeatherMap) do, but:
-
-* They are raster PNGs
-* They are low‑resolution
-* They are provider‑specific
-* They do not include night variants
-* They cannot be redistributed freely
-
-Weather Icons solves all of these problems.
-
-### Why Not Let the UI Choose Icons?
-
-Because that leads to:
-
-* duplicated logic
-* inconsistent behavior
-* mismatched day/night handling
-* drift between UI and backend
-* increased maintenance burden
-
-The backend is the single source of truth.
-
-## 5. Icon Classification & Recoloring Pipeline  
-*(Updated 2026‑05)*
-
-The `check_weather` tool uses a hybrid classifier to determine how each Weather Icons SVG should be recolored.  
-Classification is now handled entirely by `analyzer.py` and merges **filename semantics** with **geometry analysis**.
-
-### Filename‑Based Classification
-Weather Icons encode most semantics directly in the filename.  
-The exporter extracts:
-
-- `sun` / `moon` (day/night)
-- `cloud`
-- `rain` (rain, showers, sprinkle, mix)
-- `snow` (snow, sleet, hail)
-- `thunder` (storm, lightning)
-- `fog` (fog, haze)
-- `wind`
-
-This is the authoritative source for precipitation and special effects.
-
-### Geometry‑Based Classification
-SVG paths are parsed and curves are approximated as line segments.  
-Geometry is used **only** to detect:
-
-- `sun`
-- `moon`
-- `cloud`
-
-Night icons suppress sun geometry to avoid false positives.
-
-### Merged Classification
-Final groups are:
-
-final_groups = filename_groups ∪ geometry_base_shape
-
-
-Examples:
-
-wi-day-rain.svg       → ['sun', 'rain']
-wi-night-snow.svg     → ['moon', 'snow']
-wi-cloudy.svg         → ['cloud']
-wi-night-fog.svg      → ['moon', 'fog']
-
-
-### Recoloring
-Recoloring is performed by `recolor.py`.  
-Each `<path>` element is assigned to one or more groups and recolored using the palette defined in the engine.
-
-### Stats Summary (New)
-After processing all icons, the exporter prints and logs:
-
-- total icons  
-- group counts  
-- coverage percentages  
-- groups‑per‑icon histogram  
-- day/night breakdown  
-
-This summary acts as a regression surface to detect classification drift.
-
-### Removed Components
-The legacy `classifier.py` has been removed.  
-All classification is now handled by `analyzer.py`.
-
-## 6. Weather Demo
-
-A small HTML/JS/CSS demo is included in this directory (`weather_demo.html`,
-`weather.js`, `weather_demo.css`). These files are not part of the NMS_Tools
-suite and are not used by any monitoring scripts. They provide a visual
-demonstration of how `check_weather.py` output can be rendered in a browser
-using the same JSON schema. The demo is provided for testing and experimentation.
-
---- 
-
-## 7. What’s New in v2.2.0 (2026‑04‑27)
-
-### Rolling 24‑Hour Hourly Forecast
-Hourly mode now begins at the **next hour ≥ local time**, not at midnight.  
-The backend slices the raw Open‑Meteo hourly arrays before flattening, ensuring:
-
-- Always 24 hours of future data  
-- No stale hours  
-- No midnight anchoring  
-- Deterministic alignment across all hourly fields  
-
-### Weekly Forecast Normalization
-Weekly mode now always begins at **today**, even if the provider returns yesterday.  
-The backend slices the raw daily arrays before enrichment.
-
-- Always 7 days  
-- Never includes yesterday  
-- Fully enriched (context, icon, wind max, units)
-
-### Backend Enrichment
-All modes now include normalized, deterministic fields:
-
-- `context` — human‑readable condition text  
-- `icon` — backend‑selected icon filename  
-- `wind_mph_max` / `wind_kph_max` — weekly max wind  
-- Unit‑converted fields for temperature, wind, visibility, pressure, precipitation  
-
-Verbose mode uses these enriched fields directly.
-
-## 8. Features
-
-### Hybrid Provider Model (Open‑Meteo + NWS)
-check_weather uses a hybrid model combining:
-* Open‑Meteo forecast data
-* NWS station‑level observations (temperature, dewpoint, humidity, wind, gusts, pressure)
-
-The backend merges both sources into a unified, normalized schema.
-Feels‑like calculations, scientific indices, and condition mapping use the merged dataset.
-
-### Scientific Index Engine
 check_weather computes:
 * Heat index
 * Wind chill
@@ -338,287 +289,147 @@ check_weather computes:
 * Air density
 * Pressure altitude
 
-These values drive the unified feels‑like selection logic.
+Feels‑like selection uses:
+* heat index
+* wind chill
+* humidex
+* temperature (fallback)
 
-### Feels‑Like Selection Logic
-The backend selects the feels‑like metric using:
-* Heat index
-* Wind chill
-* Humidex
-* Temperature (fallback)
-
-The selected metric is exposed as:
-
+Exposed as:
 ```Code
 feels_like_source
 ```
 
-### JSON Export (--output FILE)
-JSON output can be written directly to a file using:
+---
 
+## 8. Output Modes
+
+### Output Modes
+* `-v`, `--verbose` — Verbose output
+* `-j`, `--json` — JSON output
+* `-q`, `--quiet` — Quiet (exit code only)
+* `--color` — Colorize verbose
+* `--output FILE` — Write output to file
+
+### Weather Modes
+* `--weekly` — Weekly forecast
+* `--hourly` — Hourly forecast
+* `--full` — Current + hourly + weekly
+
+### Implicit Mode
+* **Current mode** — Default when no weather mode is specified
+
+### Nagios Mode
+* Default output style
+* Single-line status + perfdata
+* Logging disabled
+
+---
+
+## 9. Usage Examples (All Modes)
+
+### Current Mode
+```bash
+check_weather --location 67576
+check_weather --location 67576 -v
+check_weather --location 67576 -j
+```
+
+###Hourly Mode
+```bash
+check_weather --location 67576 --hourly -v
+check_weather --location 67576 --hourly -j
+```
+
+### Weekly Mode
+```bash
+check_weather --location 67576 --weekly -v
+check_weather --location 67576 --weekly -j
+```
+
+### Full Mode
+```bash
+check_weather --location 67576 --full -j
+check_weather --location 67576 --full -j --output weather.json
+```
+
+### Nagios Mode
+```bash
+check_weather --location 67576
+check_weather --location 67576 -q
+```
+
+### Verbose Mode
+```bash
+check_weather --location 67576 -v
+```
+
+### JSON Mode
+```bash
+check_weather --location 67576 -j
+```
+
+### Quiet Mode
+```bash
+check_weather --location 67576 -q
+```
+
+### Threshold Example
+```bash
+check_weather --lat 38.00 --lon -98.76 --warning-temp 30
+```
+
+### Show Provider Details
+```bash
+check_weather --location 67576 --show-location-details
+```
+
+### Logging
+```bash
+check_weather --location 67576 --log-dir ~/Logs
+```
+
+---
+
+## 10. Inclusion Options
 ```Code
---output FILE
+--include-gusts
+--include-precip
+--include-clouds
 ```
 
-This is required for frozen binaries, which bypass stdout.
-The final rendered JSON (current, hourly, weekly) is written to FILE exactly as displayed in console mode.
+---
 
-### Frozen Binary Behavior (PyInstaller)
-Frozen binaries:
-* bypass stdout
-* require --output FILE for JSON export
-* write relative paths into the PyInstaller extraction directory
+## 11. Cache & Logging
 
-This ensures deterministic behavior in all environments.
-
-### Full hourly weather data
-
-- Temperature
-- Wind speed
-- Wind gusts
-- Humidity
-- Precipitation
-- Cloud cover
-- Weather condition codes + text
-- Rolling 24‑hour forecast window (next hour → +24h)
-
-### Flexible location resolution
-
-- ZIP code
-- City + optional state
-- Latitude/longitude
-
-### Threshold support
-
-- Temperature (hot/cold)
-- Wind
-- Gust
-- Humidity
-- Precipitation
-- Cloud cover
-
-### Multiple output modes
-
-- Nagios
-- JSON
-- Verbose
-- Quiet
-
-### Deterministic behavior
-
-- Timestamp alignment
-- Rounded numeric values
-- Clean error handling
-- Predictable caching
-- Operator‑grade logging
-- Rolling hourly slicing and weekly day‑slicing performed in fetch layer
-- Backend‑normalized condition text and icon filenames
-
-### Dependencies
-
-Requires:
-
-- **Python 3.8+**
-- **requests**
-
-Install:
-
-```bash
-pip install requests
-```
-
-## 9. Usage
-
-### Basic
-```bash
-./check_weather.py --location "Saint John, KS"
-```
-
-### Imperial units
-
-```bash
-./check_weather.py --location "Saint John, KS" --units imperial
-```
-
-### JSON output
-
-```bash
-./check_weather.py --location 67576 -j
-```
-
-### Verbose output
-
-```bash
-./check_weather.py --location "Saint John, KS" -v
-```
-### Hourly Mode (Rolling 24 Hours)
-
-Hourly mode now returns the next 24 hours starting from the next hour ≥ local time.
-
-```bash
-./check_weather.py --location 67576 -v -H
-```
-
-### Weekly Mode (7 Days Starting Today)
-Weekly mode now always returns 7 days beginning at the current local date.
-
-```bash
-./check_weather.py --location 67576 -W -v
-```
-
-### Threshold example
-
-```bash
-./check_weather.py --location 67576 \
-  --warning-wind 25 \
-  --critical-wind 35 \
-  --warning-gust 40 \
-  --critical-gust 50
-```
-
-### Show provider URL + resolved location
-
-```bash
-./check_weather.py --location 67576 --show-location-details
+### Cache Flags
+```Code
+--ignore-cache
+--ignore-ttl
+--cache-info
+--force-cache
 ```
 
 ### Logging
 
-```bash
-./check_weather.py --location 67576 --log-dir ~/Logs
-```
+Disabled in Nagios mode.
+Enabled in verbose, JSON, quiet.
 
-## 10. Provider Architecture
+---
 
-check_weather.py uses **three distinct provider components**:
+## 12. Frozen Binary Notes
 
-### Weather Provider
+Frozen binaries:
+* bypass stdout
+* require --output FILE
+* write relative paths into PyInstaller extraction directory
+* deterministic behavior across environments
 
-- **Open‑Meteo**
-- Selected via --provider (validated enum)
-- Base URL:
-   [https://api.open-meteo.com/v1/forecast]
-- Used for all weather data retrieval.
+---
 
-### Location Provider (ZIP)
+## 13. Example JSON Schemas
 
-- **Zippopotam.us**
-- URL pattern:
-   [https://api.zippopotam.us/<country>/<zip>]
-
-### Location Provider (City/State)
-
-- **Open‑Meteo Geocoding**
-- URL pattern:
-   [https://geocoding-api.open-meteo.com/v1/search?name=<city>]
-
-The resolved location block includes:
-
-- Provider name
-- Provider URL
-- Latitude / longitude
-- Resolved city, state, country
-
-These appear in both JSON (resolved_location) and verbose (--show-location-details) output.
-
-### Provider Selection
-
-```bash
---provider {open-meteo}
-```
-
-The provider flag is validated but currently non‑functional.
-
-check_weather always uses:
-- **Zippopotam.us** for ZIP → lat/lon
-- **Open‑Meteo Geocoding** for city/state
-- **Open‑Meteo** for weather data
-
-The [--provider] value is logged for operator visibility but does not change execution behavior.
-Reserved for future multi‑provider support.
-
-## 11. Inclusion Flags
-
-```bash
---include-gusts     Include wind gusts even without thresholds  
---include-precip    Include precipitation fields  
---include-clouds    Include cloud cover fields  
-```
-
-These flags control which fields appear in:
-
-- Verbose output
-- JSON output
-- Perfdata
-
-## 12. Cache Flags
-
-```bash
---force-cache       Force reading from cache even if API is available  
---ignore-cache      Ignore cache entirely  
---ignore-ttl        Ignore TTL when reading cache  
---cache-info        Display cache metadata  
-```
-
-## 13. Logging
-
-**Logging is disabled in Nagios mode.**
-Nagios mode is the default output mode, and plugins must remain side‑effect‑free.
-Logging only activates when using --verbose, --json, or --quiet.
-
-Enable logging:
-
-```bash
---log-dir /path/to/logs
-```
-
-Log entries include:
-
-- [START] metadata banner
-- [WEATHER] location + weather blocks
-- [RESULT] final Nagios state + message
-- [END] termination marker
-
-Rotation controlled by:
-
-```bash
---log-max-mb <size>
-```
-
-## 14. Example Outputs
-
-### Nagios
-
-```bash
-OK: Weather normal: 56.66°F, 20.26 mph | temp=56.66;; wind=20.26;; humidity=31.00;; cloud=54.00;;
-```
-
-### Verbose
-
-```bash
-Location Resolution Details:
-  Input: 67576
-  Location Provider: zippopotam.us
-  Location Provider URL: https://api.zippopotam.us/US/67576
-  Weather Provider: open-meteo
-  Weather Provider URL: https://api.open-meteo.com/v1/forecast
-  Resolved Name: Saint John, Kansas, US
-  Latitude: 38.0309
-  Longitude: -98.7647
-  Weather API URL: https://api.open-meteo.com/v1/forecast?latitude=...
-
-Status: OK
-Message: Weather normal: 56.66°F, 20.26 mph
-Location: Saint John, Kansas 67576, US
-Temperature: 56.66°F (13.70°C)
-Wind Speed: 20.26 mph (32.60 kph)
-Humidity: 31.00%
-Condition: Partly cloudy
-Source: Live API
-```
-
-### JSON
-
+###  Current
 ```json
 {
   "status": "OK",
@@ -648,6 +459,7 @@ Source: Live API
   "runtime_ms": 763.0
 }
 ```
+
 ### Hourly (Rolling 24 Hours)
 
 ```json
@@ -702,24 +514,126 @@ Source: Live API
   }
 }
 ```
----
-
-## 15. Upcoming Enhancements
-
-The following features are planned for the next release:
-
-- Verbose mode will display icon filenames next to condition text.
-- New `--debug` flag will expose backend decision details (slice indices, sunrise/sunset logic, WMO mappings).
-- New `--self-test` mode will validate slicing, enrichment, and mapping without hitting the API.
-- Minutely precipitation support (`--minutely`) for short‑term rain alerts.
-- Alerts mode (`--alerts`) using Open‑Meteo NWS alert feed for US locations.
 
 ---
 
-## 16. Notes
+## 14. Troubleshooting
+* Stale cache → `--ignore-cache`
+* Provider outage → clean error messages
+* Missing NWS fields → fallback logic
+* Pressure MSL TypeError → fixed in v3.0.0
 
-- Uses Open‑Meteo hourly API for deterministic, timestamp‑aligned data
-- Uses Zippopotam.us + Open‑Meteo Geocoding for location resolution
-- All numeric values rounded to 2 decimals
-- Designed for graphing (PNP4Nagios, Grafana, etc.)
-- Logging, caching, and condition‑text support fully implemented
+---
+
+## 15. Features
+
+### Dual‑Provider Hybrid Model
+* Open‑Meteo for forecast baseline
+* NWS for live station‑level observations
+* Deterministic merge layer with override rules
+
+### Multiple Weather Modes
+* Current
+* Hourly
+* Weekly
+* Full
+
+### Deterministic Output Pipeline
+* Timestamp alignment
+* Normalized condition text
+* Backend‑selected icons
+* Unified feels‑like selection
+* Rounded numeric values
+
+### Scientific Index Engine
+* Heat index
+* Wind chill
+* Humidex
+* Wet bulb
+* Vapor pressure
+* Air density
+* Pressure altitude
+
+### Icon Classification & Recoloring
+* Derived from Weather Icons
+* Fully embedded SVG set
+* Deterministic day/night selection
+* Geometry‑based classification
+
+### Robust CLI Modes
+* Verbose
+* JSON
+* Quiet
+* Nagios‑compatible
+* Colorized verbose output
+
+### Frozen Binary Support
+* Deterministic PyInstaller builds
+* `--output FILE` JSON export
+* Stable across environments
+
+### Debug & Diagnostics
+* `--debug`
+* `--self-test`
+* `--show-location-details`
+* Cache inspection flags
+
+### Production‑Ready
+* Logging architecture stable
+* Threshold evaluation
+* Perfdata output
+* Fully compatible with PythonTools
+* Included in NMS_Tools packaging
+
+---
+
+## 16. Current Status
+* ✔ Fully compatible with PythonTools
+* ✔ Deterministic dual‑provider routing (Open‑Meteo + NWS)
+* ✔ Current / Hourly / Weekly / Full modes finalized
+* ✔ Verbose / JSON / Nagios / Quiet modes stable
+* ✔ Logging architecture stable
+* ✔ Frozen mode enabled via scripts/build.py
+* ✔ Included in NMS_Tools packaging
+* ✔ Suitable for production monitoring environments
+
+---
+
+## 17. Documents
+
+| Document | Description |
+|----------|-------------|
+| [Installation.md](docs/Installation.md) | Installation and environment setup |
+| [Usage.md](docs/Usage.md)        | Full CLI reference and examples |
+| [Operation.md](docs/Operation.md)    | Discovery, normalization, and output pipeline |
+| [Enforcement.md](docs/Enforcement.md)  | Status evaluation and filtering logic |
+| [Metadata_schema.md](docs/Metadata_schema.md) | Normalized interface schema |
+
+---
+
+## 18. Tools in This Suite
+| Tool | Description | Documentation |
+|------|-------------|---------------|
+| **check_cert** | TLS certificate inspection and expiration validation | [../check_cert/README.md](../check_cert/README.md) |
+| **check_html** | HTTP/HTTPS content validation and deterministic HTML checks | [../check_html/README.md](../check_html/README.md) |
+| **check_interfaces** | Network interface inspection and operational state reporting | [../check_interfaces/README.md](../check_interfaces/README.md) |
+| **check_ports** | Port and service availability inspection | [../check_ports/README.md](../check_ports/README.md) |
+| **check_weather** | Deterministic weather client for monitoring pipelines | [../check_weather/README.md](../check_weather/README.md) |
+| **check_ticker** | Deterministic market/ticker client using PythonTools finance providers | - |
+
+---
+
+## 19. Notes
+* All numeric values rounded to 2 decimals
+* Designed for graphing (PNP4Nagios, Grafana)
+* Logging, caching, and condition‑text support fully implemented
+
+A standalone HTML/JS/CSS weather demo is included in the weather_demo/ directory.
+It is not part of NMS_Tools and is not used by any monitoring scripts.
+It is provided only as a visual demonstration of how the JSON output can be rendered.
+
+---
+
+## 20. License
+* Source code: MIT [LICENSE](../../LICENSE) for details.
+* Frozen binary: Proprietary [LICENSE_BINARY](../../LICENSE_BINARY.txt)

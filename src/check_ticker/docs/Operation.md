@@ -16,7 +16,7 @@
 6. [Logging Architecture](#6-logging-architecture)
 7. [Frozen Mode Behavior](#7-frozen-mode-behavior)
 8. [Failure Handling](#8-failure-handling)
-9. [Documents](#9-documents)
+9. [See Also](#9-see-also)
 
 ---
 
@@ -290,7 +290,7 @@ Failure handling is deterministic and maps directly to exit codes.
 
 ---
 
-## 9. Documents
+## 9. See Also
 * [Installation.md](Installation.md)
 * [FLAGS.md](../../../docs/FLAGS.md)
 * [Metadata_schema.md](Metadata_schema.md)

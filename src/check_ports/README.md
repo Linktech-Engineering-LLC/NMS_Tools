@@ -417,6 +417,6 @@ Including:
 ---
 
 ## 13. License
-
-MIT License — see LICENSE.md in the repository root.
+* Source code: MIT [LICENSE](../../LICENSE) for details.
+* Frozen binary: Proprietary [LICENSE_BINARY](../../LICENSE_BINARY.txt)
 

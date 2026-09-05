@@ -8,8 +8,9 @@
 **Last Updated:** 2026‑08‑17
 
 ## Table of Contents
-1. Installation
-2. Tool Verification
+1. [Installation](#1-installation)
+2. [Tool Verification](#2-tool-verification)
+3. [See Also](#3-see-also)
 
 ---
 
@@ -49,3 +50,10 @@ check_html -H https://example.com -j
 ```bash
 check_html -V
 ```
+
+## 3. See Also
+* [Enforcement](Enforcement.md)
+* [Metadata_schema](Metadata_schema.md)
+* [Operations](Operation.md)
+* [Usage](Usage.md)
+* [FLAGS.md](../../../docs/FLAGS.md)

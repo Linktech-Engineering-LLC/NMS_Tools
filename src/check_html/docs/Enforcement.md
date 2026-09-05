@@ -31,6 +31,7 @@
     3. [9.3 Quiet Mode](#83-quiet-mode)  
     4. [9.4 Nagios/Icinga Mode](#84-nagiosicinga-mode)  
     5. [9.5 Logging Behavior](#85-logging-behavior)
+10. [See Also](#10-see-also)
 
 ---
 
@@ -50,6 +51,8 @@ The final status is computed using strict Nagios severity precedence:
 **CRITICAL > WARNING > UNKNOWN > OK**
 
 This document defines the complete enforcement model for Version 1.
+
+---
 
 ## 2. Enforcement Overview
 The enforcement engine evaluates four independent domains:
@@ -78,6 +81,8 @@ Each subsystem returns a structured result:
 ```
 
 The engine merges these results into a final Nagios status and message.
+
+---
 
 ## 3. Status Enforcement
 Status enforcement validates the HTTP status code.
@@ -114,6 +119,9 @@ CRITICAL - Expected 200, got 404
 ```Code
 OK - Status 200 OK
 ```
+
+---
+
 ## 4. Content‑Type Enforcement
 Validates the presence and correctness of the Content-Type header.
 
@@ -125,22 +133,13 @@ Validates the presence and correctness of the Content-Type header.
 ### 4.2 Rules
 
 Missing content‑type
-
-```Code
-UNKNOWN - No content-type header
-```
+`UNKNOWN - No content-type header`
 
 **Required type mismatch**
-
-```Code
-CRITICAL - Expected content-type text/html, got application/json
-```
+`CRITICAL - Expected content-type text/html, got application/json`
 
 **Success**
-
-```Code
-OK - Content-type text/html
-```
+`OK - Content-type text/html`
 
 ## 5. HTML Enforcement
 Validates the presence of an HTML body.
@@ -153,23 +152,14 @@ Validates the presence of an HTML body.
 ### 5.2 Rules
 
 **Missing HTML body (only if required)**
-
-```Code
-UNKNOWN - No HTML body
-```
+`UNKNOWN - No HTML body`
 
 **Not required**
 If --require-html is not provided:
-
-```Code
-OK - HTML body present or not required
-```
+`OK - HTML body present or not required`
 
 **Success**
-
-```Code
-OK - HTML body present
-```
+`OK - HTML body present`
 
 ## 6. Backend Enforcement
 Validates the detected backend against operator expectations.
@@ -183,28 +173,18 @@ Validates the detected backend against operator expectations.
 
 **TLS failure**
 Backend cannot be evaluated:
-
-```Code
-UNKNOWN - Backend check skipped due to TLS failure
-```
+`UNKNOWN - Backend check skipped due to TLS failure`
 
 **Missing backend detection**
-
-```Code
-UNKNOWN - Unable to determine backend
-```
+`UNKNOWN - Unable to determine backend`
 
 **Backend mismatch**
-
-```Code
-CRITICAL - Backend mismatch: expected nginx, detected apache
-```
+`CRITICAL - Backend mismatch: expected nginx, detected apache`
 
 **Success**
+`OK - Backend nginx`
 
-```Code
-OK - Backend nginx
-```
+---
 
 ## 7. Severity Merging
 Final status is computed using strict Nagios precedence:
@@ -233,6 +213,8 @@ OK - 200 OK (text/html)
 ```
 
 Nagios/Icinga mode always prints exactly one line.
+
+---
 
 ## 9. Output Mode Interaction
 
@@ -275,3 +257,12 @@ Logging is enabled only when:
 - **and** the active mode is **not** Nagios/Icinga mode
 
 Quiet mode **does** allow logging (if `--log-dir` is set), but still prints nothing.
+
+---
+
+## 10. See Also
+* [Installation](Installation.md)
+* [Metadata_schema](Metadata_schema.md)
+* [Operations](Operation.md)
+* [Usage](Usage.md)
+* [FLAGS.md](../../../docs/FLAGS.md)

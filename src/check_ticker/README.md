@@ -265,5 +265,5 @@ Frozen mode is fully operational and used by:
 | **check_ticker** | Deterministic market/ticker client using PythonTools finance providers | - |
 
 ## 14. License
-
-MIT License — see [LICENSE](../../LICENSE) in the repository root.
+* Source code: MIT [LICENSE](../../LICENSE) for details.
+* Frozen binary: Proprietary [LICENSE_BINARY](../../LICENSE_BINARY.txt)

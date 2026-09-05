@@ -16,7 +16,7 @@
 6. [Exit Code Mapping](#6-exit-code-mapping)
 7. [Failure Modes](#7-failure-modes)
 8. [Examples](#8-examples)
-9. [Documents](#9-documents)
+9. [See Also](#9-see-also)
 
 ---
 
@@ -244,7 +244,7 @@ check_ticker ETH --history 10 --trend --require-up -j
 
 ---
 
-## 9. Documents
+## 9. See Also
 * [Metadata_schema.md](Metadata_schema.md)
 * [Operation.md](Operation.md)
 * [Usage.md](Usage.md)

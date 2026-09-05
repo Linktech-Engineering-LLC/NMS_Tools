@@ -15,7 +15,7 @@
 5. [Provider Metadata](#5-provider-metadata)
 6. [Error Schema](#6-error-schema)
 7. [Examples](#7-examples)
-8. [Documents](#8-documents)
+8. [See Also](#8-see-also)
 
 ---
 
@@ -200,7 +200,7 @@ Errors are normalized into a deterministic structure.
 
 ---
 
-## 8. Documents
+## 8. See Also
 * [Installation.md](Installation.md)
 * [FLAGS.md](../../../docs/FLAGS.md)
 * [Enforcement.md](Enforcement.md)

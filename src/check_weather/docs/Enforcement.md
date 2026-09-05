@@ -1,21 +1,16 @@
 # Enforcement Model
-
-**Part of:** NMS_Tools Monitoring Suite  
-**Script:** export_icons.py  
-**Version:** 3.0.0  
-**Author:** Leon McClatchey, Linktech Engineering LLC  
-**License:** MIT  
-**Last Updated:** 2026‑08‑16
-
 Deterministic Monitoring Enforcement for NMS_Tools
 
-check_weather.py follows the unified NMS_Tools enforcement model used across all monitoring plugins.
-The tool produces deterministic, single‑line Nagios/Icinga output in default mode and supports verbose and JSON modes for diagnostics and ingestion.
-
-This document defines the enforcement rules, output guarantees, severity model, and behavior under monitoring and policy enforcement.
+**Part of:** NMS_Tools Monitoring Suite  
+**Document:** Enforcement Model
+**Version:** 3.0.0 
+**Author:** Leon McClatchey, Linktech Engineering LLC  
+**License:** MIT  
+**Requires:** Python 3.12+  (development only; not required for frozen binary)
+**Last Updated:** 2026-08-16
 
 ## Table of Contents
-1. [Enforcement Overview](#1-enforcement-overview)
+1. [Overview](#1-overview)
 2. [Output Rules](#2-output-rules)
 3. [Severity Model](#3-severity-model)
 4. [Threshold Enforcement](#4-threshold-enforcement)
@@ -25,27 +20,37 @@ This document defines the enforcement rules, output guarantees, severity model, 
 8. [JSON Mode Enforcement](#8-json-mode-enforcement)
 9. [Deterministic Behavior Guarantees](#9-deterministic-behavior-guarantees)
 10. [Examples](#10-examples)
+11. [See Also](#11-see-also)
+---
 
-## 1. Enforcement Overview
+## 1. Overview
+
+check_weather.py follows the unified NMS_Tools enforcement model used across all monitoring plugins.
+The tool produces deterministic, single‑line Nagios/Icinga output in default mode and supports verbose and JSON modes for diagnostics and ingestion.
+
+This document defines the enforcement rules, output guarantees, severity model, and behavior under monitoring and policy enforcement.
+
 check_weather.py implements two enforcement layers:
 
 ### 1.1. Monitoring Enforcement (always enabled)
 
-- Resolves location
-- Retrieves weather data
-- Normalizes values
-- Evaluates thresholds
-- Produces Nagios/Icinga output
+* Resolves location
+* Retrieves weather data
+* Normalizes values
+* Evaluates thresholds
+* Produces Nagios/Icinga output
 
 ### 1.2. Policy Enforcement (threshold‑based, optional)
 
 Activated only when threshold flags are provided.
 
-- Determines WARNING/CRITICAL states
-- Ensures deterministic severity selection
-- Applies precedence rules
+* Determines WARNING/CRITICAL states
+* Ensures deterministic severity selection
+* Applies precedence rules
 
 If no thresholds are provided, the plugin returns OK unless a resolver or provider error occurs.
+
+---
 
 ## 2. Output Rules
 
@@ -53,28 +58,31 @@ If no thresholds are provided, the plugin returns OK unless a resolver or provid
 
 Nagios mode is the default when no other output mode is selected.
 
-- Default mode must produce:
-- Exactly one line of output
-- No leading or trailing whitespace
-- No resolver or provider details
-- Status text at the beginning of the line
-- Perfdata appended after a pipe (|)
-- No additional lines, warnings, or debug text
-- Logging is disabled (Nagios plugins must be side‑effect‑free)
+* Default mode must produce:
+* Exactly one line of output
+* No leading or trailing whitespace
+* No resolver or provider details
+* Status text at the beginning of the line
+* Perfdata appended after a pipe (|)
+* No additional lines, warnings, or debug text
+* Logging is disabled (Nagios plugins must be side‑effect‑free)
 
 Example:
 
-```OK: Weather normal: 72°F, 8 mph | temp=72 wind=8 gust=12 precip=0 clouds=20```
+`OK: Weather normal: 72°F, 8 mph | temp=72 wind=8 gust=12 precip=0 clouds=20`
 
 This output is safe for:
 
-- Nagios Core
-- Icinga 2
-- NRPE
+* Nagios Core
+* Icinga 2
+* NRPE
 
 Any monitoring engine expecting single‑line plugin output
 
+---
+
 ## 3. Severity Model
+
 Severity is determined by threshold evaluation.
 
 ### 3.1 Severity Levels
@@ -90,23 +98,25 @@ Severity is determined by threshold evaluation.
 
 Severity precedence is deterministic:
 
-- CRITICAL
-- WARNING
-- OK
-- UNKNOWN (only for errors)
+* CRITICAL
+* WARNING
+* OK
+* UNKNOWN (only for errors)
 
 If multiple thresholds are exceeded, the highest‑severity condition wins.
+
+---
 
 ## 4. Threshold Enforcement
 
 Thresholds apply to normalized values:
 
-- Temperature (°F) -- bi-directional thresholds supported
-- Wind speed (mph)
-- Wind gust (mph)
-- Humidity (%)
-- Precipitation (mm)
-- Cloud cover (%)
+* Temperature (°F) -- bi-directional thresholds supported
+* Wind speed (mph)
+* Wind gust (mph)
+* Humidity (%)
+* Precipitation (mm)
+* Cloud cover (%)
 
 ### 4.1 Temperature Thresholds (Bi‑Directional)
 
@@ -114,18 +124,18 @@ Temperature thresholds support both hot and cold evaluation.
 
 The plugin automatically determines whether thresholds represent:
 
-- Hot mode (thresholds above the current temperature)
+* Hot mode (thresholds above the current temperature)
   → Evaluate using temp ≥ threshold
-- Cold mode (thresholds below the current temperature)
+* Cold mode (thresholds below the current temperature)
   → Evaluate using temp ≤ threshold
 
 This determination is automatic, based on the relative position of the thresholds to the current temperature.
 
 Rules:
 
-- If both thresholds are above the current temperature → hot thresholds
-- If both thresholds are below the current temperature → cold thresholds
-- If mixed → defaults to hot mode (Nagios‑style convention)
+* If both thresholds are above the current temperature → hot thresholds
+* If both thresholds are below the current temperature → cold thresholds
+* If mixed → defaults to hot mode (Nagios‑style convention)
 
 Flags:
 
@@ -136,11 +146,11 @@ Flags:
 
 Example:
 
-- Hot thresholds:
-  ```--warning-temp 85 --critical-temp 95```
+* Hot thresholds:
+  `--warning-temp 85 --critical-temp 95`
   → WARNING at 85+, CRITICAL at 95+
-- Cold thresholds:
-  ```--warning-temp 32 --critical-temp 0```
+* Cold thresholds:
+  `--warning-temp 32 --critical-temp 0`
   → WARNING at 32 or below, CRITICAL at 0 or below
 
 Temperature is the only metric with bi‑directional threshold logic.
@@ -164,20 +174,24 @@ These thresholds are not bi‑directional.
 Thresholds are optional.
 If none are provided, the plugin performs monitoring only.
 
+---
+
 ## 5. UNKNOWN Enforcement
 
 The plugin returns UNKNOWN when:
 
-- Location cannot be resolved
-- Provider returns an error or timeout
-- Required fields are missing
-- Input is invalid
-- Internal normalization fails
-- [UNKNOWN] always overrides [OK/WARNING/CRITICAL].
+* Location cannot be resolved
+* Provider returns an error or timeout
+* Required fields are missing
+* Input is invalid
+* Internal normalization fails
+* [UNKNOWN] always overrides [OK/WARNING/CRITICAL].
 
 Example:
 
-```UNKNOWN: Failed to resolve location "Wichitaz, KS"```
+`UNKNOWN: Failed to resolve location "Wichitaz, KS"`
+
+---
 
 ## 6. Perfdata Enforcement
 
@@ -185,80 +199,99 @@ Perfdata is always included in default mode.
 
 Rules:
 
-- All fields must be present
-- All values must be normalized and rounded
-- No units in perfdata values
-- Field order is deterministic
+* All fields must be present
+* All values must be normalized and rounded
+* No units in perfdata values
+* Field order is deterministic
 
 Perfdata fields:
 
-```temp=<°F> wind=<mph> gust=<mph> precip=<mm> clouds=<%>```
+`temp=<°F> wind=<mph> gust=<mph> precip=<mm> clouds=<%>`
 
 Example:
 
-```temp=72 wind=8 gust=12 precip=0 clouds=20```
+`temp=72 wind=8 gust=12 precip=0 clouds=20`
+
+---
 
 ## 7. Verbose Mode Enforcement
 
-Verbose mode (-v) is diagnostic only.
+Verbose mode (`-v`/`--verbose`) is diagnostic only.
 
 Rules:
 
-- Multi‑line output is allowed
-- Resolver and provider metadata must be included
-- Raw provider fields must be shown
-- Final line must still contain a valid Nagios/Icinga status line
-- Logging is **enabled** in verbose mode
+* Multi‑line output is allowed
+* Resolver and provider metadata must be included
+* Raw provider fields must be shown
+* Final line must still contain a valid Nagios/Icinga status line
+* Logging is **enabled** in verbose mode
 
 Verbose mode **must never** break default mode behavior.
 
+---
+
 ## 8. JSON Mode Enforcement
 
-JSON mode (--json) produces:
+JSON mode (`-j`/`--json`) produces:
 
-- Deterministic schema
-- Fully structured metadata
-- Final status included in the JSON
-- No human‑readable summary line unless included in the JSON block
-- Logging is enabled in JSON mode
+* Deterministic schema
+* Fully structured metadata
+* Final status included in the JSON
+* No human‑readable summary line unless included in the JSON block
+* Logging is enabled in JSON mode
 
-[JSON] mode is intended for:
+`JSON` mode is intended for:
 
-- Dashboards
-- Log pipelines
-- Automated diagnostics
+* Dashboards
+* Log pipelines
+* Automated diagnostics
+
+---
 
 ## 9. Deterministic Behavior Guarantees
 
-check_weather.py guarantees:
-
-- No nondeterministic output
-- No GUI dependencies
-- Stable field names
-- Stable perfdata ordering
-- Stable severity evaluation
-- Stable resolver behavior
-- Stable normalization rules
-- Deterministic caching
-- Deterministic logging (when enabled)
-- No logging in Nagios mode
+`check_weather` guarantees:
+* No nondeterministic output
+* No GUI dependencies
+* Stable field names
+* Stable perfdata ordering
+* Stable severity evaluation
+* Stable resolver behavior
+* Stable normalization rules
+* Deterministic caching
+* Deterministic logging (when enabled)
+* No logging in Nagios mode
 
 These guarantees ensure consistent monitoring behavior across all supported platforms.
+
+---
 
 ## 10. Examples
 
 OK
 
-```OK: Temp 68°F, Wind 5 mph | temp=68 wind=5 gust=7 precip=0 clouds=10```
+`OK: Temp 68°F, Wind 5 mph | temp=68 wind=5 gust=7 precip=0 clouds=10`
 
 WARNING
 
-```WARNING: Temp 92°F exceeds warning threshold (90°F) | temp=92 wind=8 gust=12 precip=0 clouds=20```
+`WARNING: Temp 92°F exceeds warning threshold (90°F) | temp=92 wind=8 gust=12 precip=0 clouds=20`
 
 CRITICAL
 
-```CRITICAL: Wind gust 48 mph exceeds critical threshold (45 mph) | temp=70 wind=20 gust=48 precip=0 clouds=30```
+`CRITICAL: Wind gust 48 mph exceeds critical threshold (45 mph) | temp=70 wind=20 gust=48 precip=0 clouds=30`
 
 UNKNOWN
 
-```UNKNOWN: Provider error: Open‑Meteo returned HTTP 500```
+`UNKNOWN: Provider error: Open‑Meteo returned HTTP 500`
+
+---
+
+## 11. See Also
+* [CHANGELOG](CHANGELOG.md)
+* [Architecture](Architecture.md)
+* [FLAGS.md](../../../docs/FLAGS.md)
+* [Installation](Installation.md)
+* [Logging](Logging.md)
+* [Operation](Operation.md)
+* [Provider_Architecture](Provider_Architecture.md)
+* [Usage](Usage.md)

@@ -1,11 +1,11 @@
 # check_weather — CHANGELOG
 
 **Part of:** NMS_Tools Monitoring Suite  
-**Script:** `check_weather.py` 
+**Document:** CHANGELOG
 **Version:** 3.0.0 
 **Author:** Leon McClatchey, Linktech Engineering LLC  
 **License:** MIT  
-**Requires:** Python 3.10+  
+**Requires:** Python 3.12+  (development only; not required for frozen binary)
 **Last Updated:** 2026-08-16
 
 All notable changes to the `check_weather` tool are documented here.  

@@ -8,8 +8,9 @@
 **Last Updated:** 2026‑08‑17
 
 ## Table of Contents
-1. Installation
-2. Tool Verification
+1. [Installation](#1-installation)
+2. [Tool Verification](#2-tool-verification)
+3. [See Also](#3-see-also)
 
 ---
 
@@ -54,3 +55,10 @@ check_ticker AAPL -j
 ```bash
 check_ticker -V
 ```
+
+## 3. See Also
+* [Metadata_schema.md](Metadata_schema.md)
+* [Operation.md](Operation.md)
+* [Usage.md](Usage.md)
+* [Enforcement.md](Enforcement.md)
+* [FLAGS.md](../../../docs/FLAGS.md)

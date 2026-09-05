@@ -312,8 +312,8 @@ There is no WARNING tier.
 ---
 
 ## 12. See Also
-
-[Installation.md](Installation.md)
-[Usage.md](Usage.md)
-[Enforcement.md](Enforcement.md)
-[Metadata_schema.md](Metadata_schema.md)
+* [Installation](Installation.md)
+* [Metadata_schema](Metadata_schema.md)
+* [Enforcement](Enforcement.md)
+* [Usage](Usage.md)
+* [FLAGS.md](../../../docs/FLAGS.md)
