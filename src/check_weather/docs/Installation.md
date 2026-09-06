@@ -10,7 +10,7 @@
 ## Table of Contents
 1. [Installation](#1-installation)
 2. [Tool Verification](#2-tool-verification)
-3. [Documents](#3-documents)
+3. [See Also](#3-see-also)
 
 ---
 
@@ -51,7 +51,7 @@ check_weather -l "New York, NY" -j
 check_weather -V
 ```
 
-## 3. Documents
+## 3. See Also
 * [CHANGELOG](CHANGELOG.md)
 * [Architecture](Architecture.md)
 * [FLAGS.md](../../../docs/FLAGS.md)

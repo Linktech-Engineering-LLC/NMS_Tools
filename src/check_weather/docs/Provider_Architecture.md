@@ -1,55 +1,51 @@
 # Provider Architecture for check_weather v3.0.0
 
+Defines the provider roles and hybrid provider behavior for check_weather v3.0.0.
+
 **Part of:** NMS_Tools Monitoring Suite  
-**Script:** export_icons.py  
-**Version:** 3.0.0  
+**Document:** Provider Architecture
+**Version:** 3.0.0 
 **Author:** Leon McClatchey, Linktech Engineering LLC  
 **License:** MIT  
-**Last Updated:** 2026‑08‑16
-
-This document defines the provider architecture for the check_weather subsystem in **NMS_Tools v2.0.0**, including provider selection rules, resolver behavior, provider capabilities, metadata guarantees, and fallback logic. It reflects the redesigned multi‑provider engine introduced in the v2 series.
-
-The system is designed for deterministic, operator‑grade monitoring and produces stable, provider‑agnostic output across all modes.
+**Requires:** Python 3.12+  (development only; not required for frozen binary)
+**Last Updated:** 2026-08-16
 
 ## Table of Contents
 1. [Overview](#1-overview)
 2. [Provider Model](#2-provider-model)
-    * [Weather Providers](#21-weather-providers)
-    * [Location Providers](#22-location-providers)
-3. [Provider Selection Rules](#3-provider-selection-rules)
-4. [Weather Provider Details](#4-weather-provider-details)
-    * [NWS](#41-nws)
-    * [Open‑Meteo](#42-openmeteo)
-5. [Location Provider Details](#5-location-provider-details)
-    * [ZIP Resolution](#51-zip-resolution)
-    * [City/Region Resolution](#52-cityregion-resolution)
-    * [Direct Latitude/Longitude](#53-direct-latitudelongitude)
-6. [Provider Metadata](#6-provider-metadata)
-7. [Fallback Behavior](#7-fallback-behavior)
+    1. [Weather Providers](#21-weather-providers)
+    2. [Location Providers](#22-location-providers)
+3. [Hybrid Provider Behavior (Current v3.0.0 Model)](#3-hybrid-provider-behavior-current-v300-model)
+4. [Provider Selection Flag](#4-provider-selection-flag)
+5. [Weather Provider Details](#5-weather-provider-details)
+    1. [NWS](#51-nws)
+    2. [Open‑Meteo](#52-openmeteo)
+6. [Location Provider Details](#6-location-provider-details)
+7. [Provider Metadata](#7-provider-metadata)
 8. [Deterministic Guarantees](#8-deterministic-guarantees)
-9. [Examples](#9-examples)
+9. [Planned Provider Isolation (v3.1+)](#9-planned-provider-isolation-v31)
+10. [Examples](#10-examples)
+11. [See Also](#11-see-also)
+
+---
 
 ## 1. Overview
-The v2.0.0 provider architecture separates:
-* **weather retrieval**
-* **location resolution**
-* **provider selection**
-* **provider fallback**
-* **provider metadata emission**
 
-All providers map into a unified schema through the normalization layer.
+`check_weather` v3.0.0 uses a multi‑provider weather engine built on `PythonTools.weather`.
+The current implementation operates in a **hybrid provider model**, where both NWS and Open‑Meteo may be used depending on mode, field availability, and location type. Provider fallback and strict provider isolation are not yet implemented; these are planned for v3.1+.
 
-The system is fully deterministic and produces stable output across all modes (current, hourly, weekly).
+All providers feed into a unified normalization layer and produce stable, deterministic output across all modes.
+
+---
 
 ## 2. Provider Model
+
 ### 2.1 Weather Providers
 
 | Provider | Capabilities | Coverage |
 | --- | --- | --- |
-| **NWS** | Current, hourly, weekly, station metadata, observations, alerts (planned) | United States |
-| **Open‑Meteo** | Hourly, daily/weekly, dewpoint/humidity, sunrise/sunset, astronomy (planned), alerts (optional) | Global |
-
-Both providers feed into the same normalization and merge layers.
+| **NWS** | Current, hourly, weekly, station metadata, grid metadata, observations, **alerts** | United States |
+| **Open‑Meteo** | Hourly, daily/weekly, dewpoint, humidity, cloudcover, visibility, pressure_msl, precipitation probability | Global |
 
 ### 2.2 Location Providers
 
@@ -57,47 +53,80 @@ Both providers feed into the same normalization and merge layers.
 | --- | --- | --- |
 | ZIP code | Zippopotam.us | US ZIP resolution |
 | City/state or city/country | Open‑Meteo Geocoding | Global geocoding |
-| Latitude/longitude | None | Direct coordinates |
+| Latitude/longitude | direct | No provider call |
 | NWS station metadata | NWS Points API | Used after initial resolution |
 
-Location resolution always produces:
-* latitude
-* longitude
-* display name
-* country code
-* admin1 (state/province)
-* provider metadata
+Location resolution always produces latitude, longitude, display name, country code, admin1, and provider metadata.
 
-## 3. Provider Selection Rules
-Provider selection follows deterministic rules:
-1. **If NWS coverage exists for the location → prefer NWS.**
-2. If NWS fails or is unavailable → fallback to Open‑Meteo.
-3. If both providers fail → fallback to cached data.
-4. If no cache exists → return error.
+---
 
-Selection is logged in metadata:
+## 3. Hybrid Provider Behavior (Current v3.0.0 Model)
 
+`check_weather` v3.0.0 uses a **hybrid provider model**:
+
+Even when a provider is selected via `--provider`, the engine may pull data from **both NWS and Open‑Meteo** depending on field availability, mode, and location type.
+
+### NWS is used for:
+* current conditions
+* hourly forecast
+* weekly forecast
+* station metadata
+* grid metadata
+* observations
+* alerts
+* weekly enrichment
+* hourly enrichment
+
+### Open‑Meteo is used for:
+* geocoding
+* ZIP fallback
+* dewpoint
+* cloudcover
+* visibility
+* pressure_msl
+* precipitation probability
+
+### No provider fallback exists
+
+If NWS fails, the engine does not switch to Open‑Meteo.
+If Open‑Meteo fails, the engine does not switch to NWS.
+Only cache fallback exists.
+
+**Provider isolation is not yet implemented**
+
+The provider switch is parsed and validated, but does not enforce strict isolation.
+
+---
+
+## 4. Provider Selection Flag
 ```Code
-provider_selected
-provider_fallback
-provider_reason
+--provider {nws,open-meteo}
 ```
 
-## 4. Weather Provider Details
-### 4.1 NWS
-**Base Endpoints**
-* Points:
-  `https://api.weather.gov/points/<lat>,<lon>`
-* Gridpoint forecast:
-  `https://api.weather.gov/gridpoints/<office>/<gridX>,<gridY>/forecast`
-* Hourly forecast:
-  `https://api.weather.gov/gridpoints/<office>/<gridX>,<gridY>/forecast/hourly`
-* Observations:
-  `https://api.weather.gov/stations/<station>/observations/latest`
-* Alerts (planned):
-  `https://api.weather.gov/alerts/active`
+### Current behavior (v3.0.0)
+* The flag is accepted and validated.
+* The selected provider is recorded in metadata.
+* The engine may still use both providers depending on field availability.
 
-**Metadata Emitted**
+### Planned behavior (v3.1+)
+* Strict provider isolation
+* Automatic provider selection based on country
+* Optional fallback logic
+
+---
+
+## 5. Weather Provider Details
+
+### 5.1 NWS
+
+#### Base Endpoints
+* Points: `https://api.weather.gov/points/<lat>,<lon>`
+* Gridpoint forecast: `https://api.weather.gov/gridpoints/<office>/<gridX>,<gridY>/forecast`
+* Hourly forecast: `https://api.weather.gov/gridpoints/<office>/<gridX>,<gridY>/forecast/hourly`
+* Observations: `https://api.weather.gov/stations/<station>/observations/latest`
+* Alerts: `https://api.weather.gov/alerts/active`
+
+#### Metadata Emitted
 * nws_office
 * grid_x / grid_y
 * station_id
@@ -105,141 +134,97 @@ provider_reason
 * observation_url
 * forecast_url
 * hourly_url
+* alerts_url
 
-NWS provides the highest‑resolution US data.
+### 5.2 Open‑Meteo
 
-### 4.2 Open‑Meteo
-Base Endpoint
+Base Endpoint:
+`https://api.open-meteo.com/v1/forecast`
 
-```Code
-https://api.open-meteo.com/v1/forecast
-```
-
-**Capabilities**
+#### Capabilities
 * hourly forecast
 * daily/weekly forecast
-* dewpoint/humidity
-* sunrise/sunset
-* astronomy (planned)
-* alerts (optional)
+* dewpoint
+* humidity
+* cloudcover
+* visibility
+* pressure_msl
+* precipitation probability
 
-**Metadata Emitted**
+#### Metadata Emitted
 * openmeteo_url
 * hourly_fields
 * daily_fields
 * timezone
 * model metadata
 
-Open‑Meteo provides global coverage and consistent physics.
+---
 
-## 5. Location Provider Details
-### 5.1 ZIP Resolution
-Used when input matches:
+## 6. Location Provider Details
 
-```Code
-^\d{5}$
-```
+### 6.1 ZIP Resolution
+Provider: Zippopotam.us
+URL: `https://api.zippopotam.us/US/<zip>`
 
-**Provider:** Zippopotam.us
-#### URL:
+### 6.2 City/Region Resolution
+Provider: Open‑Meteo Geocoding
+URL: `https://geocoding-api.open-meteo.com/v1/search?name=<query>`
 
-```Code
-https://api.zippopotam.us/US/<zip>
-```
+### 6.3 Direct Latitude/Longitude
+Provider: direct
+Metadata: latitude, longitude
 
-**Metadata Emitted**
-* location_provider: "zippopotam.us"
-* location_provider_url
-* city
-* state
-* country
-* latitude
-* longitude
+---
 
-### 5.2 City/Region Resolution
-Used when input is not a ZIP and not lat/lon.
+## 7. Provider Metadata
 
-**Provider:** Open‑Meteo Geocoding
-#### URL:
+All output modes include a provider block containing:
 
-```Code
-https://geocoding-api.open-meteo.com/v1/search?name=<query>
-```
-
-**Metadata Emitted**
-* location_provider: "open-meteo"
-* location_provider_url
-* city
-* admin1
-* country_code
-* latitude
-* longitude
-
-### 5.3 Direct Latitude/Longitude
-Used when input matches:
-
-```Code
-<lat>,<lon>
-```
-
-**Provider:** direct
-**Metadata Emitted**
-* location_provider: "direct"
-* location_provider_url: null
-* latitude
-* longitude
-
-## 6. Provider Metadata
-All output modes include a `provider` block containing:
 | Field | Description |
 | --- | --- |
-| provider_selected | "nws" or "open-meteo" |
-| provider_fallback | true/false |
-| provider_reason | Why the provider was selected |
-| provider_urls | All URLs used |
-| provider_capabilities | Capabilities of the selected provider |
+| provider_selected | Provider chosen via ``--provider`` |
+| provider_urls | All URLs used during the run |
 | provider_metadata | Provider‑specific metadata |
 
-This block is stable and schema‑aligned.
+Removed fields (v2.x only):
+`provider_fallback`, `provider_reason`
 
-## 7. Fallback Behavior
-Fallback behavior is deterministic:
-1. Try NWS
-2. If NWS fails → try Open‑Meteo
-3. If Open‑Meteo fails → use cached data
-4. If cache missing → error
-
-Fallback reasons include:
-* provider timeout
-* provider HTTP error
-* missing fields
-* normalization failure
-* merge failure
-* location outside NWS coverage
-
-Fallback is logged in metadata.
+---
 
 ## 8. Deterministic Guarantees
-`check_weather` guarantees:
-* deterministic provider selection
-* deterministic fallback behavior
+
+check_weather guarantees:
 * deterministic URL construction
 * deterministic metadata emission
-* no randomization
+* deterministic normalization
+* deterministic merge logic
+* deterministic cache behavior
+* no fallback logic
 * no silent provider switching
-* no ambiguous provider names
 * stable schema across all modes
 
-These guarantees ensure predictable monitoring behavior across all supported platforms.
+---
 
-## 9. Examples
+## 9. Planned Provider Isolation (v3.1+)
+
+Future versions will introduce:
+* strict provider isolation
+* automatic provider selection based on country
+* optional fallback logic
+* provider‑specific output blocks
+* full enforcement of the --provider flag
+
+---
+
+## 10. Examples
+
 ### ZIP Input
 
 ```Code
 Input: 67576
 Location Provider: zippopotam.us
-Weather Provider: nws (preferred)
-Fallback: open-meteo if NWS fails
+Weather Provider (selected): nws
+Hybrid Behavior: Open‑Meteo may supply dewpoint/cloudcover/visibility
 ```
 
 ### City Input
@@ -247,14 +232,28 @@ Fallback: open-meteo if NWS fails
 ```Code
 Input: "Saint John, KS"
 Location Provider: open-meteo
-Weather Provider: nws (preferred)
+Weather Provider (selected): nws
+Hybrid Behavior: Open‑Meteo supplies geocoding + supplemental fields
 ```
 
 ### Lat/Lon Input
+
 ```Code
 Input: "38.03,-98.76"
 Location Provider: direct
-Weather Provider: nws (preferred)
+Weather Provider (selected): nws
+Hybrid Behavior: Open‑Meteo may supply supplemental fields
 ```
 
-**End of Provider_Architecture.md**
+---
+
+## 11. See Also
+* [CHANGELOG](CHANGELOG.md)
+* [Architecture](Architecture.md)
+* [FLAGS.md](../../../docs/FLAGS.md)
+* [Logging.md](Logging.md)
+* [Enforcement](Enforcement.md)
+* [Installation](Installation.md)
+* [Operation](Operation.md)
+* [Metadata_schema.md](Metadata_schema.md)
+* [Usage](Usage.md)

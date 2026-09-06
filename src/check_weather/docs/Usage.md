@@ -1,99 +1,160 @@
 # Usage for check_weather v3.0.0
 
+Defines all CLI flags, output modes, and usage patterns for check_weather v3.0.0.
+
 **Part of:** NMS_Tools Monitoring Suite  
-**Script:** export_icons.py  
-**Version:** 3.0.0  
+**Document:** Usage Reference
+**Version:** 3.0.0 
 **Author:** Leon McClatchey, Linktech Engineering LLC  
 **License:** MIT  
-**Last Updated:** 2026‑08‑16
-
-`check_weather` retrieves current, hourly, and weekly weather data using a deterministic multi‑provider engine (NWS + Open‑Meteo). It resolves locations, normalizes provider fields, merges hourly/daily data, computes meteorological indexes, applies unit conversion, and outputs structured JSON suitable for CLI, CGI, dashboards, and automation.
-
-This document describes all CLI flags, output modes, examples, and integration notes for **NMS_Tools v2.0.0.**
+**Requires:** Python 3.12+  (development only; not required for frozen binary)
+**Last Updated:** 2026-09-06
 
 ## Table of Contents
-1. [Basic Invocation](#1-basic-invocation)
-2. [Command‑Line Options](#2-commandline-options)
-3. [Output Modes](#3-output-modes)
-4. [Location Formats](#4-location-formats)
-5. [Examples](#5-examples)
-6. [Provider Selection](#6-provider-selection)
-7. [Caching Behavior](#7-caching-behavior)
-8. [Error Handling](#8-error-handling)
-9. [Deterministic Guarantees](#9-deterministic-guarantees)
+1. [Overview](#1-overview)
+2. [Basic Invocation](#2-basic-invocation)
+3. [Command‑Line Options](#3-commandline-options)
+4. [Output Modes](#4-output-modes)
+5. [Location Formats](#5-location-formats)
+6. [Examples](#6-examples)
+7. [Provider Selection](#7-provider-selection)
+8. [Caching Behavior](#8-caching-behavior)
+9. [Error Handling](#9-error-handling)
+10. [Deterministic Guarantees](#10-deterministic-guarantees)
+11. [See Also](#11-see-also)
 
-## 1. Basic Invocation
-```bash
+---
+
+## 1. Overview
+
+`check_weather` v3.0.0 retrieves current, hourly, and weekly weather data using a deterministic multi‑provider engine built on `PythonTools.weather`. The v3 engine operates in a **hybrid provider model**, where both NWS and Open‑Meteo may be used depending on mode, field availability, and location type. Provider fallback and strict provider isolation are not yet implemented; these are planned for v3.1+.
+
+The tool resolves locations, normalizes provider fields, merges hourly/daily data, applies unit conversion, evaluates thresholds, and outputs structured JSON suitable for CLI, CGI, dashboards, and automation.
+
+---
+
+## 2. Basic Invocation
+```Bash
 check_weather.py -l "<location>"
 ```
-The <location> may be:
+
+The `<location>` may be:
 * `"Wichita, KS"`
 * `"Berlin, DE"`
 * `"67576"`
 * `"38.0,-98.7"`
 
-The resolver determines the correct provider and emits full metadata.
+The resolver uses the `--country` value (default: US) when interpreting the location.
 
-## 2. Command‑Line Options
+---
+
+## 3. Command‑Line Options
+
 ### Required
 ```Code
 -l, --location <value>
 ```
-Location string to resolve.
+
+Primary location input.
+Accepts raw or encrypted free‑form strings.
+All location resolution begins from this value.
+
+##### Deprecated Location Aliases
+```Code
+--zip <value>
+--city <value>
+--lat <value>
+--lon <value>
+```
+These switches normalize into `--location` internally but were **never validated** in v3.0.0 and are now **deprecated**.
+They may be removed in future versions.
+
+`--city` accepts either `"City"` or `"City, State"`.
+
+#### Country Selection
+```Code
+--country <code>
+```
+
+Specifies the country for location resolution.
+Defaults to **US**.
+
+Examples:
+* `--country US`
+* `--country DE`
+* `--country CA`
+
+This affects **location resolution only**.
+It does **not** select weather providers.
 
 ### Mode Selection
 ```Code
---current     Output current conditions
 --hourly      Output hourly forecast
 --weekly      Output weekly forecast
 --full        Output full merged structure (planned)
 ```
-If no mode is provided, --current is used.
+
+Behavior:
+* If **no mode flag** is provided, the mode defaults to **current**.
+* There is **no** `--current` flag.
+* Nagios/Icinga mode only supports current.
+* Using `--hourly`, `--weekly`, or `--full` without `--json` or `--verbose` raises an error.
 
 ### Output Format
 ```Code
---nagios      Nagios/Icinga single-line output (default)
 --json -j        Structured JSON
 --verbose -v     Multi-line diagnostic output
---quiet -q      Exit code only (no output)
+--quiet -q       Exit code only (no output)
 ```
-If no mode is provided, **Nagios/Icinga mode is used.**
+
+Behavior:
+* If none of `--json`, `--verbose`, or `--quiet` is provided, the tool defaults to Nagios/Icinga mode.
+* There is no `--nagios` flag.
+* Nagios mode is implicit.
 
 ### Provider Control (Optional)
 ```Code
 --provider nws
 --provider open-meteo
 ```
-Behavior:
+
+Behavior in v3.0.0:
 * If no provider is specified, the engine defaults to NWS.
-* If NWS is unavailable or fails, the engine falls back to Open‑Meteo.
-* If both providers fail, the engine falls back to cache.
-* If no cache exists, the engine returns an error (or UNKNOWN in Nagios mode).
+* The selected provider is recorded in metadata.
+* **Provider isolation is not yet implemented.**
+* The engine may still use both providers depending on field availability.
+* No provider fallback exists; only cache fallback applies.
 
-This matches the actual v2.0.0 provider architecture.
-
-Caching Options
+### Caching Options
 ```Code
---no-cache        Disable cache read/write
---cache-info      Show cache metadata only
+--ignore-cache     Skip cache read; always attempt live fetch
+--ignore-ttl       Use cached data regardless of age
+--cache-info       Show cache metadata in output
+--force-cache      Return cached data only; never call provider APIs
 ```
+
 Caching is enabled by default.
 
-## 3. Output Modes
-### 3.1 Nagios/Icinga Mode (default)
-Produces:
+---
 
-```Code
-OK - Temp 72°F, Wind 8 mph, Gust 12 mph | temp=72 wind=8 gust=12 precip=0 clouds=20
-```
+## 4. Output Modes
+
+### 4.1 Nagios/Icinga Mode (default)
+Triggered when no output mode flag is provided.
+
+Produces:
+`OK - Temp 72°F, Wind 8 mph, Gust 12 mph | temp=72 wind=8 gust=12 precip=0 clouds=20`
+
 Characteristics:
 * single line
 * status text at beginning
 * perfdata always included
 * thresholds applied
 * exit codes follow Nagios/Icinga conventions
+* only valid in current mode
 
-### 3.2 JSON Mode
+### 4.2 JSON Mode
+
 Produces structured JSON including:
 * normalized fields
 * merged hourly/daily data
@@ -101,10 +162,12 @@ Produces structured JSON including:
 * provider metadata
 * resolver metadata
 * cache metadata
+* runtime metadata
 
 Recommended for dashboards, CGI, and automation.
 
-### 3.3 Verbose Mode
+### 4.3 Verbose Mode
+
 Adds:
 * resolver path
 * provider URLs
@@ -117,8 +180,8 @@ Adds:
 
 Verbose mode is multi‑line and intended for diagnostics.
 
-### 3.4 Quiet Mode
-```Code
+### 4.4 Quiet Mode
+```Bash
 --quiet
 ```
 
@@ -130,80 +193,121 @@ Useful for:
 * conditional logic
 * silent monitoring checks
 
-## 4. Location Formats
+---
+
+## 5. Location Formats
+
 ### ZIP Code
-```Code
+```Bash
 check_weather.py -l 67576
 ```
-Uses Zippopotam.us → NWS/Open‑Meteo.
+
+Uses Zippopotam.us → NWS/Open‑Meteo hybrid.
+(`--zip` is deprecated.)
 
 ### City + Region
-```Code
+```Bash
 check_weather.py -l "Wichita, KS"
 ```
-Uses Open‑Meteo Geocoding → NWS/Open‑Meteo.
+
+Uses Open‑Meteo Geocoding → NWS/Open‑Meteo hybrid.
+(`--city` is deprecated.)
 
 ### Latitude/Longitude
-```Code
+```Bash
 check_weather.py -l "38.0,-98.7"
 ```
-Uses coordinates directly.
 
-## 5. Examples
+Uses coordinates directly.
+(`--lat` / `--lon` are deprecated.)
+
+### International City
+```Bash
+check_weather.py -l "Berlin" --country DE
+```
+
+Uses Open‑Meteo Geocoding → Open‑Meteo weather.
+NWS is US‑only and cannot serve international locations.
+
+---
+
+## 6. Examples
+
 ### Default (Nagios/Icinga)
-```bash
+```Bash
 check_weather -l "Wichita, KS"
 ```
+
 ### JSON Output
-```bash
-check_weather -l "Berlin, DE" --json
-```
-### Verbose Diagnostic Output
-```bash
-check_weather -l "Wichita, KS" --hourly --verbose
-```
-### Quiet Mode
-```bash
-check_weather -l "Wichita, KS" --quiet
-```
-### Weekly Forecast
-```bash
-check_weather -l "Wichita, KS" --weekly
-```
-### Force Open‑Meteo
-```bash
-check_weather -l "Berlin, DE" --provider open-meteo
+```Bash
+check_weather -l "Berlin" --country DE --json
 ```
 
-## 6. Provider Selection
-The engine selects providers deterministically:
-1. Prefer NWS when coverage exists
-2. Fallback to Open‑Meteo
-3. Fallback to cache
-4. Error if no cache exists
+### Verbose Diagnostic Output
+```Bash
+check_weather -l "Wichita, KS" --hourly --verbose
+```
+
+### Quiet Mode
+```Bash
+check_weather -l "Wichita, KS" --quiet
+```
+
+### Weekly Forecast
+```Bash
+check_weather -l "Wichita, KS" --weekly
+```
+
+### Force Open‑Meteo
+```Bash
+check_weather -l "Berlin" --country DE --provider open-meteo
+```
+
+---
+
+## 7. Provider Selection
+
+The v3.0.0 engine uses a **hybrid provider model**:
+* Provider selection is explicit via `--provider`.
+* Provider isolation is not yet implemented.
+* No provider fallback exists.
+* Only cache fallback applies.
 
 Provider metadata includes:
 * provider_selected
+* provider_urls
+* provider_metadata
+
+Removed fields (v2.x only):
 * provider_fallback
 * provider_reason
-* provider_urls
 
-## 7. Caching Behavior
+---
+
+## 8. Caching Behavior
+
 Caching stores:
 * current
 * hourly
 * weekly
+* raw provider data
 * metadata
-* provider info
-* cache_id
-* cache_age
+* timestamps
 
 Cache is used when:
-* provider fails
-* provider is unreachable
-* user requests cache info
+* provider APIs fail
+* `--force-cache` is set
+* `--ignore-ttl` is set
+* `--cache-info` is requested
 
-## 8. Error Handling
+Cache TTL:
+* weather: 15 minutes
+* location: 24 hours
+
+---
+
+## 9. Error Handling
+
 Errors include:
 * resolver errors
 * provider errors
@@ -222,18 +326,32 @@ All errors produce deterministic JSON with:
 
 Verbose mode prints full diagnostics.
 
-## 9. Deterministic Guarantees
-`check_weather` guarantees:
-*  deterministic provider selection
-* deterministic fallback behavior
+---
+
+## 10. Deterministic Guarantees
+
+check_weather guarantees:
 * deterministic normalization
 * deterministic merge behavior
 * deterministic index computation
 * deterministic unit conversion
+* deterministic cache behavior
+* deterministic URL construction
 * stable schema
 * reproducible output
-* logged fallback behavior
+* no provider fallback
+* no silent provider switching
 
-These guarantees ensure predictable monitoring behavior across all supported platforms.
+---
 
-End of Usage.md
+## 11. See Also
+* [CHANGELOG](CHANGELOG.md)
+* [Architecture](Architecture.md)
+* [FLAGS.md](../../../docs/FLAGS.md)
+* [Logging.md](Logging.md)
+* [Enforcement](Enforcement.md)
+* [Installation](Installation.md)
+* [Operation](Operation.md)
+* [Metadata_schema.md](Metadata_schema.md)
+* [Provider_Architecture](Provider_Architecture.md)
+                                                                                                       

@@ -1,28 +1,30 @@
 # Logging Reference -- check_weather
 
 **Part of:** NMS_Tools Monitoring Suite  
-**Script:** export_icons.py  
-**Version:** 3.0.0  
+**Document:** Logging Reference
+**Version:** 3.0.0 
 **Author:** Leon McClatchey, Linktech Engineering LLC  
 **License:** MIT  
-**Last Updated:** 2026‑08‑16
+**Requires:** Python 3.12+  (development only; not required for frozen binary)
+**Last Updated:** 2026-08-16
 
 ## Table of Contents
 1. [Enabling Logging](#1-enabling-logging)
 2. [Log Rotation](#2-log-rotation)
 3. [Log Structure](#3-log-structure)
-  * [START](#start)
-  * [LOCATION](#location)
-  * [WEATHER](#weather)
-  * [THRESHOLDS](#thresholds)
-  * [RESULT](#result)
-  * [END](#end)
+    1. [START](#31-start)
+    2. [LOCATION](#32-location)
+    3. [WEATHER](33-#weather)
+    4. [THRESHOLDS](#34-thresholds)
+    5. [RESULT](#35-result)
+    6. [END](#36-end)
 4. [Logging Guarantees](#4-logging-guarantees)
 5. [When Logging Is Useful](#5-when-logging-is-useful)
 6. [When Logging Is Not Recommended](#6-when-logging-is-not-recommended)
 7. [Logging Behavior in Nagios Mode](#7-logging-behavior-in-nagios-mode)
-  * [When Logging Is Disabled](#when-logging-is-disabled)
-  * [When Logging Is Enabled](#when-logging-is-enabled)
+    1. [When Logging Is Disabled](#71-when-logging-is-disabled)
+    2. [When Logging Is Enabled](#72-when-logging-is-enabled)
+8. [See Also](#8-see-also)
 
 ## 1. Enabling Logging
 
@@ -110,7 +112,7 @@ Each invocation produces a structured, multi‑section log entry.
 [END]
 ```
 
-### START
+### 3.1 START
 
 Contains metadata about the invocation:
 * Timestamp
@@ -120,7 +122,7 @@ Contains metadata about the invocation:
 * Weather provider
 * Logging directory
 
-### LOCATION
+### 3.2 LOCATION
 
 Includes all resolved location metadata:
 * Input
@@ -131,7 +133,7 @@ Includes all resolved location metadata:
 
 Matches the `resolved_location` JSON block.
 
-### WEATHER
+### 3.3 WEATHER
 
 Contains the weather metrics used for evaluation:
 * Source (`Live API`, `Cache`, `Forced Cache`, `Cache (TTL ignored)`)
@@ -140,7 +142,7 @@ Contains the weather metrics used for evaluation:
 * Condition code + text
 * Weather API URL
 
-### THRESHOLDS
+### 3.4 THRESHOLDS
 
 Appears only when thresholds are provided.
 
@@ -148,14 +150,14 @@ Includes:
 * All thresholds passed on the command line
 * Evaluation result (OK, WARNING, CRITICAL)
 
-### RESULT
+### 3.5 RESULT
 
 Final Nagios‑style result:
 * Status
 * Message
 * Runtime in milliseconds
 
-### END
+### 3.6 END
 
 Marks the end of the log entry.
 
@@ -210,7 +212,7 @@ This guarantees:
 * **Deterministic performance**
 * **Clean monitoring output**
 
-### When Logging Is Disabled
+### 7.1 When Logging Is Disabled
 
 Logging is disabled when:
 * No output mode flags are provided
@@ -218,7 +220,7 @@ Logging is disabled when:
 * The tool is invoked by Nagios/Icinga/Thruk
 * Even if --log-dir is supplied, logging will not activate in Nagios mode
 
-### When Logging Is Enabled
+### 7.2 When Logging Is Enabled
 
 Logging is enabled only when:
 * --verbose is used
@@ -228,3 +230,14 @@ Logging is enabled only when:
 Any mode other than default Nagios mode activates logging.
 
 This ensures logging is available for diagnostics and operator workflows — but never during monitoring execution.
+
+## 8. See Also
+* [CHANGELOG](CHANGELOG.md)
+* [Architecture](Architecture.md)
+* [FLAGS.md](../../../docs/FLAGS.md)
+* [Metadata_schema.md](Metadata_schema.md)
+* [Enforcement](Enforcement.md)
+* [Installation](Installation.md)
+* [Operation](Operation.md)
+* [Provider_Architecture](Provider_Architecture.md)
+* [Usage](Usage.md)
