@@ -1,5 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+import pathlib
+
+project_root = pathlib.Path(__file__).resolve().parents[1]
+version_file = project_root / "VERSION"
+
 block_cipher = None
 
 repo_root = os.getcwd()
@@ -8,7 +13,7 @@ a = Analysis(
     [os.path.join(repo_root, 'src/check_cert/check_cert.py')],
     pathex=[os.path.join(repo_root, 'src/check_cert')],
     binaries=[],
-    datas=[],
+    datas=[("../VERSION", "VERSION")],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

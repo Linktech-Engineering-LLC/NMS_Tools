@@ -6,7 +6,7 @@ File: check_html.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-21
- Modified: 2026-08-29
+Modified: 2026-09-08
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -53,23 +53,11 @@ from PythonTools.nagios import (
     critical_exit,
     build_result_object,
 )
-from PythonTools.utils.common import normalize_list
+from PythonTools.utils.common import normalize_list, load_version
 # Root of the suite (two levels up from the tool script)
-SUITE_ROOT = Path(__file__).resolve().parent.parent
+SUITE_ROOT = Path(__file__).resolve().parents[2]
+VERSION = load_version(Path(__file__).resolve().parents[1])
 
-def load_version() -> str:
-    """
-    Load the suite VERSION file if present.
-    If missing, return a fallback string indicating external execution.
-    """
-    version_file = SUITE_ROOT / "VERSION"
-
-    try:
-        return version_file.read_text(encoding="utf-8").strip()
-    except Exception:
-        return "External to NMS_TOOLS Suite"
-
-VERSION = load_version()
 MIN_MAJOR = 3
 MIN_MINOR = 8
 # Other Global Constants

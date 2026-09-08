@@ -6,7 +6,7 @@ File: check_ticker.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-06-17
- Modified: 2026-08-29
+Modified: 2026-09-08
 Required: Python 3.10dist+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -50,23 +50,15 @@ from PythonTools.nagios import (
     BaseNagiosParser,
     should_output,
 )
-from PythonTools.utils.common import normalize_path, json_output
+from PythonTools.utils.common import normalize_path, json_output, load_version
 
 # -------------------------------------------------------------------
 # Suite metadata
 # -------------------------------------------------------------------
-SUITE_ROOT = Path(__file__).resolve().parents[1]
+SUITE_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_NAME = Path(sys.argv[0]).stem
 SCRIPT_VERSION = "1.0.0"
-
-def load_version() -> str:
-    version_file = SUITE_ROOT.parent / "VERSION"
-    try:
-        return version_file.read_text(encoding="utf-8").strip()
-    except Exception:
-        return "External to NMS_TOOLS Suite"
-
-VERSION = load_version()
+VERSION = load_version(Path(__file__).resolve().parents[1])
 
 # -------------------------------------------------------------------
 # Argument parser
@@ -81,19 +73,21 @@ def build_parser() -> BaseNagiosParser:
         script_version=SCRIPT_VERSION,
         suite_version=VERSION,
     )
-
-    parser.add_argument(
+    # Remove the inherited command positional
+    parser.remove_command_positional()
+    # Now add your ticker positional
+    parser.parser.add_argument(
         "ticker",
         help="Ticker symbol (e.g., AAPL, BTC, GOLD, US10Y)",
     )
 
-    core = parser.add_group("Core Options")
-    core.add_argument("--history", type=int, metavar="DAYS", help="Fetch N days of historical data")
-    core.add_argument("--trend", action="store_true", help="Enable trend analysis (direction + slope)")
-    core.add_argument("--trend-volatility", action="store_true",help="Include volatility (standard deviation of history)")
-    core.add_argument("--trend-strength", action="store_true", help="Include trend strength (slope normalized by volatility)")
-    core.add_argument("--trend-reversal", action="store_true", help="Detect mid‑window trend reversals")
-    core.add_argument("--trend-windows", action="store_true", help="Compute short/medium/long window trends")
+    trnd = parser.add_group("Trend Options")
+    trnd.add_argument("--history", type=int, metavar="DAYS", help="Fetch N days of historical data")
+    trnd.add_argument("--trend", action="store_true", help="Enable trend analysis (direction + slope)")
+    trnd.add_argument("--trend-volatility", action="store_true",help="Include volatility (standard deviation of history)")
+    trnd.add_argument("--trend-strength", action="store_true", help="Include trend strength (slope normalized by volatility)")
+    trnd.add_argument("--trend-reversal", action="store_true", help="Detect mid‑window trend reversals")
+    trnd.add_argument("--trend-windows", action="store_true", help="Compute short/medium/long window trends")
 
     filt = parser.add_group("Nagios Behavior Filters")
     filt.add_argument("--require-up", action="store_true", help="Require upward trend → CRITICAL if not")

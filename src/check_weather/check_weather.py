@@ -61,7 +61,7 @@ from PythonTools.nagios import (
     should_output,
     nagios_summary,
 )
-from PythonTools.utils import strip_none
+from PythonTools.utils import strip_none, load_version
 from PythonTools.weather import (
     WEATHER_PROVIDERS,
     convert_units_mode_aware,
@@ -80,25 +80,12 @@ from PythonTools.weather.providers import (
     fetch_valid_nws_observation
 )
 # Root of the suite (two levels up from the tool script)
-SUITE_ROOT = Path(__file__).resolve().parent.parent
-
-def load_version() -> str:
-    """
-    Load the suite VERSION file if present.
-    If missing, return a fallback string indicating external execution.
-    """
-    version_file = SUITE_ROOT / "VERSION"
-
-    try:
-        return version_file.read_text(encoding="utf-8").strip()
-    except Exception:
-        return "External to NMS_TOOLS Suite"
-
-VERSION = load_version()
+SUITE_ROOT = Path(__file__).resolve().parents[2]
+VERSION = load_version(Path(__file__).resolve().parents[1])
 MIN_MAJOR = 3
 MIN_MINOR = 8
 # Other Global Constants
-SCRIPT_VERSION = "2.2.0"
+SCRIPT_VERSION = "3.0.0"
 SCRIPT_NAME = Path(sys.argv[0]).stem
 # Weather Constants
 DEFAULT_PROVIDER = "nws"
@@ -494,13 +481,13 @@ def build_normal_message(data: Dict[str, Any], args: argparse.Namespace) -> str:
     if args.units == "imperial":
         t = data.get("temperature_f")
         w = data.get("wind_mph")
-        if t is None or w is None:
+        if t is None and w is None:
             return "Weather data unavailable"
         return f"Weather normal: {t:.2f}°F, {w:.2f} mph"
     else:
         t = data.get("temperature_c")
         w = data.get("wind_kph")
-        if t is None or w is None:
+        if t is None and w is None:
             return "Weather data unavailable"
         return f"Weather normal: {t:.2f}°C, {w:.2f} kph"
 def output_and_exit(status: int, payload: Dict[str, Any], args, flags, weather_mode: str):
@@ -830,7 +817,6 @@ def fetch_weather(
             live = fetch_fn(lat, lon, timeout, meta)
         else:                
             live, url = fetch_fn(lat, lon, timeout, meta)
-        live["alerts"] = fetch_cached_alerts(lat, lon, timeout)
     except Exception:
         live = None
 
@@ -845,8 +831,11 @@ def fetch_weather(
                 live["days"] = merge_daily_periods(live["days"], hourly_live["hours"])
             case "hourly":
                 live["hours"] = reorder_hourly_current_first(live["hours"], meta["timezone"])
+            case "current":
+                live = {"current": live}
             case _:
                 pass
+        live["alerts"] = fetch_cached_alerts(lat, lon, timeout)
         data = convert_units_mode_aware(live, units, mode, meta, logging_enabled, logger)
         save_weather_cache(cache_id, data)
         return normalize_output(data), url, "live", 0, True
@@ -943,7 +932,7 @@ def main() -> None:
     # STATUS EVALUATION (current only)
     # -----------------------------
     if weather_mode == "current":
-        status, message = evaluate_weather(data, args)
+        status, message = evaluate_weather(data["current"], args)
     else:
         # Hourly/weekly do not produce Nagios-style status
         status, message = 0, f"{weather_mode.capitalize()} forecast retrieved"

@@ -6,7 +6,7 @@ File: check_cert.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-17
- Modified: 2026-08-29
+Modified: 2026-09-08
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -45,23 +45,11 @@ from PythonTools.nagios import (
     BaseNagiosParser,
     early_exit,
 )
+from PythonTools.utils.common import load_version
 
 # Root of the suite (two levels up from the tool script)
-SUITE_ROOT = Path(__file__).resolve().parent.parent
-
-def load_version() -> str:
-    """
-    Load the suite VERSION file if present.
-    If missing, return a fallback string indicating external execution.
-    """
-    version_file = SUITE_ROOT / "VERSION"
-
-    try:
-        return version_file.read_text(encoding="utf-8").strip()
-    except Exception:
-        return "External to NMS_TOOLS Suite"
-
-VERSION = load_version()
+SUITE_ROOT = Path(__file__).resolve().parents[2]
+VERSION = load_version(Path(__file__).resolve().parents[1])
 MIN_MAJOR = 3
 MIN_MINOR = 8
 # Other Constants
@@ -89,12 +77,12 @@ def build_parser():
     # -----------------------------
     # Connection Options
     # -----------------------------
-    core = nag.add_group("Core Options")
-    core.add_argument("-H", "--host", required=True, help="Target hostname or IP")
-    core.add_argument("-p", "--port", type=int, default=443, help="Port to connect to")
-    core.add_argument("--sni", help="Override SNI value (default: host)")
-    core.add_argument("--timeout", type=int, default=5, help="Connection timeout in seconds")
-    core.add_argument("--insecure", action="store_true", help="Skip certificate validation during handshake")
+    host = nag.add_group("Host Options")
+    host.add_argument("-H", "--host", required=True, help="Target hostname or IP")
+    host.add_argument("-p", "--port", type=int, default=443, help="Port to connect to")
+    host.add_argument("--sni", help="Override SNI value (default: host)")
+    host.add_argument("--timeout", type=int, default=5, help="Connection timeout in seconds")
+    host.add_argument("--insecure", action="store_true", help="Skip certificate validation during handshake")
 
     # -----------------------------
     # TLS Requirements

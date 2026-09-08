@@ -6,7 +6,7 @@ File: export_icons.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-05-04
- Modified: 2026-08-29
+Modified: 2026-09-08
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -32,12 +32,17 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-from recolor_engine.analyzer import analyze_svg
-from recolor_engine.recolor import recolor
+from PythonTools.log_helpers.factory import LoggerFactory
+from PythonTools.weather.recolor_engine import analyze_svg
+from PythonTools.weather.recolor_engine.recolor import recolor
+from PythonTools.utils.common import load_version
+from PythonTools.parser import BaseScriptParser
+from PythonTools.nagios import build_version_string
 # Global Constants
 SUITE_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_VERSION = "1.0.0"
 SCRIPT_NAME = Path(sys.argv[0]).stem
+VERSION = load_version(SUITE_ROOT)
 SRC_DIR = Path(__file__).resolve().parent / "svg"
 DST_DIR = Path(__file__).resolve().parent / "web" / "icons"
 DEFAULT_LOG_DIR = Path.home() / "logs"
@@ -51,50 +56,13 @@ STATUS_OK = 0
 STATUS_WARNING = 1
 STATUS_CRITICAL = 2
 STATUS_UNKNOWN = 3
-# ----------------------------------------------------------------------------
-# Python Version
-# ----------------------------------------------------------------------------
-def load_version() -> str:
-    """
-    Load the suite VERSION file if present.
-    If missing, return a fallback string indicating external execution.
-    """
-    version_file = SUITE_ROOT / "VERSION"
-
-    try:
-        return version_file.read_text(encoding="utf-8").strip()
-    except Exception:
-        return "External to NMS_TOOLS Suite"
-
-VERSION = load_version()
 MIN_MAJOR = 3
 MIN_MINOR = 8
-# -----------------------------
-# Custom Formatter
-# -----------------------------
-class CustomFormatter(
-    argparse.ArgumentDefaultsHelpFormatter,
-    argparse.RawDescriptionHelpFormatter
-):
-    def _get_help_string(self, action):
-        help_text = action.help or ""
-        if "%(default)" in help_text:
-            return help_text
-        if action.default in (None, False):
-            return help_text
-        return f"{help_text} (default: {action.default})"
-class CheckArgError(Exception):
-    pass
-class CheckArgumentParser(argparse.ArgumentParser):
-    def error(self, message):
-        print(f"ERROR: {message}\n")
-        self.print_help()
-        sys.exit(STATUS_UNKNOWN)
 # ----------------------------------------------
 # Argument Parser
 # -----------------------------------------------
-def build_parser() -> argparse.Namespace:
-    parser = CheckArgumentParser(
+def build_parser():
+    parser = BaseScriptParser(
         prog=SCRIPT_NAME,
         description=(
             "Icon Export Tool\n\n"
@@ -102,63 +70,32 @@ def build_parser() -> argparse.Namespace:
             "check_weather.py. Intended for use during development and "
             "deployment of the NMS_Tools weather demo."
         ),
-        formatter_class=CustomFormatter,
-        add_help=True,
+        version_string = build_version_string(SCRIPT_NAME, SCRIPT_VERSION, VERSION)
     )
 
+    # Remove irrelevant global groups
+    parser.remove_group("Config Options")
+    parser.remove_group("Inventory Options")
+    parser.remove_group("Vault Options")
+
+    # Remove global JSON/color flags
+    parser.remove_flag("--json")
+    parser.remove_flag("--color")
+
     # Core options
-    core = parser.add_argument_group("Core Options")
-    core.add_argument(
+    paths = parser.add_group("Paths Options")
+    paths.add_argument(
         "-s", "--src",
         default=str(SRC_DIR),
         help="Source directory containing raw SVG icons",
     )
-    core.add_argument(
+    paths.add_argument(
         "-d", "--dst",
         default=str(DST_DIR),
         help="Destination directory for exported/recolored icons",
     )
-    core.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Simulate actions without writing files",
-    )
 
-    # Logging options
-    log = parser.add_argument_group("Logging Options")
-    log.add_argument(
-        "-l", "--log-dir",
-        dest="log_dir",
-        default=str(DEFAULT_LOG_DIR),
-        help="Directory to store logs (optional). If omitted, logging is disabled.",
-    )
-    log.add_argument(
-        "--log-max-mb",
-        type=int,
-        default=50,
-        dest="log_max_mb",
-        help="Maximum log size in MB before rotation.",
-    )
-
-    # Output options
-    out = parser.add_argument_group("Output Options")
-    out.add_argument(
-        "-v", "--verbose",
-        action="store_true",
-        help="Detailed output",
-    )
-    out.add_argument(
-        "-V", "--version",
-        action="version",
-        version=(
-            f"NMS_TOOLS Suite Version: {VERSION}\n"
-            f"{SCRIPT_NAME}: {SCRIPT_VERSION}\n"
-            f"Python: {platform.python_version()}"
-        ),
-        help="Show script and Python version",
-    )
-
-    return parser.parse_args()
+    return parser.parse()
 # Manage the Icons
 def extract_icon_list():
     """
@@ -186,21 +123,23 @@ def extract_icon_list():
 def copy_icon(src, dst):
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     shutil.copy2(src, dst)
-def process_icon(icon, meta):
+def process_icon(icon, meta, logger = None):
     src = SRC_DIR / icon
     dst = DST_DIR / icon
 
     if not src.exists():
         msg = f"[MISSING] {icon}"
         print(msg)
-        write_log(meta, msg)
+        if logger:
+            logger.info(meta, msg)
         return
 
     # DRY RUN
     if meta["dry_run"]:
         msg = f"[DRYRUN] Would copy {src} → {dst}"
         print(msg)
-        write_log(meta, msg)
+        if logger:
+            logger.info(meta, msg)
         return
 
     # REAL MODE: copy
@@ -239,66 +178,39 @@ def process_icon(icon, meta):
 
     msg = f"[OK] {icon} → groups={active}"
     print(msg)
-    write_log(meta, msg)
+    if logger:
+        logger.info(meta, msg)
 
 # --------------------------------------
 # Logging Functions (export_icons)
 # --------------------------------------
-def ts():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-def write_log(meta, message):
+def initialize_logger(meta):
     log_dir = meta.get("log_dir")
     if not log_dir:
-        return
+        return None
 
     try:
         os.makedirs(log_dir, exist_ok=True)
-        logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
-        with open(logfile, "a", encoding="utf-8") as f:
-            f.write(f"{ts()}; {message}\n")
-    except Exception as e:
-        if not meta.get("_log_warn_emitted"):
-            meta["_log_warn_emitted"] = True
-            warning = f"[WARN] Unable to write to log directory: {log_dir} — {e}"
-            print(warning)
-            meta.setdefault("warnings", []).append(warning)
-def rotate_log_if_needed(meta):
-    log_dir = meta.get("log_dir")
-    if not log_dir:
-        return
 
-    logfile = os.path.join(log_dir, f"{SCRIPT_NAME}.log")
-    if not os.path.exists(logfile):
-        return
+        log_cfg = {
+            "path": os.path.join(log_dir, "export_icons.log"),
+            "log_level": "INFO",
+            "log_max_mb": meta.get("log_max_mb", 50),
+            "archive_mode": "zip",
+            "backup_count": 7,
+            "console_stream": sys.stderr,
+            "console_enabled": meta.get("console_enabled", False),
+            "color": False,
+        }
 
-    max_mb = meta.get("log_max_mb", 50)
-    max_bytes = max_mb * 1024 * 1024
-
-    try:
-        if os.path.getsize(logfile) < max_bytes:
-            return
-
-        archive_path = build_archive_path(meta)
-        shutil.move(logfile, archive_path)
-        compress_file(archive_path)
-
-        with open(logfile, "w", encoding="utf-8") as f:
-            f.write(f"{ts()}; [INFO] log rotated to {os.path.basename(archive_path)}.zip\n")
+        logger_factory = LoggerFactory(log_cfg, "export_icons")
+        return logger_factory.get_logger("main")
 
     except Exception as e:
-        if not meta.get("_log_warn_emitted"):
-            meta["_log_warn_emitted"] = True
-            warn = f"[WARN] Unable to rotate log file '{logfile}': {e}"
-            print(warn)
-            meta.setdefault("warnings", []).append(warn)
-def build_archive_path(meta):
-    ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join(meta["log_dir"], f"{SCRIPT_NAME}_{ts_str}.log")
-def compress_file(path):
-    zip_path = path + ".zip"
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
-        z.write(path, os.path.basename(path))
-    os.remove(path)
+        warn = f"Unable to initialize logger: {e}"
+        print(warn)
+        meta.setdefault("warnings", []).append(warn)
+        return None
 
 def main():
     start = time.time()
@@ -310,40 +222,47 @@ def main():
         "_log_warn_emitted": False,
         "warnings": [],
     }
-    rotate_log_if_needed(meta)
-    write_log(meta, f"[START] export_icons.py dry_run={meta['dry_run']}")
+    logger = initialize_logger(meta)
+    if logger:
+        logger.info(meta, f"[START] export_icons.py dry_run={meta['dry_run']}")
     icons = extract_icon_list()
     print(f"Processing {len(icons)} icons...")
     for icon in icons:
-        process_icon(icon, meta)
+        process_icon(icon, meta, logger)
 
     duration = round(time.time() - start, 3)
-    write_log(meta, f"[SUMMARY] icons={len(icons)} dry_run={meta['dry_run']} duration={duration}s status=success")
-    write_log(meta, f"Total icons: {len(icons)}\n")
-    write_log(meta, "=== Icon Classification Summary ===")
+    if logger:
+        logger.info(meta, f"[SUMMARY] icons={len(icons)} dry_run={meta['dry_run']} duration={duration}s status=success")
+        logger.info(meta, f"Total icons: {len(icons)}\n")
+        logger.info(meta, "=== Icon Classification Summary ===")
     for g in ["sun", "moon", "cloud", "rain", "snow", "thunder", "fog", "wind"]:
-        write_log(meta, f"{g:8}: {STATS[g]}")
+        if logger:
+            logger.info(meta, f"{g:8}: {STATS[g]}")
     # Percentages
-    write_log(meta, "")
-    write_log(meta, "=== Group Coverage Percentages ===")
+    if logger:
+        logger.inf(meta, "")
+        logger.info(meta, "=== Group Coverage Percentages ===")
     for g in ["sun", "moon", "cloud", "rain", "snow", "thunder", "fog", "wind"]:
         pct = (STATS[g] / len(icons)) * 100
-        write_log(meta, f"{g:8}: {STATS[g]:2d}  ({pct:5.1f}%)")
+        if logger:
+            logger.info(meta, f"{g:8}: {STATS[g]:2d}  ({pct:5.1f}%)")
 
     # Histogram of groups per icon
-    write_log(meta, "")
-    write_log(meta, "=== Groups Per Icon Histogram ===")
+    if logger:
+        logger.info(meta, "")
+        logger.info(meta, "=== Groups Per Icon Histogram ===")
     for n in sorted(GROUPS_PER_ICON):
-        write_log(meta, f"{n} groups: {GROUPS_PER_ICON[n]}")
+        if logger:
+            logger.info(meta, f"{n} groups: {GROUPS_PER_ICON[n]}")
 
     # Day/night breakdown
-    write_log(meta, "")
-    write_log(meta, "=== Day/Night Breakdown ===")
-    write_log(meta, f"day     : {DAY_NIGHT['day']}")
-    write_log(meta, f"night   : {DAY_NIGHT['night']}")
-    write_log(meta, f"unknown : {DAY_NIGHT['unknown']}")
-
-    write_log(meta, "[END]")
+    if logger:
+        logger.info(meta, "")
+        logger.info(meta, "=== Day/Night Breakdown ===")
+        logger.info(meta, f"day     : {DAY_NIGHT['day']}")
+        logger.info(meta, f"night   : {DAY_NIGHT['night']}")
+        logger.info(meta, f"unknown : {DAY_NIGHT['unknown']}")
+        logger.info(meta, "[END]")
 
 if __name__ == "__main__":
     main()

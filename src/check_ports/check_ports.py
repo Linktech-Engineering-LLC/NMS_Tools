@@ -6,7 +6,7 @@ File: check_ports.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-20
- Modified: 2026-08-29
+Modified: 2026-09-08
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
 
@@ -32,27 +32,17 @@ from PythonTools.nagios import (
     Flags,
     MODE_MAP,
     BaseNagiosParser,
-    CheckArgError,
     should_output,
     nagios_summary,
 )
 from PythonTools.net import check_port
 from PythonTools.parsing import parse_ports, resolve_services
+from PythonTools.parser import CheckArgError
+from PythonTools.utils.common import load_version
 
 # Root of the suite (two levels up from the tool script)
-SUITE_ROOT = Path(__file__).resolve().parent.parent
-def load_version() -> str:
-    """
-    Load the suite VERSION file if present.
-    If missing, return a fallback string indicating external execution.
-    """
-    version_file = SUITE_ROOT / "VERSION"
-
-    try:
-        return version_file.read_text(encoding="utf-8").strip()
-    except Exception:
-        return "External to NMS_TOOLS Suite"
-VERSION = load_version()
+SUITE_ROOT = Path(__file__).resolve().parents[2]
+VERSION = load_version(Path(__file__).resolve().parents[1])
 # Other Global Constants
 SCRIPT_VERSION = "1.1.0"
 SCRIPT_NAME = Path(sys.argv[0]).stem

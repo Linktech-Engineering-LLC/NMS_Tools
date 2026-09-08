@@ -11,43 +11,20 @@ Behavior:
 
 import os
 import sys
-import argparse
 from datetime import date, datetime
 from pathlib import Path
 
 # PythonTools logging
 from PythonTools.log_helpers.factory import LoggerFactory
+from PythonTools.parser import BaseScriptParser
 
+VERSION = "1.0.0"
 # ------------------------------------------------------------
 # Enhanced Argparse (consistent with check_html.py)
 # ------------------------------------------------------------
 
-class CustomFormatter(
-    argparse.ArgumentDefaultsHelpFormatter,
-    argparse.RawDescriptionHelpFormatter
-):
-    def _get_help_string(self, action):
-        help_text = action.help or ""
-        if "%(default)" in help_text:
-            return help_text
-        if action.default in (None, False):
-            return help_text
-        return f"{help_text} (default: {action.default})"
-
-
-class CheckArgError(Exception):
-    pass
-
-
-class CheckArgumentParser(argparse.ArgumentParser):
-    def error(self, message):
-        print(f"ERROR: {message}\n")
-        self.print_help()
-        sys.exit(1)   # UNKNOWN not needed here; this is not a Nagios plugin
-
-
 def build_parser():
-    parser = CheckArgumentParser(
+    parser = BaseScriptParser(
         prog="update_modified",
         description=(
             "Universal Python header updater.\n\n"
@@ -55,16 +32,17 @@ def build_parser():
             "If --path is omitted, the parent folder of this script is treated\n"
             "as the project root and ALL Python files beneath it are scanned."
         ),
-        formatter_class=CustomFormatter,
-        add_help=True
+        version_string = VERSION,
     )
-
-    parser.add_argument(
-        "-p", "--path",
+    # Remove the inherited command positional
+    parser.remove_command_positional()
+    
+    parser.parser.add_argument(
+        "-p", "--path", metavar="DIR",
         help="Path to a specific project. If omitted, scan the parent folder.",
     )
 
-    parser.add_argument(
+    parser.parser.add_argument(
         "--preview",
         action="store_true",
         help="Show which files WOULD be updated, but do not modify anything.",
@@ -116,7 +94,7 @@ def update_file(path: Path, project_root: Path) -> str | None:
     with path.open("r", encoding="utf-8") as f:
         for line in f:
             if line.strip().startswith("Modified:"):
-                lines.append(f" Modified: {today}\n")
+                lines.append(f"Modified: {today}\n")
                 updated = True
             else:
                 lines.append(line)
@@ -172,7 +150,7 @@ def initialize_logger(args, mode):
 
             # Console output only when verbose AND not quiet
             "console_stream": sys.stderr,
-            "console_enabled": not args.quiet and args.verbose,
+            "console_enabled": args.verbose,
 
             # update_modified does not use color flags, but we keep the field
             "color": args.color if hasattr(args, "color") else False,
@@ -192,7 +170,7 @@ def initialize_logger(args, mode):
 
 def main():
     parser = build_parser()
-    args = parser.parse_args()
+    args = parser.parse()
     mode = "normal"
 
     logger = initialize_logger(args, mode)

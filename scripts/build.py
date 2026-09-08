@@ -6,7 +6,7 @@ File: build.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-07-08
- Modified: 2026-08-29
+Modified: 2026-09-08
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -45,8 +45,10 @@ def collect_assets(tool_dir):
     for root, dirs, files in os.walk(tool_dir):
         for f in files:
             if f.endswith(".py"):
-                assets.append((os.path.join(root, f), os.path.relpath(root, tool_dir)))
+                # Always place assets in a safe directory
+                assets.append((os.path.join(root, f), "assets"))
     return assets
+
 
 def generate_spec(tool_name, log=None):
     src_dir = ROOT / "src" / tool_name
@@ -68,7 +70,10 @@ def generate_spec(tool_name, log=None):
     dist_dir = ROOT / "build" / "linux-x86_64"
     temp_dir = ROOT / "build" / "temp"
 
-    datas = collect_assets(src_dir)
+    # datas = collect_assets(src_dir)
+    # datas.append((str(ROOT / "VERSION"), "VERSION"))
+    datas = [(str(ROOT / "VERSION.txt"), "VERSION")]
+
     binaries = []
 
     # Special case: easysnmp C-extension
