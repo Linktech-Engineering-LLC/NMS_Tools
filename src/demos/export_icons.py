@@ -20,19 +20,16 @@ Description:
 """
 # export_icons.py
 
-import argparse
 import os
-import platform
-import re
+import requests
 import shutil
 import sys
 import time
-import zipfile
 from collections import Counter
-from datetime import datetime
 from pathlib import Path
 
 from PythonTools.log_helpers.factory import LoggerFactory
+from PythonTools.weather.codes import WEATHER_CODES
 from PythonTools.weather.recolor_engine import analyze_svg
 from PythonTools.weather.recolor_engine.recolor import recolor
 from PythonTools.utils.common import load_version
@@ -82,7 +79,7 @@ def build_parser():
     parser.remove_flag("--json")
     parser.remove_flag("--color")
 
-    # Core options
+    # Path options
     paths = parser.add_group("Paths Options")
     paths.add_argument(
         "-s", "--src",
@@ -94,32 +91,65 @@ def build_parser():
         default=str(DST_DIR),
         help="Destination directory for exported/recolored icons",
     )
+    source = parser.add_group("Icon Source")
+    source.add_argument(
+        "--icon-source",
+        choices=["local", "remote", "hybrid"],
+        default="local",
+        help=(
+            "Where to obtain icons: "
+            "'local' uses only local SVGs; "
+            "'remote' downloads all icons from the upstream Weather Icons repo; "
+            "'hybrid' uses local icons when present and downloads missing ones."
+        )
+    )
 
     return parser.parse()
 # Manage the Icons
 def extract_icon_list():
     """
-    Extract all .svg filenames from the WEATHER_CODES dict in check_weather.py.
+    Extract all .svg filenames from PythonTools.weather.codes.WEATHER_CODES.
     Returns a sorted list of unique filenames.
     """
-    source = Path(__file__).resolve().parent / "check_weather.py"
 
-    if not source.exists():
-        raise FileNotFoundError(f"Cannot find check_weather.py at {source}")
+    icons = set()
 
-    text = source.read_text()
+    for entry in WEATHER_CODES.values():
+        # Day icon
+        day = entry.get("day_icon")
+        if isinstance(day, str) and day.endswith(".svg"):
+            icons.add(day)
 
-    # Extract the WEATHER_CODES dict block
-    m = re.search(r"WEATHER_CODES\s*=\s*{(.*?)}\s*$", text, re.S | re.M)
-    if not m:
-        raise RuntimeError("Could not locate WEATHER_CODES dict in check_weather.py")
+        # Night icon
+        night = entry.get("night_icon")
+        if isinstance(night, str) and night.endswith(".svg"):
+            icons.add(night)
 
-    block = m.group(1)
+    return sorted(icons)
+def fetch_remote_icon(icon_name, dst):
+    """
+    Download icon_name from the Weather Icons repo and save it to dst.
+    If dst already exists, skip download.
+    Returns the path to the saved file.
+    """
+    # If already downloaded, skip
+    if dst.exists():
+        return dst
 
-    # Extract all .svg filenames
-    icons = re.findall(r'"([^"]+\.svg)"', block)
+    url = f"https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/{icon_name}"
+    resp = requests.get(url, timeout=10)
 
-    return sorted(set(icons))
+    if resp.status_code != 200:
+        raise RuntimeError(f"Could not download icon: {icon_name}")
+
+    # Ensure directory exists
+    dst.parent.mkdir(parents=True, exist_ok=True)
+
+    # Save the file
+    dst.write_text(resp.text)
+
+    return dst
+
 def copy_icon(src, dst):
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     shutil.copy2(src, dst)
@@ -131,7 +161,7 @@ def process_icon(icon, meta, logger = None):
         msg = f"[MISSING] {icon}"
         print(msg)
         if logger:
-            logger.info(meta, msg)
+            logger.info(msg)
         return
 
     # DRY RUN
@@ -139,7 +169,7 @@ def process_icon(icon, meta, logger = None):
         msg = f"[DRYRUN] Would copy {src} → {dst}"
         print(msg)
         if logger:
-            logger.info(meta, msg)
+            logger.info(msg)
         return
 
     # REAL MODE: copy
@@ -179,7 +209,7 @@ def process_icon(icon, meta, logger = None):
     msg = f"[OK] {icon} → groups={active}"
     print(msg)
     if logger:
-        logger.info(meta, msg)
+        logger.info(msg)
 
 # --------------------------------------
 # Logging Functions (export_icons)
@@ -224,7 +254,7 @@ def main():
     }
     logger = initialize_logger(meta)
     if logger:
-        logger.info(meta, f"[START] export_icons.py dry_run={meta['dry_run']}")
+        logger.info(f"[START] export_icons.py dry_run={meta['dry_run']}")
     icons = extract_icon_list()
     print(f"Processing {len(icons)} icons...")
     for icon in icons:
@@ -232,37 +262,37 @@ def main():
 
     duration = round(time.time() - start, 3)
     if logger:
-        logger.info(meta, f"[SUMMARY] icons={len(icons)} dry_run={meta['dry_run']} duration={duration}s status=success")
-        logger.info(meta, f"Total icons: {len(icons)}\n")
-        logger.info(meta, "=== Icon Classification Summary ===")
+        logger.info(f"[SUMMARY] icons={len(icons)} dry_run={meta['dry_run']} duration={duration}s status=success")
+        logger.info(f"Total icons: {len(icons)}\n")
+        logger.info("=== Icon Classification Summary ===")
     for g in ["sun", "moon", "cloud", "rain", "snow", "thunder", "fog", "wind"]:
         if logger:
-            logger.info(meta, f"{g:8}: {STATS[g]}")
+            logger.info(f"{g:8}: {STATS[g]}")
     # Percentages
     if logger:
-        logger.inf(meta, "")
-        logger.info(meta, "=== Group Coverage Percentages ===")
+        logger.info("")
+        logger.info("=== Group Coverage Percentages ===")
     for g in ["sun", "moon", "cloud", "rain", "snow", "thunder", "fog", "wind"]:
         pct = (STATS[g] / len(icons)) * 100
         if logger:
-            logger.info(meta, f"{g:8}: {STATS[g]:2d}  ({pct:5.1f}%)")
+            logger.info(f"{g:8}: {STATS[g]:2d}  ({pct:5.1f}%)")
 
     # Histogram of groups per icon
     if logger:
-        logger.info(meta, "")
-        logger.info(meta, "=== Groups Per Icon Histogram ===")
+        logger.info("")
+        logger.info("=== Groups Per Icon Histogram ===")
     for n in sorted(GROUPS_PER_ICON):
         if logger:
-            logger.info(meta, f"{n} groups: {GROUPS_PER_ICON[n]}")
+            logger.info(f"{n} groups: {GROUPS_PER_ICON[n]}")
 
     # Day/night breakdown
     if logger:
-        logger.info(meta, "")
-        logger.info(meta, "=== Day/Night Breakdown ===")
-        logger.info(meta, f"day     : {DAY_NIGHT['day']}")
-        logger.info(meta, f"night   : {DAY_NIGHT['night']}")
-        logger.info(meta, f"unknown : {DAY_NIGHT['unknown']}")
-        logger.info(meta, "[END]")
+        logger.info("")
+        logger.info("=== Day/Night Breakdown ===")
+        logger.info(f"day     : {DAY_NIGHT['day']}")
+        logger.info(f"night   : {DAY_NIGHT['night']}")
+        logger.info(f"unknown : {DAY_NIGHT['unknown']}")
+        logger.info("[END]")
 
 if __name__ == "__main__":
     main()
