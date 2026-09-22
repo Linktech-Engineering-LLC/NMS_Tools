@@ -47,8 +47,10 @@ def build_parser():
         action="store_true",
         help="Show which files WOULD be updated, but do not modify anything.",
     )
-
-    return parser
+    args = parser.parse()
+    if hasattr(args, "func"):
+        return args.func(args)
+    return args
 
 # ------------------------------------------------------------
 # Helper Functions (no side effects)
@@ -169,8 +171,7 @@ def initialize_logger(args, mode):
 # ------------------------------------------------------------
 
 def main():
-    parser = build_parser()
-    args = parser.parse()
+    args = build_parser()
     mode = "normal"
 
     logger = initialize_logger(args, mode)

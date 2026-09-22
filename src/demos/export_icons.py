@@ -6,7 +6,7 @@ File: export_icons.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-05-04
-Modified: 2026-09-08
+Modified: 2026-09-22
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -103,8 +103,11 @@ def build_parser():
             "'hybrid' uses local icons when present and downloads missing ones."
         )
     )
-
-    return parser.parse()
+    args = parser.parse()
+    if hasattr(args, "func"):
+        return args.func(args)
+    args.log_dir = DEFAULT_LOG_DIR if args.log_dir is None else args.log_dir
+    return args
 # Manage the Icons
 def extract_icon_list():
     """
