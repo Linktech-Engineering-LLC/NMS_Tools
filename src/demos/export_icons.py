@@ -6,7 +6,7 @@ File: export_icons.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-05-04
-Modified: 2026-09-22
+Modified: 2026-09-23
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -29,6 +29,11 @@ from collections import Counter
 from pathlib import Path
 
 from PythonTools.log_helpers.factory import LoggerFactory
+from PythonTools.weather import (
+    collect_alert_icons,
+    collect_weather_icons,
+    generate_alert_svg
+)
 from PythonTools.weather.codes import WEATHER_CODES
 from PythonTools.weather.recolor_engine import analyze_svg
 from PythonTools.weather.recolor_engine.recolor import recolor
@@ -97,59 +102,105 @@ def build_parser():
         choices=["local", "remote", "hybrid"],
         default="local",
         help=(
-            "Where to obtain icons: "
-            "'local' uses only local SVGs; "
-            "'remote' downloads all icons from the upstream Weather Icons repo; "
+            "Where to obtain icons:\n"
+            "'local' uses only local SVGs;\n"
+            "'remote' downloads all icons from the upstream Weather Icons repo;\n"
             "'hybrid' uses local icons when present and downloads missing ones."
         )
+    )
+    source.add_argument(
+        "--icon",
+        action="append",
+        help="Name of a specific icon to export. Use multiple --icon flags to export more than one."
     )
     args = parser.parse()
     if hasattr(args, "func"):
         return args.func(args)
-    args.log_dir = DEFAULT_LOG_DIR if args.log_dir is None else args.log_dir
+    args.log_dir = args.log_dir or DEFAULT_LOG_DIR
     return args
 # Manage the Icons
-def extract_icon_list():
+def extract_icon_list(args, logger=None):
     """
-    Extract all .svg filenames from PythonTools.weather.codes.WEATHER_CODES.
-    Returns a sorted list of unique filenames.
+    Return the full set of icons used by weather conditions + alerts.
+    If --icon is provided, validate the requested icons.
     """
-
     icons = set()
 
-    for entry in WEATHER_CODES.values():
-        # Day icon
-        day = entry.get("day_icon")
-        if isinstance(day, str) and day.endswith(".svg"):
-            icons.add(day)
+    icons.update(collect_weather_icons())
+    icons.update(collect_alert_icons())
 
-        # Night icon
-        night = entry.get("night_icon")
-        if isinstance(night, str) and night.endswith(".svg"):
-            icons.add(night)
+    # User requested specific icons
+    if args.icon:
+        requested = set(args.icon)
+        invalid = requested - icons
 
+        if invalid:
+            # Compact single-line list of invalid icons
+            bad = ", ".join(sorted(invalid))
+            msg = (
+                f"[ERROR] The following icons are not recognized: {bad}\n"
+                "Use --list-icons to see valid names."
+            )
+
+            if logger:
+                logger.error(msg)
+            else:
+                print(msg)
+
+            return []  # signal invalid input
+
+        return sorted(requested)
+
+    # Default: return all icons
     return sorted(icons)
-def fetch_remote_icon(icon_name, dst):
+def fetch_remote_icon(dst, logger=None):
     """
     Download icon_name from the Weather Icons repo and save it to dst.
     If dst already exists, skip download.
     Returns the path to the saved file.
     """
-    # If already downloaded, skip
+
+    # Guard against malformed paths
+    if not dst.name or dst.name in {"None", ""}:
+        msg = f"Invalid icon name in path: {dst}"
+        if logger:
+            logger.error(msg)
+        raise ValueError(msg)
+
+    icon_name = dst.name
+
+    # Skip if already downloaded
     if dst.exists():
+        if logger:
+            logger.debug(f"Skipping {icon_name}: already exists at {dst}")
+        return dst
+    if icon_name == "alert.svg":
+        if logger:
+            logger.info(f"Creating icon: {icon_name}")
+        dst.write_text(generate_alert_svg())
         return dst
 
     url = f"https://raw.githubusercontent.com/erikflowers/weather-icons/master/svg/{icon_name}"
+
+    if logger:
+        logger.info(f"Downloading remote icon: {icon_name}")
+
     resp = requests.get(url, timeout=10)
 
     if resp.status_code != 200:
-        raise RuntimeError(f"Could not download icon: {icon_name}")
+        msg = f"Could not download icon {icon_name}: HTTP {resp.status_code}"
+        if logger:
+            logger.error(msg)
+        raise RuntimeError(msg)
 
     # Ensure directory exists
     dst.parent.mkdir(parents=True, exist_ok=True)
 
     # Save the file
     dst.write_text(resp.text)
+
+    if logger:
+        logger.info(f"Saved remote icon: {icon_name} → {dst}")
 
     return dst
 
@@ -159,6 +210,8 @@ def copy_icon(src, dst):
 def process_icon(icon, meta, logger = None):
     src = SRC_DIR / icon
     dst = DST_DIR / icon
+    if not SRC_DIR.exists():
+        SRC_DIR.mkdir(parents=True, exist_ok=True)
 
     if not src.exists():
         msg = f"[MISSING] {icon}"
@@ -217,7 +270,7 @@ def process_icon(icon, meta, logger = None):
 # --------------------------------------
 # Logging Functions (export_icons)
 # --------------------------------------
-def initialize_logger(meta):
+def initialize_logger(meta, debug=False):
     log_dir = meta.get("log_dir")
     if not log_dir:
         return None
@@ -227,7 +280,7 @@ def initialize_logger(meta):
 
         log_cfg = {
             "path": os.path.join(log_dir, "export_icons.log"),
-            "log_level": "INFO",
+            "log_level": "DEBUG" if debug else "INFO",
             "log_max_mb": meta.get("log_max_mb", 50),
             "archive_mode": "zip",
             "backup_count": 7,
@@ -236,7 +289,7 @@ def initialize_logger(meta):
             "color": False,
         }
 
-        logger_factory = LoggerFactory(log_cfg, "export_icons")
+        logger_factory = LoggerFactory(log_cfg, SCRIPT_NAME)
         return logger_factory.get_logger("main")
 
     except Exception as e:
@@ -255,10 +308,14 @@ def main():
         "_log_warn_emitted": False,
         "warnings": [],
     }
-    logger = initialize_logger(meta)
+    logger = initialize_logger(meta, args.debug)
     if logger:
         logger.info(f"[START] export_icons.py dry_run={meta['dry_run']}")
-    icons = extract_icon_list()
+    icons = extract_icon_list(args, logger)
+    print(f"Downloading {len(icons)} icons...")
+    for icon in icons:
+        fetch_remote_icon(SRC_DIR / icon, logger)
+    fetch_remote_icon(SRC_DIR / "alert.svg", logger)
     print(f"Processing {len(icons)} icons...")
     for icon in icons:
         process_icon(icon, meta, logger)
