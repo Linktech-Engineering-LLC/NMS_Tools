@@ -9,6 +9,8 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    container:
+      image: dad:3000/linux/leon-ci:latest
 
     steps:
       - name: Checkout repository
