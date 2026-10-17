@@ -217,6 +217,14 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       # 2. Ensure gh-pages exists
+    - name: Delete gh-pages branch (if exists)
+      run: |
+        if git ls-remote --exit-code origin gh-pages; then
+          echo "Deleting remote gh-pages..."
+          git push origin --delete gh-pages
+        else
+          echo "gh-pages does not exist, nothing to delete."
+        fi
       - name: Ensure gh-pages exists
         run: |
           if ! git ls-remote --exit-code origin gh-pages; then
