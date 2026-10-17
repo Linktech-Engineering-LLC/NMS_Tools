@@ -205,12 +205,10 @@ jobs:
     needs: nightly-build
 
     steps:
-      - name: Checkout main branch
+      - name: Checkout repository root
         uses: actions/checkout@v4
         with:
-          ref: main
-          path: main_src
-          submodules: false
+          fetch-depth: 0
 
       - name: Ensure gh-pages exists
         run: |
