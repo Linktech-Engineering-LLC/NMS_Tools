@@ -205,12 +205,13 @@ jobs:
     needs: nightly-build
 
     steps:
-      - name: Checkout repository root
+      - name: Checkout gh-pages root
         uses: actions/checkout@v4
         with:
+          ref: gh-pages
           fetch-depth: 0
 
-      - name: Configure git identity (required before orphan branch)
+      - name: Configure git identity
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -230,7 +231,7 @@ jobs:
           ref: gh-pages
           fetch-depth: 0
 
-      - name: Wipe gh-pages for rolling release (preserve .git)
+      - name: Wipe gh-pages (preserve .git)
         run: |
           find . -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} +
 
@@ -243,31 +244,26 @@ jobs:
           name: nightly-nms-tools
           path: artifacts
 
-      - name: Copy metadata.json to dashboard
+      - name: Copy metadata.json
         run: cp artifacts/metadata.json dashboard/
 
-      - name: Checkout main branch
+      - name: Checkout main branch OUTSIDE repo
         uses: actions/checkout@v4
         with:
           ref: main
-          path: main_src
+          path: ../main_src
           submodules: false
 
       - name: Copy dashboard assets
         run: |
-          cp main_src/packaging/dashboard/index.html dashboard/
-          cp main_src/packaging/dashboard/styles.css dashboard/
-          cp main_src/packaging/dashboard/dashboard.js dashboard/
-
-      - name: Copy artifacts to dashboard
-        run: |
-          mkdir -p dashboard/artifacts
-          cp artifacts/nms_tools*.* dashboard/artifacts || true
+          cp ../main_src/packaging/dashboard/index.html dashboard/
+          cp ../main_src/packaging/dashboard/styles.css dashboard/
+          cp ../main_src/packaging/dashboard/dashboard.js dashboard/
 
       - name: Prevent empty gh-pages deploy
         run: |
-          if [ -z "$(ls -A .)" ]; then
-            echo "ERROR: gh-pages output is empty. Aborting deploy."
+          if [ -z "$(ls -A dashboard)" ]; then
+            echo "ERROR: dashboard folder is empty. Aborting deploy."
             exit 1
           fi
 
@@ -275,8 +271,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -m "Update nightly dashboard" || echo "No changes"
           git push origin gh-pages
