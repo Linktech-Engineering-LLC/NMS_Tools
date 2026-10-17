@@ -210,6 +210,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Configure git identity (required before orphan branch)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Ensure gh-pages exists
         run: |
           if ! git ls-remote --exit-code origin gh-pages; then
