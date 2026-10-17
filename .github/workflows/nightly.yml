@@ -200,17 +200,31 @@ jobs:
           git tag -f nightly
           git push -f origin nightly
 
-
   publish-dashboard:
     runs-on: ubuntu-latest
     needs: nightly-build
 
     steps:
+      - name: Ensure gh-pages exists
+        run: |
+          if ! git ls-remote --exit-code origin gh-pages; then
+            echo "gh-pages does not exist. Initializing..."
+            git checkout --orphan gh-pages
+            git commit --allow-empty -m "Initialize gh-pages"
+            git push origin gh-pages
+          fi
 
       - name: Checkout gh-pages branch
         uses: actions/checkout@v4
         with:
           ref: gh-pages
+          fetch-depth: 0
+      
+      - name: Wipe gh-pages for rolling release
+        run: rm -rf ./*
+
+      - name: Create dashboard folder
+        run: mkdir -p dashboard
 
       - name: Download nightly artifacts
         uses: actions/download-artifact@v4
@@ -218,9 +232,8 @@ jobs:
           name: nightly-nms-tools
           path: artifacts
 
-      - name: Copy metadata.json to dashboard root
-        run: |
-          cp artifacts/metadata.json .
+      - name: Copy metadata.json to dashboard
+        run: cp artifacts/metadata.json dashboard/
 
       - name: Checkout main branch
         uses: actions/checkout@v4
@@ -231,15 +244,27 @@ jobs:
 
       - name: Copy dashboard assets
         run: |
-          cp main_src/packaging/dashboard/index.html .
-          cp main_src/packaging/dashboard/styles.css .
-          cp main_src/packaging/dashboard/dashboard.js .
+          cp main_src/packaging/dashboard/index.html dashboard/
+          cp main_src/packaging/dashboard/styles.css dashboard/
+          cp main_src/packaging/dashboard/dashboard.js dashboard/
+
+      - name: Copy artifacts to dashboard
+        run: |
+          mkdir -p dashboard/artifacts
+          cp artifacts/NMS_Tools*.* dashboard/artifacts || true
 
       - name: Remove old folders from gh-pages
         run: |
           rm -rf source
           rm -rf main_src
           rm -rf artifacts
+
+      - name: Prevent empty gh-pages deploy
+        run: |
+          if [ -z "$(ls -A .)" ]; then
+            echo "ERROR: gh-pages output is empty. Aborting deploy."
+            exit 1
+          fi
 
       - name: Publish dashboard to gh-pages
         env:
