@@ -246,6 +246,13 @@ jobs:
       - name: Copy metadata.json to dashboard
         run: cp artifacts/metadata.json dashboard/
 
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main_src
+          submodules: false
+
       - name: Copy dashboard assets
         run: |
           cp main_src/packaging/dashboard/index.html dashboard/
@@ -255,7 +262,7 @@ jobs:
       - name: Copy artifacts to dashboard
         run: |
           mkdir -p dashboard/artifacts
-          cp artifacts/NMS_Tools*.* dashboard/artifacts || true
+          cp artifacts/nms_tools*.* dashboard/artifacts || true
 
       - name: Prevent empty gh-pages deploy
         run: |
