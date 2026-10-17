@@ -205,6 +205,13 @@ jobs:
     needs: nightly-build
 
     steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main_src
+          submodules: false
+
       - name: Ensure gh-pages exists
         run: |
           if ! git ls-remote --exit-code origin gh-pages; then
@@ -235,13 +242,6 @@ jobs:
 
       - name: Copy metadata.json to dashboard
         run: cp artifacts/metadata.json dashboard/
-
-      - name: Checkout main branch
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          path: main_src
-          submodules: false
 
       - name: Copy dashboard assets
         run: |
