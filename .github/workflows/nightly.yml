@@ -205,10 +205,9 @@ jobs:
     needs: nightly-build
 
     steps:
-      - name: Checkout gh-pages root
+      - name: Base checkout (create repo workspace)
         uses: actions/checkout@v4
         with:
-          ref: gh-pages
           fetch-depth: 0
 
       - name: Configure git identity
@@ -247,18 +246,23 @@ jobs:
       - name: Copy metadata.json
         run: cp artifacts/metadata.json dashboard/
 
-      - name: Checkout main branch OUTSIDE repo
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          path: ../main_src
-          submodules: false
+      # --- Sparse checkout of main branch ---
+      - name: Sparse checkout main (dashboard only)
+        run: |
+          git fetch origin main
+          git sparse-checkout init --cone
+          git sparse-checkout set packaging/dashboard
+          git checkout main
 
       - name: Copy dashboard assets
         run: |
-          cp ../main_src/packaging/dashboard/index.html dashboard/
-          cp ../main_src/packaging/dashboard/styles.css dashboard/
-          cp ../main_src/packaging/dashboard/dashboard.js dashboard/
+          cp packaging/dashboard/index.html dashboard/
+          cp packaging/dashboard/styles.css dashboard/
+          cp packaging/dashboard/dashboard.js dashboard/
+
+      - name: Remove sparse checkout files
+        run: |
+          rm -rf packaging
 
       - name: Prevent empty gh-pages deploy
         run: |
