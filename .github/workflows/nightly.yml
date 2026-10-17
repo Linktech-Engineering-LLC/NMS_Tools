@@ -250,7 +250,7 @@ jobs:
           path: artifacts
 
       - name: Copy metadata.json
-        run: cp artifacts/metadata.json dashboard/
+        run: cp artifacts/metadata.json dashboard/metadata.json
 
       # 7. Sparse checkout main (dashboard only)
       - name: Sparse checkout main (dashboard only)
@@ -263,9 +263,9 @@ jobs:
       # 8. Copy dashboard assets
       - name: Copy dashboard assets
         run: |
-          cp packaging/dashboard/index.html dashboard/
-          cp packaging/dashboard/styles.css dashboard/
-          cp packaging/dashboard/dashboard.js dashboard/
+          cp packaging/dashboard/index.html dashboard/index.html
+          cp packaging/dashboard/styles.css dashboard/styles.css
+          cp packaging/dashboard/dashboard.js dashboard/dashboard.js
 
       - name: Disable sparse checkout
         run: |
@@ -289,5 +289,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git add dashboard
+          git sparse-checkout disable
+          git add .
+          if [ ! -f dashboard/index.html ]; then
+            echo "Dashboard missing — aborting publish."
+            exit 1
+          fi
           git commit -m "Update nightly dashboard" || echo "No changes"
           git push origin gh-pages
