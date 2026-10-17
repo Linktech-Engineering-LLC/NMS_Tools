@@ -219,9 +219,10 @@ jobs:
         with:
           ref: gh-pages
           fetch-depth: 0
-      
-      - name: Wipe gh-pages for rolling release
-        run: rm -rf ./*
+
+      - name: Wipe gh-pages for rolling release (preserve .git)
+        run: |
+          find . -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} +
 
       - name: Create dashboard folder
         run: mkdir -p dashboard
@@ -252,12 +253,6 @@ jobs:
         run: |
           mkdir -p dashboard/artifacts
           cp artifacts/NMS_Tools*.* dashboard/artifacts || true
-
-      - name: Remove old folders from gh-pages
-        run: |
-          rm -rf source
-          rm -rf main_src
-          rm -rf artifacts
 
       - name: Prevent empty gh-pages deploy
         run: |
