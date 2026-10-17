@@ -275,33 +275,35 @@ jobs:
           cp packaging/dashboard/styles.css dashboard/styles.css
           cp packaging/dashboard/dashboard.js dashboard/dashboard.js
 
-      - name: Disable sparse checkout
-        run: |
-          git sparse-checkout disable
-
-      # 9. Remove sparse checkout files
-      - name: Remove sparse checkout files
-        run: rm -rf packaging
-
-      # 10. Safety check
-      - name: Prevent empty gh-pages deploy
-        run: |
-          if [ -z "$(ls -A dashboard)" ]; then
-            echo "ERROR: dashboard folder is empty. Aborting deploy."
-            exit 1
-          fi
-
-      # 11. Publish dashboard
-      - name: Publish dashboard to gh-pages
+      # 9. Publish dashboard using a throwaway repo
+      - name: Publish dashboard via throwaway repo
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git add dashboard
-          git sparse-checkout disable
+          mkdir publish
+          cd publish
+
+          # Initialize clean repo
+          git init
+
+          # Add remote (mirror or GitHub)
+          git remote add origin https://github.com/linktech-engineering-llc/NMS_Tools.git
+
+          # Fetch gh-pages if it exists
+          git fetch origin gh-pages || true
+
+          # Checkout or create gh-pages
+          git checkout gh-pages || git checkout --orphan gh-pages
+
+          # Wipe everything except .git
+          find . -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} +
+
+          # Copy dashboard files from main workspace
+          cp -r ../dashboard ./dashboard
+
+          # Commit
           git add .
-          if [ ! -f dashboard/index.html ]; then
-            echo "Dashboard missing — aborting publish."
-            exit 1
-          fi
-          git commit -m "Update nightly dashboard" || echo "No changes"
-          git push origin gh-pages
+          git commit -m "Update nightly dashboard"
+
+          # Push (force ensures clean overwrite)
+          git push origin gh-pages --force
