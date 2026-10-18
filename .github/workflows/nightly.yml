@@ -237,6 +237,11 @@ jobs:
           cp packaging/dashboard/styles.css dashboard/
           cp packaging/dashboard/dashboard.js dashboard/
 
+      - name: Generate QR code
+        run: |
+          curl -s -o dashboard/qr.png \
+            "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://linktech-engineering-llc.github.io/NMS_Tools/"
+
       - name: Publish dashboard via throwaway repo
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
