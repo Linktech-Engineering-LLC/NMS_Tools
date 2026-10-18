@@ -213,8 +213,7 @@ jobs:
     needs: nightly-build
 
     steps:
-      # 1. Create repo workspace (MUST be first)
-      - name: Base checkout (create repo workspace)
+      - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -224,58 +223,19 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      # 2. Ensure gh-pages exists
-      - name: Ensure gh-pages exists
-        run: |
-          if ! git ls-remote --exit-code origin gh-pages; then
-            echo "gh-pages does not exist. Initializing..."
-            git checkout --orphan gh-pages
-            git commit --allow-empty -m "Initialize gh-pages"
-            git push origin gh-pages
-          fi
-
-      # 3. Checkout gh-pages
-      - name: Checkout gh-pages
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          fetch-depth: 0
-
-      # 4. Wipe gh-pages clean
-      - name: Wipe gh-pages (preserve .git)
-        run: |
-          find . -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} +
-
-      # 5. Prepare dashboard folder
-      - name: Create dashboard folder
-        run: mkdir -p dashboard
-
-      # 6. Download nightly artifacts
       - name: Download nightly artifacts
         uses: actions/download-artifact@v4
         with:
           name: nightly-nms-tools
-          path: artifacts
+          path: dashboard
 
-      - name: Copy metadata.json
-        run: cp artifacts/metadata.json dashboard/metadata.json
-
-      # 7. Sparse checkout main (dashboard only)
-      - name: Sparse checkout main (dashboard only)
-        run: |
-          git fetch origin main
-          git sparse-checkout init --cone
-          git sparse-checkout set packaging/dashboard
-          git checkout main
-
-      # 8. Copy dashboard assets
       - name: Copy dashboard assets
         run: |
-          cp packaging/dashboard/index.html dashboard/index.html
-          cp packaging/dashboard/styles.css dashboard/styles.css
-          cp packaging/dashboard/dashboard.js dashboard/dashboard.js
+          mkdir -p dashboard
+          cp packaging/dashboard/index.html dashboard/
+          cp packaging/dashboard/styles.css dashboard/
+          cp packaging/dashboard/dashboard.js dashboard/
 
-      # 9. Publish dashboard using a throwaway repo
       - name: Publish dashboard via throwaway repo
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -283,31 +243,18 @@ jobs:
           mkdir publish
           cd publish
 
-          # Initialize clean repo
           git init
-
-          # Configure identity INSIDE the throwaway repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Add remote (mirror or GitHub)
           git remote add origin https://x-access-token:${GITHUB_TOKEN}@github.com/linktech-engineering-llc/NMS_Tools.git
 
-          # Fetch gh-pages if it exists
           git fetch origin gh-pages || true
-
-          # Checkout or create gh-pages
           git checkout gh-pages || git checkout --orphan gh-pages
 
-          # Wipe everything except .git
-          find . -mindepth 1 -maxdepth 1 ! -name ".git" -exec rm -rf {} +
-
-          # Copy dashboard files from main workspace
+          git rm -rf .
           cp -r ../dashboard ./dashboard
 
-          # Commit
           git add .
           git commit -m "Update nightly dashboard"
-
-          # Push (force ensures clean overwrite)
           git push origin gh-pages --force
