@@ -19,11 +19,28 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Ensure openssh-client is installed
+        run: |
+          apt-get update
+          apt-get install -y openssh-client
+
+      - name: Install SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.NMS_TOOLS_GITHUB }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Add GitHub to known_hosts
+        run: |
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts
+
+      - name: Start SSH agent
+        run: |
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_ed25519
+
       - name: Push to Remote Hub
         run: |
-          git remote add github ssh://git@github.com/linktech-engineering-llc/NMS_Tools.git
-          # Push ONLY main
+          git remote add github ssh://git@github.com/Linktech-Engineering-LLC/NMS_Tools.git
           git push github main
-
-          # Push ONLY tags
           git push github --tags
