@@ -21,7 +21,7 @@ jobs:
 
       - name: Push to Remote Hub
         run: |
-          git remote add remote_target ssh://git@github.com/linktech-engineering-llc/NMS_Tools.git
+          git remote add github ssh://git@github.com/linktech-engineering-llc/NMS_Tools.git
           # Push ONLY main
           git push github main
 
