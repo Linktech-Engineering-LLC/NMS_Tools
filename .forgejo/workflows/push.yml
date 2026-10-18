@@ -3,6 +3,9 @@ on: [push, delete]
 jobs:
   sync_to_remote:
     runs-on: ubuntu-latest
+    container:
+      image: dad:3000/linux/leon-ci:latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
