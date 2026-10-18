@@ -1,0 +1,61 @@
+{
+  "meta_version": 2,
+  "build": {
+    "date": "2026-10-18T11:14:51Z",
+    "commit": "a6d32e2",
+    "version": "1.0.0",
+    "branch": "nightly",
+    "workflow_run_id": 39122209559
+},
+  "toolchain": {
+    "python": "3.12.15",
+    "pyinstaller": "6.22.3",
+    "builder_os": "ubuntu-latest"
+},
+  "binary_license": {
+    "name": "NMS_Tools Binary License",
+    "file": "LICENSE_BINARY.txt",
+    "url": "https://github.com/linktech-engineering-llc/NMS_Tools/blob/nightly/LICENSE_BINARY.txt"
+},
+  "artifacts": [
+    {
+      "name": "nms-tools_1.0.0-1.x86_64.rpm",
+      "type": "rpm",
+      "os": "linux",
+      "arch": "x86_64",
+      "size": 205934125,
+      "sha256": "7f306c93b445309689dae7a3d05a59dc4c740b258bf10487a79a08f0f6731eeb",
+      "crc32": "607e94fd"
+    }
+,
+    {
+      "name": "nms-tools_1.0.0.deb",
+      "type": "deb",
+      "os": "linux",
+      "arch": "amd64",
+      "size": 204771422,
+      "sha256": "7dc659264a0151731f69e9d0ee860024d6421ffeb7ba9dc62191758a28da8701",
+      "crc32": "392ffda5"
+    }
+,
+    {
+      "name": "nms-tools_2.0.0.tgz",
+      "type": "tgz",
+      "os": "linux",
+      "arch": "amd64",
+      "size": 205860352,
+      "sha256": "b662a63b28807f212f15e9b17bf47730c045a95f8fd6a5c65a842adb20a82f64",
+      "crc32": "66698f12"
+    }
+,
+    {
+      "name": "nms-tools_2.0.0.zip",
+      "type": "zip",
+      "os": "windows",
+      "arch": "x86_64",
+      "size": 205862378,
+      "sha256": "2ae3069291a6831ccc26f9c638f771181900de062ed565bfdee20de6ec2efc49",
+      "crc32": "c11d98ad"
+    }
+  ]
+}

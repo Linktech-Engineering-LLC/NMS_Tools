@@ -1,8 +1,0 @@
-cryptography
-easysnmp
-psutil
-python-dateutil
-requests
-typing_extensions
-astral
-timezonefinder
