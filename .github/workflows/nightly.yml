@@ -291,7 +291,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           # Add remote (mirror or GitHub)
-          git remote add origin https://github.com/linktech-engineering-llc/NMS_Tools.git
+          git remote add origin https://x-access-token:${GITHUB_TOKEN}@github.com/linktech-engineering-llc/NMS_Tools.git
 
           # Fetch gh-pages if it exists
           git fetch origin gh-pages || true
