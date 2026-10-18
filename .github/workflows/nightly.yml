@@ -286,6 +286,10 @@ jobs:
           # Initialize clean repo
           git init
 
+          # Configure identity INSIDE the throwaway repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
           # Add remote (mirror or GitHub)
           git remote add origin https://github.com/linktech-engineering-llc/NMS_Tools.git
 
