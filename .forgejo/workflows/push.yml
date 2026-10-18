@@ -1,4 +1,10 @@
-on: [push, delete]
+on:
+  push:
+    branches:
+      - main
+  create:
+    tags:
+      - '*'on: [push, delete]
   workflow_dispatch:
 
 jobs:
