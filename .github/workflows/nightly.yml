@@ -227,11 +227,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: nightly-nms-tools
-          path: dashboard
+          path: artifacts
 
       - name: Copy dashboard assets
         run: |
           mkdir -p dashboard
+          cp artifacts/metadata.json dashboard/
           cp packaging/dashboard/index.html dashboard/
           cp packaging/dashboard/styles.css dashboard/
           cp packaging/dashboard/dashboard.js dashboard/
