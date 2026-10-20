@@ -76,12 +76,13 @@ jobs:
           FORGEJO_TOKEN: ${{ secrets.NMSTOOLSTOKEN }}
         run: |
           curl -v -H "Authorization: token $FORGEJO_TOKEN" "$FORGEJO_URL"
+          ls -al packaging/output
           mkdir -p artifacts
           cp packaging/output/*.tgz artifacts/ || true
           cp packaging/output/*.zip artifacts/ || true
           cp packaging/output/*.deb artifacts/ || true
           cp packaging/output/*.rpm artifacts/ || true
-
+          ls -al artifacts
       - name: Generate metadata.json
         run: |
           mkdir -p artifacts
