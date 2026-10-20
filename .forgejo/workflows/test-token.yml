@@ -1,0 +1,33 @@
+name: Test Forgejo Token
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-token:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Test API access to NMS_Tools nightly release
+        env:
+          TOKEN: ${{ secrets.NMSTOOLSTOKEN }}
+        run: |
+          echo "Testing Forgejo API token against NMS_Tools…"
+
+          # Query the nightly release
+          RESPONSE=$(curl -s \
+            -H "Authorization: token $TOKEN" \
+            http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/nightly)
+
+          # Extract the release ID (if present)
+          RELEASE_ID=$(echo "$RESPONSE" | jq -r '.id // empty')
+
+          if [ -z "$RELEASE_ID" ]; then
+            echo "❌ Token test FAILED"
+            echo "Raw API response:"
+            echo "$RESPONSE"
+            exit 1
+          fi
+
+          echo "✅ Token test PASSED"
+          echo "Nightly release ID: $RELEASE_ID"

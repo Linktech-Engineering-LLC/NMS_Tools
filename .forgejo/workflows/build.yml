@@ -1,0 +1,260 @@
+name: Forgejo Nightly Build
+
+on:
+  schedule:
+    - cron: "0 6 * * *"   # 06:00 UTC nightly
+  workflow_dispatch:
+
+concurrency:
+  group: forgejo-nightly
+  cancel-in-progress: true
+
+jobs:
+
+  nightly-build:
+    runs-on: ubuntu-latest
+    container:
+      image: dad:3000/linux/leon-ci:latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Ensure nightly tag exists
+        run: |
+          if ! git ls-remote --tags origin nightly >/dev/null; then
+            echo "Creating nightly tag"
+            git tag nightly
+            git push origin nightly
+          else
+            echo "Updating nightly tag to current commit"
+            git tag -f nightly
+            git push origin nightly --force
+          fi
+
+      - name: Capture metadata
+        id: capture
+        run: |
+          echo "build_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
+          echo "git_hash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Install Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y pandoc rpm dpkg-dev libarchive-zip-perl
+          apt-get install -y libsnmp-dev snmp-mibs-downloader
+
+      - name: Install Python build dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install pyinstaller jsonschema
+          python3 -m pip install git+http://dad:3000/linux/PythonTools.git
+
+      - name: Make scripts executable
+        run: |
+          chmod +x scripts/*.sh
+          chmod +x packaging/*.sh
+
+      - name: Build all artifacts
+        run: packaging/build_all.sh
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p artifacts
+          cp packaging/output/*.tgz artifacts/ || true
+          cp packaging/output/*.zip artifacts/ || true
+          cp packaging/output/*.deb artifacts/ || true
+          cp packaging/output/*.rpm artifacts/ || true
+
+      - name: Generate metadata.json
+        run: |
+          mkdir -p artifacts
+          PYTHON_VERSION=$(python3 --version | awk '{print $2}')
+          PYINSTALLER_VERSION=$(pyinstaller --version 2>/dev/null || echo "unknown")
+          BUILDER_OS="forgejo-runner"
+
+          cat > artifacts/metadata.json <<EOF
+          {
+            "meta_version": 2,
+            "build": {
+              "date": "${{ steps.capture.outputs.build_date }}",
+              "commit": "${{ steps.capture.outputs.git_hash }}",
+              "branch": "nightly"
+            },
+            "toolchain": {
+              "python": "$PYTHON_VERSION",
+              "pyinstaller": "$PYINSTALLER_VERSION",
+              "builder_os": "$BUILDER_OS"
+            },
+            "binary_license": {
+              "name": "NMS_Tools Binary License",
+              "file": "LICENSE_BINARY.txt",
+              "url": "http://dad:3000/linux/NMS_Tools/src/branch/nightly/LICENSE_BINARY.txt"
+            },
+            "artifacts": [
+          EOF
+
+          FIRST=1
+          for f in artifacts/nms-tools_*; do
+            NAME=$(basename "$f")
+            SIZE=$(stat -c%s "$f")
+            SHA=$(sha256sum "$f" | awk '{print $1}')
+            CRC=$(crc32 "$f")
+
+            case "$NAME" in
+              *.deb) TYPE="deb"; OS="linux"; ARCH="amd64";;
+              *.rpm) TYPE="rpm"; OS="linux"; ARCH="x86_64";;
+              *.zip) TYPE="zip"; OS="windows"; ARCH="x86_64";;
+              *.tgz|*.tar.gz) TYPE="tgz"; OS="linux"; ARCH="amd64";;
+              *) TYPE="unknown"; OS="unknown"; ARCH="unknown";;
+            esac
+
+            if [ $FIRST -eq 0 ]; then
+              echo "," >> artifacts/metadata.json
+            fi
+            FIRST=0
+
+            cat >> artifacts/metadata.json <<EOF
+              {
+                "name": "$NAME",
+                "type": "$TYPE",
+                "os": "$OS",
+                "arch": "$ARCH",
+                "size": $SIZE,
+                "sha256": "$SHA",
+                "crc32": "$CRC"
+              }
+          EOF
+          done
+
+          cat >> artifacts/metadata.json <<EOF
+            ]
+          }
+          EOF
+
+      - name: Ensure nightly release exists
+        run: |
+          RELEASE=$(curl -s \
+            -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
+            http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/nightly \
+            | jq -r '.id // empty')
+
+          if [ -z "$RELEASE" ]; then
+            echo "Creating nightly release"
+            curl -X POST \
+              -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
+              -H "Content-Type: application/json" \
+              -d '{"tag_name":"nightly","name":"Nightly Build","prerelease":true}' \
+              http://dad:3000/api/v1/repos/linux/NMS_Tools/releases
+          else
+            echo "Nightly release already exists"
+          fi
+
+      - name: Remove existing nightly assets
+        run: |
+          RELEASE=$(curl -s \
+            -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
+            http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/nightly \
+            | jq -r '.id')
+
+          curl -s \
+            -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
+            http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/nightly \
+            | jq -r '.assets // [] | .[].id' \
+            | while read ID; do
+                echo "Deleting asset $ID"
+                curl -X DELETE \
+                  -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
+                  http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/$RELEASE/assets/$ID
+              done
+
+      - name: Upload artifacts to Forgejo nightly release
+        run: |
+          RELEASE=$(curl -s \
+            -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
+            http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/nightly \
+            | jq -r '.id')
+
+          for f in artifacts/*; do
+            echo "Uploading $f"
+            curl -X POST \
+              -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"$f" \
+              "http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/$RELEASE/assets?name=$(basename "$f")"
+          done
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: nightly
+          path: artifacts/
+
+  create-dashboard:
+    needs: nightly-build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "forgejo-actions"
+          git config user.email "forgejo-actions@noreply.local"
+
+      - name: Download nightly artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: nightly
+          path: artifacts
+
+      - name: Build dashboard folder
+        run: |
+          mkdir -p dashboard
+          cp packaging/dashboard/index.html dashboard/
+          cp packaging/dashboard/dashboard.js dashboard/
+          cp packaging/dashboard/styles.css dashboard/
+          cp artifacts/metadata.json dashboard/
+
+          mkdir -p dashboard/artifacts
+          cp -r artifacts/nms-tools* dashboard/artifacts/
+
+          curl -s -o dashboard/qr.png \
+            "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://dad:3000/Linux/NMS_Tools/"
+
+      - name: Clone global Pages repo
+        env:
+          FORGEJO_SSH_KEY: ${{ secrets.SSH_PAGES_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$FORGEJO_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_ed25519
+
+          ssh-keyscan -t ed25519 -p 2222 dad >> ~/.ssh/known_hosts
+
+          git clone ssh://forgejo@dad:2222/doug/Pages.git pagesrepo
+          cd pagesrepo
+
+          mkdir -p NMS_Updates
+          rm -rf NMS_Updates/*
+          cp -r ../dashboard/* NMS_Updates/
+
+          git config --global user.name "forgejo-actions"
+          git config --global user.email "forgejo-actions@noreply.local"
+
+          git add .
+          git commit -m "Nightly NMS_Tools dashboard update"
+          git branch -M main
+          git push origin main --force

@@ -42,6 +42,8 @@ jobs:
       - name: Push to Remote Hub
         run: |
           git remote add github ssh://git@github.com/Linktech-Engineering-LLC/NMS_Tools.git
+          git fetch github main
+          git merge --ff-only github/main || echo "Non-fast-forward; skipping merge"
           git push github main
           for tag in $(git tag -l "v*"); do
               git push github "$tag"
