@@ -1,5 +1,5 @@
 cryptography
-easysnmp
+pysnmp
 psutil
 python-dateutil
 requests
