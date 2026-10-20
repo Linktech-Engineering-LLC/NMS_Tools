@@ -157,10 +157,9 @@ jobs:
       - name: Ensure Forgejo nightly release exists
         id: forgejo_release
         run: |
-          curl -v -H "Authorization: token $FORGEJO_TOKEN" "$FORGEJO_URL"
           RELEASE=$(curl -s \
-            -H "Authorization: token $FORGEJO_TOKEN " \
-            $FORGEJO_URL \
+            -H "Authorization: token $FORGEJO_TOKEN" \
+            "$FORGEJO_URL" \
             | jq -r '.id // empty')
 
           if [ -z "$RELEASE" ]; then
@@ -169,11 +168,11 @@ jobs:
               -H "Authorization: token $FORGEJO_TOKEN" \
               -H "Content-Type: application/json" \
               -d '{"tag_name":"nightly","name":"Nightly Build","body":"Nightly build artifacts","prerelease":true}' \
-              $FORGEJO_URL
+              http://dad:3000/api/v1/repos/linux/NMS_Tools/releases
 
             RELEASE=$(curl -s \
-              -H "Authorization: token $FORGEJO_TOKEN " \
-              $FORGEJO_URL \
+              -H "Authorization: token $FORGEJO_TOKEN" \
+              "$FORGEJO_URL" \
               | jq -r '.id // empty')
           fi
 
@@ -186,20 +185,17 @@ jobs:
       - name: Remove existing Forgejo nightly assets
         run: |
           RELEASE=${{ steps.forgejo_release.outputs.forgejo_id }}
-          curl -v -H "Authorization: token $FORGEJO_TOKEN" "$FORGEJO_URL"
-          curl -v \
-            -H "Authorization: token $FORGEJO_TOKEN" \
-            "$FORGEJO_URL"
 
           curl -s \
-            -H "Authorization: token $FORGEJO_TOKEN " \
-            $FORGEJO_URL \
-            | jq -r '.assets[].id' \
+            -H "Authorization: token $FORGEJO_TOKEN" \
+            "$FORGEJO_URL" \
+            | jq -r '.assets[].id // empty' \
             | while read ID; do
+                [ -z "$ID" ] && continue
                 echo "Deleting Forgejo asset $ID"
                 curl -s -X DELETE \
-                  -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
-                  http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/$RELEASE/assets/$ID
+                  -H "Authorization: token $FORGEJO_TOKEN" \
+                  "http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/$RELEASE/assets/$ID"
               done
 
       # ============================================================
