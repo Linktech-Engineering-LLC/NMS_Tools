@@ -6,7 +6,7 @@ File: build.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-07-08
-Modified: 2026-09-08
+ Modified: 2026-10-20
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -76,12 +76,6 @@ def generate_spec(tool_name, log=None):
 
     binaries = []
 
-    # Special case: easysnmp C-extension
-    if tool_name == "check_interfaces":
-        import easysnmp
-        easysnmp_dir = Path(easysnmp.__file__).parent
-        for f in easysnmp_dir.glob("*.so"):
-            binaries.append((str(f), "easysnmp"))
 
     spec_content = f"""
 # -*- mode: python ; coding: utf-8 -*-
