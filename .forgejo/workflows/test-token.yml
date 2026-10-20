@@ -8,6 +8,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Install jq
+        run: |
+          apt-get update
+          apt-get install -y jq
+
       - name: Test API access to NMS_Tools nightly release
         env:
           TOKEN: ${{ secrets.NMSTOOLSTOKEN }}
