@@ -43,6 +43,11 @@ jobs:
           apt-get update
           apt-get install -y python3.12 python3.12-dev python3.12-venv
 
+      - name: Install SNMP build dependencies
+        run: |
+          apt-get update
+          apt-get install -y libsnmp-dev snmp-mibs-downloader net-snmp
+
       - name: Create virtual environment
         run: |
           python3.12 -m venv /opt/venv
