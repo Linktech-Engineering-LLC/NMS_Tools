@@ -39,9 +39,13 @@ jobs:
           echo "git_hash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
       - name: Install Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+        run: |
+          apt-get update
+          apt-get install -y python3.12 python3.12-dev python3.12-distutils
+          update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
+      - name: Install pip
+        run: |
+          curl -sS https://bootstrap.pypa.io/get-pip.py | python3
 
       - name: Install build dependencies
         run: |
@@ -138,52 +142,82 @@ jobs:
           }
           EOF
 
-      - name: Ensure nightly release exists
+      # ============================================================
+      # Sync GitHub nightly release metadata → Forgejo release
+      # ============================================================
+
+      - name: Download GitHub nightly release metadata
+        id: ghmeta
+        run: |
+          curl -s \
+            https://api.github.com/repos/linux/NMS_Tools/releases/tags/nightly \
+            -o gh_release.json
+
+          echo "gh_name=$(jq -r '.name' gh_release.json)" >> $GITHUB_OUTPUT
+          echo "gh_body=$(jq -r '.body' gh_release.json)" >> $GITHUB_OUTPUT
+
+      # ============================================================
+      # Ensure Forgejo nightly release exists (using GitHub metadata)
+      # ============================================================
+
+      - name: Ensure Forgejo nightly release exists
+        id: forgejo_release
         run: |
           RELEASE=$(curl -s \
             -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
-            http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/nightly \
+            http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/tags/nightly \
             | jq -r '.id // empty')
 
           if [ -z "$RELEASE" ]; then
-            echo "Creating nightly release"
-            curl -X POST \
+            echo "Creating Forgejo nightly release using GitHub metadata"
+            BODY=$(jq -Rs '.' <<< "${{ steps.ghmeta.outputs.gh_body }}")
+
+            curl -s -X POST \
               -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
               -H "Content-Type: application/json" \
-              -d '{"tag_name":"nightly","name":"Nightly Build","prerelease":true}' \
+              -d "{\"tag_name\":\"nightly\",\"name\":\"${{ steps.ghmeta.outputs.gh_name }}\",\"body\":$BODY,\"prerelease\":true}" \
               http://dad:3000/api/v1/repos/linux/NMS_Tools/releases
+
+            RELEASE=$(curl -s \
+              -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
+              http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/tags/nightly \
+              | jq -r '.id')
           else
-            echo "Nightly release already exists"
+            echo "Forgejo nightly release already exists"
           fi
 
-      - name: Remove existing nightly assets
+          echo "forgejo_id=$RELEASE" >> $GITHUB_OUTPUT
+
+      # ============================================================
+      # Remove existing Forgejo nightly assets
+      # ============================================================
+
+      - name: Remove existing Forgejo nightly assets
         run: |
-          RELEASE=$(curl -s \
-            -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
-            http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/nightly \
-            | jq -r '.id')
+          RELEASE=${{ steps.forgejo_release.outputs.forgejo_id }}
 
           curl -s \
             -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
-            http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/nightly \
-            | jq -r '.assets // [] | .[].id' \
+            http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/tags/nightly \
+            | jq -r '.assets[].id' \
             | while read ID; do
-                echo "Deleting asset $ID"
-                curl -X DELETE \
+                echo "Deleting Forgejo asset $ID"
+                curl -s -X DELETE \
                   -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
                   http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/$RELEASE/assets/$ID
               done
 
-      - name: Upload artifacts to Forgejo nightly release
+      # ============================================================
+      # Upload Forgejo-built artifacts → Forgejo nightly release
+      # ============================================================
+
+      - name: Upload Forgejo-built artifacts to Forgejo release
         run: |
-          RELEASE=$(curl -s \
-            -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
-            http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/nightly \
-            | jq -r '.id')
+          RELEASE=${{ steps.forgejo_release.outputs.forgejo_id }}
 
           for f in artifacts/*; do
             echo "Uploading $f"
-            curl -X POST \
+            curl -s -X POST \
               -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
               -H "Content-Type: application/octet-stream" \
               --data-binary @"$f" \
