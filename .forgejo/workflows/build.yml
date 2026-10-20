@@ -150,20 +150,6 @@ jobs:
           EOF
 
       # ============================================================
-      # Sync GitHub nightly release metadata → Forgejo release
-      # ============================================================
-
-      - name: Download GitHub nightly release metadata
-        id: ghmeta
-        run: |
-          curl -s \
-            https://api.github.com/repos/linux/NMS_Tools/releases/tags/nightly \
-            -o gh_release.json
-
-          echo "gh_name=$(jq -r '.name' gh_release.json)" >> $GITHUB_OUTPUT
-          echo "gh_body=$(jq -r '.body' gh_release.json)" >> $GITHUB_OUTPUT
-
-      # ============================================================
       # Ensure Forgejo nightly release exists (using GitHub metadata)
       # ============================================================
 
@@ -176,21 +162,17 @@ jobs:
             | jq -r '.id // empty')
 
           if [ -z "$RELEASE" ]; then
-            echo "Creating Forgejo nightly release using GitHub metadata"
-            BODY=$(jq -Rs '.' <<< "${{ steps.ghmeta.outputs.gh_body }}")
-
+            echo "Creating Forgejo nightly release"
             curl -s -X POST \
               -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
               -H "Content-Type: application/json" \
-              -d "{\"tag_name\":\"nightly\",\"name\":\"${{ steps.ghmeta.outputs.gh_name }}\",\"body\":$BODY,\"prerelease\":true}" \
+              -d '{"tag_name":"nightly","name":"Nightly Build","body":"Nightly build artifacts","prerelease":true}' \
               http://dad:3000/api/v1/repos/linux/NMS_Tools/releases
 
             RELEASE=$(curl -s \
               -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
               http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/tags/nightly \
               | jq -r '.id')
-          else
-            echo "Forgejo nightly release already exists"
           fi
 
           echo "forgejo_id=$RELEASE" >> $GITHUB_OUTPUT
