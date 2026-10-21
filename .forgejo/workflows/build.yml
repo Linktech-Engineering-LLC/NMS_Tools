@@ -18,7 +18,7 @@ jobs:
     env:
       FORGEJO_URL: "http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/tags/nightly"
       FORGEJO_TOKEN: ${{ secrets.NMSTOOLSTOKEN }}
-
+      FORGEJO_API: ${{ secrets.TOOLSAPITOKEN}}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -258,7 +258,7 @@ jobs:
 
       - name: Clone global Pages repo
         env:
-          FORGEJO_SSH_KEY: ${{ secrets.SSH_PAGES_KEY }}
+          FORGEJO_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
         run: |
           mkdir -p ~/.ssh
           echo "$FORGEJO_SSH_KEY" > ~/.ssh/id_ed25519
