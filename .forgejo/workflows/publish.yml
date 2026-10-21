@@ -16,12 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GIT_SSH_COMMAND: "ssh -F /github/home/.ssh/config -o IdentitiesOnly=yes"
+      NMSTOOLS_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
+      NMSTOOLS_API_KEY: ${{ secrets.TOOLSAPITOKEN }}
 
     steps:
       - name: Setup SSH keys and config
-        env:
-          NMSTOOLS_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
-          NMSTOOLS_API_KEY: ${{ secrets.TOOLSAPITOKEN }}
         run: |
           mkdir -p /github/home/.ssh
 
