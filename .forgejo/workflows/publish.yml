@@ -21,11 +21,12 @@ jobs:
       - name: Setup SSH keys and config
         env:
           NMSTOOLS_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
+          NMSTOOLS_API_KEY: ${{ secrets.TOOLSAPITOKEN }}
         run: |
           mkdir -p /github/home/.ssh
 
-          echo "$NMSTOOLS_SSH_KEY" > /github/home/.ssh/id_runupdates
-          chmod 600 /github/home/.ssh/id_runupdates
+          echo "$NMSTOOLS_SSH_KEY" > /github/home/.ssh/id_nms_tools
+          chmod 600 /github/home/.ssh/id_nms_tools
 
           # Fetch actual host key for dad
           ssh-keyscan -p 2222 -t ed25519 dad >> /github/home/.ssh/known_hosts
@@ -37,16 +38,16 @@ jobs:
               HostName dad
               Port 2222
               User runner
-              IdentityFile /github/home/.ssh/id_runupdates
+              IdentityFile /github/home/.ssh/id_nms_tools
               IdentitiesOnly yes
               UserKnownHostsFile /github/home/.ssh/known_hosts
           EOF
 
       - name: Clone Pages repo
         run: |
-          git clone http://doug:${{ secrets.TOOLSAPITOKEN }}@dad:3000/doug/Pages.git Pages
+          git clone http://doug:$NMSTOOLS_API_KEY@dad:3000/doug/Pages.git Pages
           cd Pages
-          git remote set-url origin http://doug:${{ secrets.NMSTOOLSTOKEN }}@dad:3000/doug/Pages.git
+          git remote set-url origin http://doug:$NMSTOOLS_API_KEY@dad:3000/doug/Pages.git
       - name: Install rsync
         run: |
           apt-get update && apt-get install -y rsync
