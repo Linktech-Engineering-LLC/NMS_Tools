@@ -1,11 +1,11 @@
 {
   "meta_version": 2,
   "build": {
-    "date": "2026-10-26T12:38:13Z",
+    "date": "2026-10-27T11:56:03Z",
     "commit": "361b4ce",
     "version": "1.0.0",
     "branch": "nightly",
-    "workflow_run_id": 40323531931
+    "workflow_run_id": 40499328915
 },
   "toolchain": {
     "python": "3.12.15",
@@ -23,9 +23,9 @@
       "type": "rpm",
       "os": "linux",
       "arch": "x86_64",
-      "size": 218122914,
-      "sha256": "05c7ca24109c3b0c9b7616765ebb32b654a05b4b636ab915679f86cc3bc216e7",
-      "crc32": "793b4a26"
+      "size": 218125145,
+      "sha256": "8bc45a935685e63f03fe64a557d6df15259ead1476a3d606ab0331de490e05bd",
+      "crc32": "0ce2fcaf"
     }
 ,
     {
@@ -33,9 +33,9 @@
       "type": "deb",
       "os": "linux",
       "arch": "amd64",
-      "size": 216661282,
-      "sha256": "260484e9fcb7579982b278518c4a4dffbd139f1b9dc42d87fdefd2e247841953",
-      "crc32": "457b97b8"
+      "size": 216665560,
+      "sha256": "b5bd1f4fff141f5697714054566c0edd9a93499df5dc26d46beb4132bc454b82",
+      "crc32": "2dcf4e9d"
     }
 ,
     {
@@ -43,9 +43,9 @@
       "type": "tgz",
       "os": "linux",
       "arch": "amd64",
-      "size": 218047466,
-      "sha256": "6f337c58a7756a65409868be1aed2aad16f87a79f41a2ccaf13bb5650dcd8cf2",
-      "crc32": "dd1d77b2"
+      "size": 218050745,
+      "sha256": "9646ce01980c8b807bacbca1a158652f37b2169740f77a1d88c241dc68553cf7",
+      "crc32": "df4d9d76"
     }
 ,
     {
@@ -53,9 +53,9 @@
       "type": "zip",
       "os": "windows",
       "arch": "x86_64",
-      "size": 218048986,
-      "sha256": "48118aa80a0776d269d17669307339093508d9fc56cfaca9e544903691d90569",
-      "crc32": "05cc5147"
+      "size": 218052834,
+      "sha256": "ed60665c0f684cac7f7de7a42ad003ed1ee94a54ee2781f135177d3ffefd4930",
+      "crc32": "64d237a1"
     }
   ]
 }
