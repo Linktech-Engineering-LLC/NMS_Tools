@@ -38,3 +38,4 @@ jobs:
 
           echo "✅ Token test PASSED"
           echo "Nightly release ID: $RELEASE_ID"
+          

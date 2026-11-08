@@ -1,3 +1,50 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Leon McClatchey, Linktech Engineering LLC
+#
+# Workflow: build.yml
+# Workflow Class: Build
+# Package: NMS_Tools
+# Repository: Linux/NMS_Tools
+#
+# Author: Leon McClatchey
+# Company: Linktech Engineering LLC
+#
+# Created: 2026-10-21
+# Modified: 2026-10-21
+# Version: 1.0.0
+#
+# Purpose:
+#   Builds the packages and saves the artifacts to Linux/NMS_Tools/releases/nightly
+#
+# Triggers:
+#   - workflow_dispatch
+#
+# Dependencies:
+#   - none
+#
+# Artifacts Consumed:
+#   - none
+#
+# Artifacts Produced:
+#   - none
+#
+# Required Secrets:
+#   - none
+#
+# Pipeline:
+#
+#   nightly-build
+#          |
+#          v
+#      dashboard
+#          |
+#          v
+#       publish
+#
+# Notes:
+#   Additional implementation details
+
+
 name: Forgejo Nightly Build
 
 on:
