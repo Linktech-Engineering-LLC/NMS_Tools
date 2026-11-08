@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FORGEJO_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
+      FORGEJO_TOKEN: ${{ secrets.NMSTOOLSTOKEN }}
 
     steps:
       - name: Checkout main repo
@@ -37,24 +38,27 @@ jobs:
           git config user.email "forgejo-actions@noreply.local"
 
       - name: Download nightly artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: nightly
-          path: artifacts
-
+        run: |
+          mkdir -p artifacts
+          curl \
+            -H "Authorization: token $FORGEJO_TOKEN" \
+            "$FORGEJO_URL" > release.json
+          cat release.json
+            
       - name: Build dashboard folder
         run: |
           mkdir -p dashboard
-          cp packaging/dashboard/index.html dashboard/
-          cp packaging/dashboard/dashboard.js dashboard/
-          cp packaging/dashboard/styles.css dashboard/
-          cp artifacts/metadata.json dashboard/
+          cp release.json dashboard/metadata.json
+#          cp packaging/dashboard/index.html dashboard/
+#          cp packaging/dashboard/dashboard.js dashboard/
+#          cp packaging/dashboard/styles.css dashboard/
+#          cp artifacts/metadata.json dashboard/
 
-          mkdir -p dashboard/artifacts
-          cp -r artifacts/nms-tools* dashboard/artifacts/
+#          mkdir -p dashboard/artifacts
+#          cp -r artifacts/nms-tools* dashboard/artifacts/
 
-          curl -s -o dashboard/qr.png \
-            "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://dad:3000/Linux/NMS_Tools/"
+#          curl -s -o dashboard/qr.png \
+#            "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://dad:3000/Linux/NMS_Tools/"
 
       - name: Clone global Pages repo
         run: |
