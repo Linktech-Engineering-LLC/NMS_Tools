@@ -63,7 +63,9 @@ jobs:
     container:
       image: dad:3000/linux/leon-ci:latest
     env:
+      FORGEJO_PAGES: "ssh://forgejo@dad:3001/doug/Pages.git"
       FORGEJO_URL: "http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/tags/nightly"
+      FORGEJO_BASE: "ssh://forgejo@dad:3001/Linux/NMS_Tools.git"
       FORGEJO_TOKEN: ${{ secrets.NMSTOOLSTOKEN }}
       FORGEJO_API: ${{ secrets.TOOLSAPITOKEN}}
     steps:
@@ -316,7 +318,7 @@ jobs:
 
           ssh-keyscan -t ed25519 -p 2222 dad >> ~/.ssh/known_hosts
 
-          git clone ssh://forgejo@dad:2222/doug/Pages.git pagesrepo
+          git clone $FORGEJO_PAGES pagesrepo
           cd pagesrepo
 
           mkdir -p NMS_Updates

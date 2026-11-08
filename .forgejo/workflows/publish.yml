@@ -15,6 +15,7 @@ jobs:
        github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     env:
+      DOUG_PAGES: "ssh://forgejo@dad:3001/doug/Pages.git"
       GIT_SSH_COMMAND: "ssh -F /github/home/.ssh/config -o IdentitiesOnly=yes"
       NMSTOOLS_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
       NMSTOOLS_API_KEY: ${{ secrets.TOOLSAPITOKEN }}
@@ -44,9 +45,9 @@ jobs:
 
       - name: Clone Pages repo
         run: |
-          git clone http://doug:$NMSTOOLS_API_KEY@dad:3000/doug/Pages.git Pages
+          git clone $DOUG_PAGES Pages
           cd Pages
-          git remote set-url origin http://doug:$NMSTOOLS_API_KEY@dad:3000/doug/Pages.git
+          git remote set-url origin $DOUG_PAGES
       - name: Install rsync
         run: |
           apt-get update && apt-get install -y rsync
