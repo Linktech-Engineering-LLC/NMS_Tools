@@ -17,7 +17,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-jobs:
   create-dashboard:
     if: |
       ${{ github.event.workflow_run.conclusion == 'success' 
@@ -73,7 +72,7 @@ jobs:
           echo "FORGEJO_PAGES=$FORGEJO_PAGES"
 
           git ls-remote "$FORGEJO_PAGES"
-          
+
           git clone "$FORGEJO_PAGES" pagesrepo
           cd pagesrepo
 
