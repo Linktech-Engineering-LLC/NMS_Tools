@@ -63,7 +63,6 @@ jobs:
     container:
       image: dad:3000/linux/leon-ci:latest
     env:
-      FORGEJO_PAGES: "ssh://forgejo@dad:3001/doug/Pages.git"
       FORGEJO_URL: "http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/tags/nightly"
       FORGEJO_BASE: "ssh://forgejo@dad:3001/Linux/NMS_Tools.git"
       FORGEJO_TOKEN: ${{ secrets.NMSTOOLSTOKEN }}
@@ -273,6 +272,9 @@ jobs:
   create-dashboard:
     needs: nightly-build
     runs-on: ubuntu-latest
+    env:
+      FORGEJO_PAGES: "ssh://forgejo@dad:3001/doug/Pages.git"
+      FORGEJO_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
 
     steps:
       - name: Checkout main repo
@@ -306,8 +308,6 @@ jobs:
             "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://dad:3000/Linux/NMS_Tools/"
 
       - name: Clone global Pages repo
-        env:
-          FORGEJO_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
         run: |
           mkdir -p ~/.ssh
           echo "$FORGEJO_SSH_KEY" > ~/.ssh/id_ed25519
