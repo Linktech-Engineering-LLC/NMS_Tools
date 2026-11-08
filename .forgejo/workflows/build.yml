@@ -310,6 +310,8 @@ jobs:
 
       - name: Clone global Pages repo
         run: |
+          set -x
+
           mkdir -p ~/.ssh
           echo "$FORGEJO_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
@@ -317,9 +319,13 @@ jobs:
           eval "$(ssh-agent -s)"
           ssh-add ~/.ssh/id_ed25519
 
-          ssh-keyscan -t ed25519 -p 3001 dad >> ~/.ssh/known_hosts
+          ssh-keyscan -p 3001 dad >> ~/.ssh/known_hosts
 
-          git clone $FORGEJO_PAGES pagesrepo
+          echo "FORGEJO_PAGES=$FORGEJO_PAGES"
+
+          git ls-remote "$FORGEJO_PAGES"
+
+          git clone "$FORGEJO_PAGES" pagesrepo
           cd pagesrepo
 
           rm -rf NMS_Updates
