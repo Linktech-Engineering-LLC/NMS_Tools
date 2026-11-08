@@ -1,0 +1,91 @@
+name: Create Dashboard
+env:
+  FORGEJO_URL: "http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/tags/nightly"
+  FORGEJO_BASE: "ssh://forgejo@dad:3001/Linux/NMS_Tools.git"
+  FORGEJO_PAGES: "ssh://forgejo@dad:3001/doug/Pages.git"
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - "Forgejo Nightly Build"
+    types:
+      - completed
+      
+concurrency:
+  group: forgejo-nightly
+  cancel-in-progress: true
+
+jobs:
+jobs:
+  create-dashboard:
+    if: |
+      ${{ github.event.workflow_run.conclusion == 'success' 
+      || github.event_name == 'workflow_dispatch' }}    
+    runs-on: ubuntu-latest
+    env:
+      FORGEJO_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
+
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "forgejo-actions"
+          git config user.email "forgejo-actions@noreply.local"
+
+      - name: Download nightly artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: nightly
+          path: artifacts
+
+      - name: Build dashboard folder
+        run: |
+          mkdir -p dashboard
+          cp packaging/dashboard/index.html dashboard/
+          cp packaging/dashboard/dashboard.js dashboard/
+          cp packaging/dashboard/styles.css dashboard/
+          cp artifacts/metadata.json dashboard/
+
+          mkdir -p dashboard/artifacts
+          cp -r artifacts/nms-tools* dashboard/artifacts/
+
+          curl -s -o dashboard/qr.png \
+            "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://dad:3000/Linux/NMS_Tools/"
+
+      - name: Clone global Pages repo
+        run: |
+          set -x
+
+          mkdir -p ~/.ssh
+          echo "$FORGEJO_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_ed25519
+
+          ssh-keyscan -p 3001 dad >> ~/.ssh/known_hosts
+
+          echo "FORGEJO_PAGES=$FORGEJO_PAGES"
+
+          git ls-remote "$FORGEJO_PAGES"
+          
+          git clone "$FORGEJO_PAGES" pagesrepo
+          cd pagesrepo
+
+          rm -rf NMS_Updates
+          mkdir -p NMS_Tools
+          rm -rf NMS_Tools/*
+          cp -r ../dashboard/* NMS_Tools/
+
+          git config --global user.name "forgejo-actions"
+          git config --global user.email "forgejo-actions@noreply.local"
+
+          git add .
+          git commit -m "Nightly NMS_Tools dashboard update"
+          git branch -M main
+          git push origin main --force
