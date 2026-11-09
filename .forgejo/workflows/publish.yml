@@ -31,7 +31,7 @@ jobs:
         run: |
           mkdir -p ~/.ssh
 
-          echo "$NMSTOOLS_SSH_KEY" > /github/home/.ssh/id_nms_tools
+          echo "$NMSTOOLS_SSH_KEY" > ~/.ssh/id_nms_tools
           chmod 600 ~/.ssh/id_nms_tools
 
           ssh-keyscan -p 3001 -t ed25519 dad >> ~/.ssh/known_hosts
@@ -90,24 +90,24 @@ jobs:
 
       - name: Create destination folders
         run: |
-          ssh -F /github/home/.ssh/config dad \
+          ssh -F ~/.ssh/config dad \
             "mkdir -p /srv/forgejo-pages/NMS_Tools/artifacts"
 
       - name: Deploy dashboard
         run: |
           rsync -avz --delete \
-            -e "ssh -F /github/home/.ssh/config -o IdentitiesOnly=yes" \
+            -e "ssh -F ~/.ssh/config -o IdentitiesOnly=yes" \
             Pages/NMS_Tools/ \
             dad:/srv/forgejo-pages/NMS_Tools/
 
       - name: Deploy artifacts
         run: |
           rsync -avz --delete \
-            -e "ssh -F /github/home/.ssh/config -o IdentitiesOnly=yes" \
+            -e "ssh -F ~/.ssh/config -o IdentitiesOnly=yes" \
             artifacts/ \
             dad:/srv/forgejo-pages/NMS_Tools/artifacts/
 
       - name: Verify deployment
         run: |
-          ssh -F /github/home/.ssh/config dad \
+          ssh -F ~/.ssh/config dad \
             "find /srv/forgejo-pages/NMS_Tools -type f | sort"
