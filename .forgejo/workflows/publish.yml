@@ -1,9 +1,11 @@
 name: publish-dashboard
+
 on:
   workflow_run:
     workflows: ["nightly-build"]
     types:
       - completed
+
   workflow_dispatch:
 
 jobs:
@@ -12,15 +14,19 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run &&
        github.event.workflow_run.conclusion == 'success')
+
     runs-on: ubuntu-latest
+
     container:
       image: dad:3000/linux/leon-ci:latest
+
     env:
       GIT_SSH_COMMAND: "ssh -F /github/home/.ssh/config -o IdentitiesOnly=yes"
       NMSTOOLS_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
       NMSTOOLS_TOKEN: ${{ secrets.TOOLSAPITOKEN }}
 
     steps:
+
       - name: Setup SSH keys and config
         run: |
           mkdir -p /github/home/.ssh
@@ -28,10 +34,7 @@ jobs:
           echo "$NMSTOOLS_SSH_KEY" > /github/home/.ssh/id_nms_tools
           chmod 600 /github/home/.ssh/id_nms_tools
 
-          # Fetch actual host key for dad
           ssh-keyscan -p 2222 -t ed25519 dad >> /github/home/.ssh/known_hosts
-
-          cat /github/home/.ssh/known_hosts
 
           cat <<EOF > /github/home/.ssh/config
           Host dad
@@ -45,11 +48,11 @@ jobs:
 
       - name: Clone Pages repo
         run: |
-          git clone --depth 1 http://doug:$NMSTOOLS_TOKEN@dad:3000/doug/Pages.git Pages
-          cd Pages
-          git remote set-url origin http://doug:$NMSTOOLS_TOKEN@dad:3000/doug/Pages.git
+          git clone --depth 1 \
+            http://doug:$NMSTOOLS_TOKEN@dad:3000/doug/Pages.git \
+            Pages
 
-      - name: Download release artifacts
+      - name: Download release assets
         env:
           FORGEJO_API_ROOT: "http://dad:3000/api/v1/repos/linux/NMS_Tools"
         run: |
@@ -63,25 +66,40 @@ jobs:
           jq -r '.assets[] | "\(.name)|\(.browser_download_url)"' release.json |
           while IFS='|' read NAME URL; do
             echo "Downloading $NAME"
-            curl -L "$URL" -o "artifacts/$NAME"
+
+            curl -L \
+              -H "Authorization: token $NMSTOOLS_TOKEN" \
+              "$URL" \
+              -o "artifacts/$NAME"
           done
 
           ls -lh artifacts
 
-      - name: Deploy dashboard via rsync
+      - name: Merge release metadata into dashboard
+        run: |
+          cp artifacts/metadata.json \
+             Pages/NMS_Tools/metadata.json
+
+      - name: Create destination folders
         run: |
           ssh -F /github/home/.ssh/config dad \
             "mkdir -p /srv/forgejo-pages/NMS_Tools/artifacts"
 
+      - name: Deploy dashboard
+        run: |
           rsync -avz --delete \
             -e "ssh -F /github/home/.ssh/config -o IdentitiesOnly=yes" \
             Pages/NMS_Tools/ \
             dad:/srv/forgejo-pages/NMS_Tools/
 
+      - name: Deploy artifacts
+        run: |
           rsync -avz --delete \
             -e "ssh -F /github/home/.ssh/config -o IdentitiesOnly=yes" \
             artifacts/ \
             dad:/srv/forgejo-pages/NMS_Tools/artifacts/
 
+      - name: Verify deployment
+        run: |
           ssh -F /github/home/.ssh/config dad \
             "find /srv/forgejo-pages/NMS_Tools -type f | sort"

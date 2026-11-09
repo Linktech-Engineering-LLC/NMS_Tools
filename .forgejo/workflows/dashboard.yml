@@ -49,6 +49,23 @@ jobs:
             "$FORGEJO_API_ROOT/releases/tags/nightly" \
             -o release.json
             
+      - name: Download metadata.json
+        run: |
+          mkdir -p dashboard
+
+          URL=$(jq -r '
+            .assets[]
+            | select(.name=="metadata.json")
+            | .browser_download_url
+          ' release.json)
+
+          echo "Downloading metadata from $URL"
+
+          curl -L \
+            -H "Authorization: token $FORGEJO_TOKEN" \
+            "$URL" \
+            -o dashboard/metadata.json
+            
       - name: Build dashboard folder
         run: |
           mkdir -p dashboard
@@ -56,33 +73,6 @@ jobs:
           cp packaging/dashboard/index.html dashboard/
           cp packaging/dashboard/dashboard.js dashboard/
 
-          jq '
-          {
-            meta_version: 3,
-
-            build: {
-              date: (.published_at // ""),
-              commit: (.target_commitish // "unknown"),
-              branch: (.tag_name // "nightly"),
-              workflow_run_id: "release"
-            },
-
-            toolchain: {
-              python: "unknown",
-              pyinstaller: "unknown"
-            },
-
-            artifacts:
-            [
-              .assets[] |
-              {
-                name: .name,
-                size: .size,
-                download_url: .browser_download_url
-              }
-            ]
-          }
-          ' release.json > dashboard/metadata.json
 
           curl -s -o dashboard/qr.png \
             "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://dad:3000/Linux/NMS_Tools/"
