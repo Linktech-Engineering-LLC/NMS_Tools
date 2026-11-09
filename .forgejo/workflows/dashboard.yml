@@ -48,30 +48,41 @@ jobs:
             -H "Authorization: token $FORGEJO_TOKEN" \
             "$FORGEJO_API_ROOT/releases/tags/nightly" \
             -o release.json
-      - name: Download release assets
-        run: |
-          mkdir -p artifacts
-
-          curl -s \
-            -H "Authorization: token $FORGEJO_TOKEN" \
-            "$FORGEJO_API_ROOT/releases/tags/nightly" \
-            > release.json
-
-          jq -r '.assets[] | "\(.name)|\(.browser_download_url)"' release.json |
-          while IFS='|' read NAME URL; do
-            echo "Downloading $NAME"
-            curl -L "$URL" -o "artifacts/$NAME"
-          done
             
       - name: Build dashboard folder
         run: |
           mkdir -p dashboard
+
           cp packaging/dashboard/index.html dashboard/
           cp packaging/dashboard/dashboard.js dashboard/
-          cp artifacts/metadata.json dashboard/
 
-          mkdir -p dashboard/artifacts
-          cp -r artifacts/nms-tools_* dashboard/artifacts/
+          jq '
+          {
+            meta_version: 3,
+
+            build: {
+              date: (.published_at // ""),
+              commit: (.target_commitish // "unknown"),
+              branch: (.tag_name // "nightly"),
+              workflow_run_id: "release"
+            },
+
+            toolchain: {
+              python: "unknown",
+              pyinstaller: "unknown"
+            },
+
+            artifacts:
+            [
+              .assets[] |
+              {
+                name: .name,
+                size: .size,
+                download_url: .browser_download_url
+              }
+            ]
+          }
+          ' release.json > dashboard/metadata.json
 
           curl -s -o dashboard/qr.png \
             "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://dad:3000/Linux/NMS_Tools/"
@@ -93,7 +104,7 @@ jobs:
 
           git ls-remote "$FORGEJO_PAGES"
 
-          git clone "$FORGEJO_PAGES" pagesrepo
+          git clone --depth 1 "$FORGEJO_PAGES" pagesrepo
           cd pagesrepo
 
           rm -rf NMS_Updates
@@ -101,10 +112,8 @@ jobs:
           rm -rf NMS_Tools/*
           cp -r ../dashboard/* NMS_Tools/
 
-          git config --global user.name "forgejo-actions"
-          git config --global user.email "forgejo-actions@noreply.local"
-
           git add .
+          git diff --staged --quiet || \
           git commit -m "Nightly NMS_Tools dashboard update"
           git branch -M main
           git push origin main --force

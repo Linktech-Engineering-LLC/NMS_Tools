@@ -133,73 +133,6 @@ jobs:
           cp packaging/output/*.deb artifacts/ || true
           cp packaging/output/*.rpm artifacts/ || true
           ls -al artifacts
-      - name: Generate metadata.json
-        run: |
-          mkdir -p artifacts
-          source /opt/venv/bin/activate
-          PYTHON_VERSION=$(python3 --version | awk '{print $2}')
-          PYINSTALLER_VERSION=$(pyinstaller --version 2>/dev/null || echo "unknown")
-          BUILDER_OS="forgejo-runner"
-
-          cat > artifacts/metadata.json <<EOF
-          {
-            "meta_version": 2,
-            "build": {
-              "date": "${{ steps.capture.outputs.build_date }}",
-              "commit": "${{ steps.capture.outputs.git_hash }}",
-              "branch": "nightly"
-            },
-            "toolchain": {
-              "python": "$PYTHON_VERSION",
-              "pyinstaller": "$PYINSTALLER_VERSION",
-              "builder_os": "$BUILDER_OS"
-            },
-            "binary_license": {
-              "name": "NMS_Tools Binary License",
-              "file": "LICENSE_BINARY.txt",
-              "url": "http://dad:3000/linux/NMS_Tools/src/branch/nightly/LICENSE_BINARY.txt"
-            },
-            "artifacts": [
-          EOF
-
-          FIRST=1
-          for f in artifacts/nms-tools_*; do
-            NAME=$(basename "$f")
-            SIZE=$(stat -c%s "$f")
-            SHA=$(sha256sum "$f" | awk '{print $1}')
-            CRC=$(crc32 "$f")
-
-            case "$NAME" in
-              *.deb) TYPE="deb"; OS="linux"; ARCH="amd64";;
-              *.rpm) TYPE="rpm"; OS="linux"; ARCH="x86_64";;
-              *.zip) TYPE="zip"; OS="windows"; ARCH="x86_64";;
-              *.tgz|*.tar.gz) TYPE="tgz"; OS="linux"; ARCH="amd64";;
-              *) TYPE="unknown"; OS="unknown"; ARCH="unknown";;
-            esac
-
-            if [ $FIRST -eq 0 ]; then
-              echo "," >> artifacts/metadata.json
-            fi
-            FIRST=0
-
-            cat >> artifacts/metadata.json <<EOF
-              {
-                "name": "$NAME",
-                "type": "$TYPE",
-                "os": "$OS",
-                "arch": "$ARCH",
-                "size": $SIZE,
-                "sha256": "$SHA",
-                "crc32": "$CRC"
-              }
-          EOF
-          done
-
-          cat >> artifacts/metadata.json <<EOF
-            ]
-          }
-          EOF
-
       # ============================================================
       # Ensure Forgejo nightly release exists (using GitHub metadata)
       # ============================================================
@@ -256,7 +189,11 @@ jobs:
         run: |
           RELEASE=${{ steps.forgejo_release.outputs.forgejo_id }}
 
-          for f in artifacts/*; do
+          for f in artifacts/*.rpm \
+                   artifacts/*.deb \
+                   artifacts/*.tgz \
+                   artifacts/*.zip; do
+            [ -f "$f" ] || continue
             echo "Uploading $f"
             curl -s -X POST \
               -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \

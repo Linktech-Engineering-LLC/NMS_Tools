@@ -45,8 +45,7 @@ function renderArtifacts(meta) {
   const div = document.getElementById("artifact-table");
   if (!div) return;
 
-  const nightlyURL =
-    "https://github.com/Linktech-Engineering-LLC/NMS_Tools/releases/download/nightly";
+  const dl = a.download_url;
 
   let rows = "";
 

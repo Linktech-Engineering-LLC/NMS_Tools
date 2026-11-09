@@ -56,4 +56,4 @@ jobs:
             Pages/NMS_Tools/ \
             dad:/srv/forgejo-pages/NMS_Tools/
 
-          ssh -F /github/home/.ssh/config dad "ls -l /srv/forgejo-pages/NMS_TOOLS"
+          ssh -F /github/home/.ssh/config dad "ls -l /srv/forgejo-pages/NMS_Tools"
