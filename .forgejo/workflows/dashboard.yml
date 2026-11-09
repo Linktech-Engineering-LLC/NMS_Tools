@@ -71,7 +71,7 @@ jobs:
           cp artifacts/metadata.json dashboard/
 
           mkdir -p dashboard/artifacts
-          cp -r artifacts/NMS_Tools* dashboard/artifacts/
+          cp -r artifacts/nms-tools_* dashboard/artifacts/
 
           curl -s -o dashboard/qr.png \
             "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://dad:3000/Linux/NMS_Tools/"
