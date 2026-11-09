@@ -27,6 +27,7 @@ jobs:
       FORGEJO_API_ROOT: "http://dad:3000/api/v1/repos/linux/NMS_Tools"
       FORGEJO_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
       FORGEJO_TOKEN: ${{ secrets.NMSTOOLSTOKEN }}
+      FORGEJO_PAGE_KEY: ${{ secrets.PAGES_KEY }}
 
     steps:
       - name: Checkout main repo
@@ -81,7 +82,7 @@ jobs:
           set -x
 
           mkdir -p ~/.ssh
-          echo "$FORGEJO_SSH_KEY" > ~/.ssh/id_ed25519
+          echo "$FORGEJO_PAGE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
           eval "$(ssh-agent -s)"
