@@ -2,7 +2,7 @@ name: Create Dashboard
 env:
   FORGEJO_URL: "http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/tags/nightly"
   FORGEJO_BASE: "ssh://forgejo@dad:3001/Linux/NMS_Tools.git"
-  FORGEJO_PAGES: "http://runner:${{ secrets.TOOLSAPITOKEN }}@dad:3000/doug/Pages.git"
+  FORGEJO_PAGES: "ssh://forgejo@dad:3001/doug/Pages.git"
 on:
   workflow_dispatch:
   workflow_run:
