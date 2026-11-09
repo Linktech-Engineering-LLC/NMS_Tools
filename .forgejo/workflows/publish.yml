@@ -45,7 +45,7 @@ jobs:
 
       - name: Clone Pages repo
         run: |
-          git clone http://doug:$NMSTOOLS_TOKEN@dad:3000/doug/Pages.git Pages
+          git clone --depth 1 http://doug:$NMSTOOLS_TOKEN@dad:3000/doug/Pages.git Pages
           cd Pages
           git remote set-url origin http://doug:$NMSTOOLS_TOKEN@dad:3000/doug/Pages.git
 
