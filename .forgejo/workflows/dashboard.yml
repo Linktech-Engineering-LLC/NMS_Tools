@@ -2,7 +2,7 @@ name: Create Dashboard
 env:
   FORGEJO_URL: "http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/tags/nightly"
   FORGEJO_BASE: "ssh://forgejo@dad:3001/Linux/NMS_Tools.git"
-  FORGEJO_PAGES: "http://doug:${{ secrets.NMSTOOLSTOKEN }}@dad:3000/doug/Pages.git"
+  FORGEJO_PAGES: "http://doug:${{ secrets.TOOLSAPITOKEN }}@dad:3000/doug/Pages.git"
 on:
   workflow_dispatch:
   workflow_run:
@@ -26,7 +26,7 @@ jobs:
     env:
       FORGEJO_API_ROOT: "http://dad:3000/api/v1/repos/linux/NMS_Tools"
       FORGEJO_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
-      FORGEJO_TOKEN: ${{ secrets.TOOLSAPITOKEN }}
+      FORGEJO_TOKEN: ${{ secrets.NMSTOOLSTOKEN }}
 
     steps:
       - name: Checkout main repo
