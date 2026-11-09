@@ -51,6 +51,8 @@ jobs:
 
       - name: Deploy dashboard via rsync
         run: |
+          ssh -vvv -F /github/home/.ssh/config dad "whoami"        
+
           rsync -avz --delete \
             -e "ssh -F /github/home/.ssh/config -o IdentitiesOnly=yes" \
             Pages/NMS_Tools/ \
