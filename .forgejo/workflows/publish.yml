@@ -21,7 +21,7 @@ jobs:
       image: dad:3000/linux/leon-ci:latest
 
     env:
-      GIT_SSH_COMMAND: "ssh -F /github/home/.ssh/config -o IdentitiesOnly=yes"
+      GIT_SSH_COMMAND: "ssh -F ~/.ssh/config -o IdentitiesOnly=yes"
       NMSTOOLS_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
       NMSTOOLS_TOKEN: ${{ secrets.TOOLSAPITOKEN }}
 
