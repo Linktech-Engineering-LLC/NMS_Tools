@@ -107,6 +107,9 @@ jobs:
           git clone --depth 1 "$FORGEJO_PAGES" pagesrepo
           cd pagesrepo
 
+          git config user.name "forgejo-actions"
+          git config user.email "forgejo-actions@noreply.local"
+
           rm -rf NMS_Updates
           mkdir -p NMS_Tools
           rm -rf NMS_Tools/*
