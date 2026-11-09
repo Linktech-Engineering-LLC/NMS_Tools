@@ -49,13 +49,39 @@ jobs:
           cd Pages
           git remote set-url origin http://doug:$NMSTOOLS_TOKEN@dad:3000/doug/Pages.git
 
+      - name: Download release artifacts
+        env:
+          FORGEJO_API_ROOT: "http://dad:3000/api/v1/repos/linux/NMS_Tools"
+        run: |
+          mkdir -p artifacts
+
+          curl -s \
+            -H "Authorization: token $NMSTOOLS_TOKEN" \
+            "$FORGEJO_API_ROOT/releases/tags/nightly" \
+            > release.json
+
+          jq -r '.assets[] | "\(.name)|\(.browser_download_url)"' release.json |
+          while IFS='|' read NAME URL; do
+            echo "Downloading $NAME"
+            curl -L "$URL" -o "artifacts/$NAME"
+          done
+
+          ls -lh artifacts
+
       - name: Deploy dashboard via rsync
         run: |
-          ssh -vvv -F /github/home/.ssh/config dad "whoami"        
+          ssh -F /github/home/.ssh/config dad \
+            "mkdir -p /srv/forgejo-pages/NMS_Tools/artifacts"
 
           rsync -avz --delete \
             -e "ssh -F /github/home/.ssh/config -o IdentitiesOnly=yes" \
             Pages/NMS_Tools/ \
             dad:/srv/forgejo-pages/NMS_Tools/
 
-          ssh -F /github/home/.ssh/config dad "ls -l /srv/forgejo-pages/NMS_Tools"
+          rsync -avz --delete \
+            -e "ssh -F /github/home/.ssh/config -o IdentitiesOnly=yes" \
+            artifacts/ \
+            dad:/srv/forgejo-pages/NMS_Tools/artifacts/
+
+          ssh -F /github/home/.ssh/config dad \
+            "find /srv/forgejo-pages/NMS_Tools -type f | sort"
