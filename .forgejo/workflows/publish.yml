@@ -1,6 +1,4 @@
 name: publish-dashboard
-env:
-  DOUG_PAGES: "ssh://forgejo@dad:3001/doug/Pages.git"
 on:
   workflow_run:
     workflows: ["nightly-build"]
@@ -15,10 +13,12 @@ jobs:
       (github.event.workflow_run &&
        github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
+    container:
+      image: dad:3000/linux/leon-ci:latest
     env:
       GIT_SSH_COMMAND: "ssh -F /github/home/.ssh/config -o IdentitiesOnly=yes"
       NMSTOOLS_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
-      NMSTOOLS_API_KEY: ${{ secrets.TOOLSAPITOKEN }}
+      NMSTOOLS_TOKEN: ${{ secrets.TOOLSAPITOKEN }}
 
     steps:
       - name: Setup SSH keys and config
@@ -45,12 +45,9 @@ jobs:
 
       - name: Clone Pages repo
         run: |
-          git clone $DOUG_PAGES Pages
+          git clone http://doug:$NMSTOOLS_TOKEN@dad:3000/doug/Pages.git Pages
           cd Pages
-          git remote set-url origin $DOUG_PAGES
-      - name: Install rsync
-        run: |
-          apt-get update && apt-get install -y rsync
+          git remote set-url origin http://doug:$NMSTOOLS_TOKEN@dad:3000/doug/Pages.git
 
       - name: Deploy dashboard via rsync
         run: |
