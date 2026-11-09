@@ -22,7 +22,10 @@ jobs:
       ${{ github.event.workflow_run.conclusion == 'success' 
       || github.event_name == 'workflow_dispatch' }}    
     runs-on: ubuntu-latest
+    container:
+      image: dad:3000/linux/leon-ci:latest
     env:
+      FORGEJO_API_ROOT: "http://dad:3000/api/v1/repos/linux/NMS_Tools"
       FORGEJO_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
       FORGEJO_TOKEN: ${{ secrets.NMSTOOLSTOKEN }}
 
@@ -37,28 +40,41 @@ jobs:
           git config user.name "forgejo-actions"
           git config user.email "forgejo-actions@noreply.local"
 
-      - name: Download nightly artifacts
+      - name: Download nightly metadata
         run: |
           mkdir -p artifacts
-          curl \
+
+          curl -L \
             -H "Authorization: token $FORGEJO_TOKEN" \
-            "$FORGEJO_URL" > release.json
-          cat release.json
+            "$FORGEJO_API_ROOT/releases/tags/nightly" \
+            -o release.json
+      - name: Download release assets
+        run: |
+          mkdir -p artifacts
+
+          curl -s \
+            -H "Authorization: token $FORGEJO_TOKEN" \
+            "$FORGEJO_API_ROOT/releases/tags/nightly" \
+            > release.json
+
+          jq -r '.assets[] | "\(.name)|\(.browser_download_url)"' release.json |
+          while IFS='|' read NAME URL; do
+            echo "Downloading $NAME"
+            curl -L "$URL" -o "artifacts/$NAME"
+          done
             
       - name: Build dashboard folder
         run: |
           mkdir -p dashboard
-          cp release.json dashboard/metadata.json
-#          cp packaging/dashboard/index.html dashboard/
-#          cp packaging/dashboard/dashboard.js dashboard/
-#          cp packaging/dashboard/styles.css dashboard/
-#          cp artifacts/metadata.json dashboard/
+          cp packaging/dashboard/index.html dashboard/
+          cp packaging/dashboard/dashboard.js dashboard/
+          cp artifacts/metadata.json dashboard/
 
-#          mkdir -p dashboard/artifacts
-#          cp -r artifacts/nms-tools* dashboard/artifacts/
+          mkdir -p dashboard/artifacts
+          cp -r artifacts/RunUpdates* dashboard/artifacts/
 
-#          curl -s -o dashboard/qr.png \
-#            "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://dad:3000/Linux/NMS_Tools/"
+          curl -s -o dashboard/qr.png \
+            "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://dad:3000/Linux/NMS_Tools/"
 
       - name: Clone global Pages repo
         run: |
