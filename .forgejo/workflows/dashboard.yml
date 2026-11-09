@@ -26,7 +26,7 @@ jobs:
     env:
       FORGEJO_API_ROOT: "http://dad:3000/api/v1/repos/linux/NMS_Tools"
       FORGEJO_SSH_KEY: ${{ secrets.TOOLSSSHKEY }}
-      FORGEJO_TOKEN: ${{ secrets.NMSTOOLSTOKEN }}
+      FORGEJO_TOKEN: ${{ secrets.TOOLSAPITOKEN }}
 
     steps:
       - name: Checkout main repo
