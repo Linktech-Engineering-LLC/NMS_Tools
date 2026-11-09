@@ -34,12 +34,12 @@ jobs:
           echo "$NMSTOOLS_SSH_KEY" > /github/home/.ssh/id_nms_tools
           chmod 600 /github/home/.ssh/id_nms_tools
 
-          ssh-keyscan -p 2222 -t ed25519 dad >> /github/home/.ssh/known_hosts
+          ssh-keyscan -p 3001 -t ed25519 dad >> /github/home/.ssh/known_hosts
 
           cat <<EOF > /github/home/.ssh/config
           Host dad
               HostName dad
-              Port 2222
+              Port 3001
               User runner
               IdentityFile /github/home/.ssh/id_nms_tools
               IdentitiesOnly yes
