@@ -93,7 +93,7 @@ jobs:
           Host dad
               HostName dad
               Port 3001
-              User runner
+              User forgejo
               IdentityFile /github/home/.ssh/id_ed25519
               IdentitiesOnly yes
               UserKnownHostsFile /github/home/.ssh/known_hosts
