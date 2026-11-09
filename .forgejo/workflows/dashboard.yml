@@ -94,7 +94,7 @@ jobs:
               HostName dad
               Port 3001
               User runner
-              IdentityFile /github/home/.ssh/id_nms_tools
+              IdentityFile /github/home/.ssh/id_ed25519
               IdentitiesOnly yes
               UserKnownHostsFile /github/home/.ssh/known_hosts
           EOF
