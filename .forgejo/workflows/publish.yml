@@ -46,17 +46,25 @@ jobs:
               UserKnownHostsFile /github/home/.ssh/known_hosts
           EOF
 
-      - name: Clone Pages repo
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      
+      - name: Create Dashboard
         run: |
-          git clone --depth 1 \
-            http://doug:$NMSTOOLS_TOKEN@dad:3000/doug/Pages.git \
-            Pages
+          mkdir -p website
+          cp packaging/dashboard/index.html website/
+          cp packaging/dashboard/dashboard.js website/
+          curl -s -o website/qr.png \
+            "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://dad:3000/Linux/NMS_Tools/"
+
 
       - name: Download release assets
         env:
           FORGEJO_API_ROOT: "http://dad:3000/api/v1/repos/linux/NMS_Tools"
         run: |
-          mkdir -p artifacts
+          mkdir -p website/artifacts
 
           curl -s \
             -H "Authorization: token $NMSTOOLS_TOKEN" \
