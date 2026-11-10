@@ -4,17 +4,18 @@
 # Workflow: nightly.yml
 # Workflow Class: Build
 # Package: NMS_Tools
-# Repository: Linus/NMS_Tools
+# Repository: Linux/NMS_Tools
 #
 # Author: Leon McClatchey
 # Company: Linktech Engineering LLC
 #
 # Created: 2026-11-10
 # Modified: 2026-11-10
-# Version: 1.0.0
+# Version: 1.1.0
 #
 # Purpose:
-#   Builds the packages and then publishes to a local server
+#   Builds nightly packages, updates the Forgejo nightly release,
+#   and publishes the nightly dashboard to the local server.
 #
 # Triggers:
 #   - workflow_dispatch
@@ -27,20 +28,38 @@
 #   - none
 #
 # Artifacts Produced:
-#   - none
+#  - metadata.json
+#  - *.rpm
+#  - *.deb
+#  - *.tgz
+#  - *.zip
+#  - nightly dashboard
 #
 # Required Secrets:
-#   - none
+#   - NMSTOOLSTOKEN
+#   - TOOLSAPITOKEN
+#   - TOOLSSSHKEY
 #
 # Pipeline:
 #
-#   nightly-build
-#          |
-#          v
-#       publish
+# nightly-build
+#     |
+#     v
+# Nightly release
+#     |
+#     v
+# publish
+#     |
+#     v
+# nightly dashboard
 #
 # Notes:
-#   Additional implementation details
+#  Nightly artifacts are uploaded to a Forgejo nightly release.
+#  The publish job downloads release assets and republishes
+#  them to the local dashboard site. The dashboard therefore
+#  reflects the actual contents of the nightly release rather
+#  than the local build workspace.
+#
 name: Forgejo Nightly Build
 env:
   FORGEJO_URL: "http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/tags/nightly"
