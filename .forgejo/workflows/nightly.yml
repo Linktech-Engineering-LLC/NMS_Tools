@@ -351,16 +351,16 @@ jobs:
       - name: Create destination folders
         run: |
           ssh -F ~/.ssh/config dad \
-            "mkdir -p /srv/forgejo-pages/NMS_Tools/artifacts"
+            "mkdir -p /srv/forgejo-pages/NMS_Tools/nightly/artifacts"
 
       - name: Deploy dashboard
         run: |
           rsync -avz --delete \
             -e "ssh -F $HOME/.ssh/config -o IdentitiesOnly=yes" \
             website/ \
-            dad:/srv/forgejo-pages/NMS_Tools/
+            dad:/srv/forgejo-pages/NMS_Tools/nightly
 
       - name: Verify deployment
         run: |
           ssh -F ~/.ssh/config dad \
-            "find /srv/forgejo-pages/NMS_Tools -type f | sort"
+            "find /srv/forgejo-pages/NMS_Tools/nightly -type f | sort"
