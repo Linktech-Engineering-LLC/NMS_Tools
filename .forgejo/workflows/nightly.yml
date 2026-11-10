@@ -260,13 +260,6 @@ jobs:
               "http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/$RELEASE/assets?name=$(basename "$f")"
           done
 
-      - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: nms-tools-nightly
-          path: artifacts/
-          retention-days: 1
-
   publish:
     needs: nightly-build
     runs-on: ubuntu-latest
@@ -315,11 +308,45 @@ jobs:
             "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://dad:3000/Linux/NMS_Tools/"
 
 
-      - name: Download workflow artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: nms-tools-nightly
-          path: artifacts
+      - name: Download release assets
+        env:
+          FORGEJO_API_ROOT: http://dad:3000/api/v1/repos/linux/NMS_Tools
+        run: |
+          mkdir -p website/artifacts
+
+          curl -s \
+            -H "Authorization: token $NMSTOOLS_TOKEN" \
+            "$FORGEJO_API_ROOT/releases/tags/nightly" \
+            > release.json
+
+          jq -r '.assets[] | "\(.name)|\(.browser_download_url)"' release.json |
+          while IFS='|' read NAME URL; do
+            echo "Downloading $NAME"
+
+            if [ "$NAME" = "metadata.json" ]; then
+              curl -L \
+                -H "Authorization: token $NMSTOOLS_TOKEN" \
+                "$URL" \
+                -o "website/metadata.json"
+            else
+              curl -L \
+                -H "Authorization: token $NMSTOOLS_TOKEN" \
+                "$URL" \
+                -o "website/artifacts/$NAME"
+            fi
+          done
+
+          echo "Website contents:"
+          find website -type f | sort
+
+      - name: Verify downloaded assets
+        run: |
+          echo "Website contents:"
+          find website -type f | sort
+
+      - name: Verify metadata
+        run: |
+          test -f website/metadata.json
 
       - name: Create destination folders
         run: |
