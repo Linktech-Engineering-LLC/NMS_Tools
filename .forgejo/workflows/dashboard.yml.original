@@ -87,7 +87,7 @@ jobs:
           eval "$(ssh-agent -s)"
           ssh-add ~/.ssh/id_ed25519
 
-          ssh-keyscan -p 3001 dad >> ~/.ssh/known_hosts
+          ssh-keyscan -p 2222 dad >> ~/.ssh/known_hosts
 
           echo "FORGEJO_PAGES=$FORGEJO_PAGES"
 
