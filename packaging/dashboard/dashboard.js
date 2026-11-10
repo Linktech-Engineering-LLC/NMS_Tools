@@ -34,7 +34,6 @@ function renderBuildInfo(meta) {
       <tr><td>Date</td><td>${b.date}</td></tr>
       <tr><td>Commit</td><td>${b.commit}</td></tr>
       <tr><td>Branch</td><td>${b.branch}</td></tr>
-      <tr><td>Workflow Run</td><td>${b.workflow_run_id}</td></tr>
       <tr><td>Python</td><td>${t.python}</td></tr>
       <tr><td>PyInstaller</td><td>${t.pyinstaller}</td></tr>
     </table>
