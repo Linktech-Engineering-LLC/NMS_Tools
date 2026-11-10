@@ -62,7 +62,7 @@ jobs:
 
       - name: Download release assets
         env:
-          FORGEJO_API_ROOT: "http://dad:3000/api/v1/repos/linux/NMS_Tools"
+          FORGEJO_API_ROOT: http://dad:3000/api/v1/repos/linux/NMS_Tools
         run: |
           mkdir -p website/artifacts
 
@@ -75,18 +75,30 @@ jobs:
           while IFS='|' read NAME URL; do
             echo "Downloading $NAME"
 
-            curl -L \
-              -H "Authorization: token $NMSTOOLS_TOKEN" \
-              "$URL" \
-              -o "website/artifacts/$NAME"
+            if [ "$NAME" = "metadata.json" ]; then
+              curl -L \
+                -H "Authorization: token $NMSTOOLS_TOKEN" \
+                "$URL" \
+                -o "website/metadata.json"
+            else
+              curl -L \
+                -H "Authorization: token $NMSTOOLS_TOKEN" \
+                "$URL" \
+                -o "website/artifacts/$NAME"
+            fi
           done
 
-          ls -lh website/artifacts
+          echo "Website contents:"
+          find website -type f | sort
 
-      - name: Merge release metadata into dashboard
+      - name: Verify downloaded assets
         run: |
-          cp website/artifacts/metadata.json \
-             Pages/NMS_Tools/metadata.json
+          echo "Website contents:"
+          find website -type f | sort
+
+      - name: Verify metadata
+        run: |
+          test -f website/metadata.json
 
       - name: Create destination folders
         run: |
