@@ -34,7 +34,7 @@ jobs:
           echo "$NMSTOOLS_SSH_KEY" > ~/.ssh/id_nms_tools
           chmod 600 ~/.ssh/id_nms_tools
 
-          ssh-keyscan -p 3001 -t ed25519 dad >> ~/.ssh/known_hosts
+          ssh-keyscan -p 2222 -t ed25519 dad >> ~/.ssh/known_hosts
 
           cat <<EOF > ~/.ssh/config
           Host dad
