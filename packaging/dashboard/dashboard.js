@@ -55,6 +55,7 @@ function renderArtifacts(meta) {
       <tr>
         <td>${a.name}</td>
         <td>${a.type}</td>
+        
         <td>${a.os}</td>
         <td>${a.arch}</td>
         <td>${a.size.toLocaleString()} bytes</td>
