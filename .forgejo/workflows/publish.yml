@@ -78,14 +78,14 @@ jobs:
             curl -L \
               -H "Authorization: token $NMSTOOLS_TOKEN" \
               "$URL" \
-              -o "artifacts/$NAME"
+              -o "website/artifacts/$NAME"
           done
 
-          ls -lh artifacts
+          ls -lh website/artifacts
 
       - name: Merge release metadata into dashboard
         run: |
-          cp artifacts/metadata.json \
+          cp website/artifacts/metadata.json \
              Pages/NMS_Tools/metadata.json
 
       - name: Create destination folders
@@ -97,15 +97,8 @@ jobs:
         run: |
           rsync -avz --delete \
             -e "ssh -F ~/.ssh/config -o IdentitiesOnly=yes" \
-            Pages/NMS_Tools/ \
+            website/ \
             dad:/srv/forgejo-pages/NMS_Tools/
-
-      - name: Deploy artifacts
-        run: |
-          rsync -avz --delete \
-            -e "ssh -F ~/.ssh/config -o IdentitiesOnly=yes" \
-            artifacts/ \
-            dad:/srv/forgejo-pages/NMS_Tools/artifacts/
 
       - name: Verify deployment
         run: |
