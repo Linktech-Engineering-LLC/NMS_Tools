@@ -45,12 +45,12 @@ function renderArtifacts(meta) {
   const div = document.getElementById("artifact-table");
   if (!div) return;
 
-  const dl = a.download_url;
-
   let rows = "";
 
   for (const a of meta.artifacts) {
-    const dl = `${nightlyURL}/${a.name}`;
+
+    const dl = `artifacts/${a.name}`;
+
     rows += `
       <tr>
         <td>${a.name}</td>

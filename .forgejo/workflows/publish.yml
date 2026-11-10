@@ -105,13 +105,6 @@ jobs:
           ssh -F ~/.ssh/config dad \
             "mkdir -p /srv/forgejo-pages/NMS_Tools/artifacts"
 
-      - name: Debug SSH environment
-        run: |
-          whoami
-          echo "HOME=$HOME"
-          ls -la ~/.ssh
-          cat ~/.ssh/config
-
       - name: Deploy dashboard
         run: |
           rsync -avz --delete \
