@@ -39,7 +39,7 @@ jobs:
           cat <<EOF > ~/.ssh/config
           Host dad
               HostName dad
-              Port 3001
+              Port 2222
               User runner
               IdentityFile ~/.ssh/id_nms_tools
               IdentitiesOnly yes
