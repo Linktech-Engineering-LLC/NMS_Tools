@@ -305,7 +305,7 @@ jobs:
           cp packaging/dashboard/dashboard.js website/
           cp packaging/dashboard/styles.css website/
           curl -s -o website/qr.png \
-            "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://dad:3000/Linux/NMS_Tools/"
+            "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=http://dad:3000/Linux/NMS_Tools/nightly/"
 
 
       - name: Download release assets
