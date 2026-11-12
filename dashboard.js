@@ -34,7 +34,6 @@ function renderBuildInfo(meta) {
       <tr><td>Date</td><td>${b.date}</td></tr>
       <tr><td>Commit</td><td>${b.commit}</td></tr>
       <tr><td>Branch</td><td>${b.branch}</td></tr>
-      <tr><td>Workflow Run</td><td>${b.workflow_run_id}</td></tr>
       <tr><td>Python</td><td>${t.python}</td></tr>
       <tr><td>PyInstaller</td><td>${t.pyinstaller}</td></tr>
     </table>
@@ -45,16 +44,17 @@ function renderArtifacts(meta) {
   const div = document.getElementById("artifact-table");
   if (!div) return;
 
-  const dl = a.download_url;
-
   let rows = "";
 
   for (const a of meta.artifacts) {
-    const dl = `${nightlyURL}/${a.name}`;
+
+    const dl = `artifacts/${a.name}`;
+
     rows += `
       <tr>
         <td>${a.name}</td>
         <td>${a.type}</td>
+        
         <td>${a.os}</td>
         <td>${a.arch}</td>
         <td>${a.size.toLocaleString()} bytes</td>
