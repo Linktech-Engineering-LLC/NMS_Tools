@@ -7,6 +7,9 @@ License:        MIT
 URL:            https://www.linktechengineering.net/projects/nms-tools/
 Source0:        %{name}-%{version}.tar.gz
 
+%global debug_package %{nil}
+%global _build_id_links none
+
 %description
 NMS_Tools is a suite of deterministic, operator-grade monitoring tools for
 Linux and Nagios environments. Each tool is self-contained, reproducible,

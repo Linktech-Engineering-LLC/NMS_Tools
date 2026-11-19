@@ -4,7 +4,20 @@
 #
 
 set -euo pipefail
+echo "===== BUILD ENV ====="
+which python
+python --version
 
+which pip
+pip --version
+
+which pyinstaller
+pyinstaller --version
+
+pwd
+whoami
+env | sort
+echo "====================="
 echo "==============================================="
 echo "[NMS_Tools] Starting full packaging pipeline..."
 echo "==============================================="
