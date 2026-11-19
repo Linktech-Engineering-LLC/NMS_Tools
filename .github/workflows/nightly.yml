@@ -20,6 +20,15 @@ jobs:
       build_date: ${{ steps.capture.outputs.build_date }}
 
     steps:
+      - name: Environment diagnostics
+        run: |
+          which python3
+          python3 --version
+          pip --version
+          pyinstaller --version
+          uname -a
+
+          python3 -m pip freeze | sort
 
       - name: Checkout repository
         uses: actions/checkout@v4

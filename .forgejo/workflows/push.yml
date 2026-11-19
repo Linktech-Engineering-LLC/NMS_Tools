@@ -14,6 +14,16 @@ jobs:
       image: dad:3000/linux/leon-ci:latest
 
     steps:
+      - name: Environment diagnostics
+        run: |
+          which python3
+          python3 --version
+          pip --version
+          pyinstaller --version
+          uname -a
+
+          python3 -m pip freeze | sort
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -22,26 +32,25 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Install linting tools
         run: |
           apt-get update
           apt-get install -y shellcheck
-          pip install flake8 black isort yamllint
+          python3 -m pip install \
+              --break-system-packages \
+              ruff black yamllint
 
-      - name: Run flake8 (non-blocking)
+      - name: Python compile check
         run: |
-          echo "Running flake8..."
-          flake8 || true
+          find . -name "*.py" -exec python3 -m py_compile {} \;
 
-      - name: Run black (check only, non-blocking)
+      - name: Ruff
         run: |
-          echo "Running black..."
+          ruff check . || true
+
+      - name: Black
+        run: |
           black --check . || true
-
-      - name: Run isort (check only, non-blocking)
-        run: |
-          echo "Running isort..."
-          isort --check-only . || true
 
       - name: Run yamllint (non-blocking)
         run: |
