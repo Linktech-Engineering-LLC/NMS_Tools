@@ -32,25 +32,25 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install linting tools
+      - name: Install dependencies
         run: |
           apt-get update
           apt-get install -y shellcheck
-          python3 -m pip install \
-              --break-system-packages \
-              ruff black yamllint
+          pip install ruff yamllint
 
-      - name: Python compile check
+      - name: Ruff lint
         run: |
-          find . -name "*.py" -exec python3 -m py_compile {} \;
-
-      - name: Ruff
-        run: |
+          echo "Running Ruff..."
           ruff check . || true
 
-      - name: Black
+      - name: Ruff Format
         run: |
-          black --check . || true
+          echo "Checking formatting..."
+          ruff format --check . || true
+
+      - name: Ruff Statistics
+        run: |
+          ruff check . --statistics || true
 
       - name: Run yamllint (non-blocking)
         run: |
