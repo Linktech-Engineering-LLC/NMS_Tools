@@ -67,7 +67,7 @@ jobs:
           chmod +x scripts/*.sh
           chmod +x packaging/*.sh
 
-      - name: Run full packaging pipeline
+      - name: Build all artifacts
         run: |
           packaging/build_all.sh
 
