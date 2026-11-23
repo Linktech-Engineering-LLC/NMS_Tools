@@ -59,10 +59,15 @@ jobs:
           echo "Running yamllint..."
           yamllint . || true
 
-      - name: Run shellcheck (non-blocking)
+      - name: Shellcheck
         run: |
-          echo "Running shellcheck..."
-          shellcheck "**/*.sh" || true
+          shellcheck $(find . -name "*.sh") | tee shellcheck.log
+
+          ERRORS=$(grep -c "error:" shellcheck.log || true)
+          WARNINGS=$(grep -c "warning:" shellcheck.log || true)
+
+          echo "Errors: $ERRORS"
+          echo "Warnings: $WARNINGS"
 
   sync_to_remote:
     needs: lint
@@ -91,12 +96,85 @@ jobs:
           eval "$(ssh-agent -s)"
           ssh-add ~/.ssh/id_ed25519
 
+      - name: Test GitHub SSH
+        run: |
+          ssh -T git@github.com || true
       - name: Push to Remote Hub
         run: |
-          git remote add github ssh://git@github.com/Linktech-Engineering-LLC/NMS_Tools.git
+          set -e
+
+          git remote add github \
+            ssh://git@github.com/Linktech-Engineering-LLC/NMS_Tools.git
+
+          echo "=== Fetching GitHub ==="
           git fetch github main
-          git merge --ff-only github/main || echo "Non-fast-forward; skipping merge"
-          git push github main
+
+          LOCAL_HASH=$(git rev-parse HEAD)
+          REMOTE_HASH=$(git rev-parse github/main)
+
+          echo "Local HEAD : $LOCAL_HASH"
+          echo "Remote HEAD: $REMOTE_HASH"
+
+          #
+          # Already synchronized
+          #
+          if [ "$LOCAL_HASH" = "$REMOTE_HASH" ]; then
+              echo "Repositories already synchronized."
+
+          else
+
+              echo
+              echo "=== Commits pending on GitHub ==="
+              git log --oneline github/main..HEAD || true
+
+              echo
+              echo "=== Commits only on GitHub ==="
+              git log --oneline HEAD..github/main || true
+
+              echo
+              echo "=== File differences ==="
+              git diff --stat github/main..HEAD || true
+
+              echo
+              echo "=== Fast-forward validation ==="
+
+              if ! git merge --ff-only github/main; then
+                  echo "ERROR: GitHub and Forgejo have diverged"
+                  git log --oneline --left-right HEAD...github/main
+                  exit 1
+              fi
+
+              echo
+              echo "=== Pushing main ==="
+              git push github main
+
+              echo
+              echo "=== Verifying push ==="
+
+              git fetch github main
+
+              LOCAL_HASH=$(git rev-parse HEAD)
+              REMOTE_HASH=$(git rev-parse github/main)
+
+              echo "Local HEAD : $LOCAL_HASH"
+              echo "Remote HEAD: $REMOTE_HASH"
+
+              if [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
+                  echo "ERROR: Push verification failed"
+                  exit 1
+              fi
+
+              echo "Push verified successfully."
+          fi
+
+          echo
+          echo "=== Pushing tags ==="
+
           for tag in $(git tag -l "v*"); do
-              git push github "$tag"
+              if git ls-remote --tags github | grep -q "refs/tags/$tag$"; then
+                  echo "Tag already exists: $tag"
+              else
+                  echo "Pushing tag: $tag"
+                  git push github "$tag"
+              fi
           done
