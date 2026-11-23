@@ -84,6 +84,14 @@ jobs:
       FORGEJO_TOKEN: ${{ secrets.NMSTOOLSTOKEN }}
       FORGEJO_API: ${{ secrets.TOOLSAPITOKEN}}
     steps:
+      - name: Verify toolchain
+        run: |
+          python3 --version
+          pandoc --version | head -1
+          ruff --version
+          yamllint --version
+          shellcheck --version
+          
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -105,15 +113,6 @@ jobs:
           echo "build_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
           echo "git_hash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Install Python 3.12
-        run: |
-          apt-get update
-          apt-get install -y python3.12 python3.12-dev python3.12-venv
-
-      - name: Install pandoc
-        run: |
-          apt-get update
-          apt-get install -y pandoc
       - name: Create virtual environment
         run: |
           python3.12 -m venv /opt/venv

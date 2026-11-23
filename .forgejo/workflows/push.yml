@@ -14,6 +14,14 @@ jobs:
       image: dad:3000/linux/leon-ci:latest
 
     steps:
+      - name: Verify toolchain
+        run: |
+          python3 --version
+          pandoc --version | head -1
+          ruff --version
+          yamllint --version
+          shellcheck --version
+
       - name: Environment diagnostics
         run: |
           which python3
@@ -31,12 +39,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Install dependencies
-        run: |
-          apt-get update
-          apt-get install -y shellcheck
-          pip install ruff yamllint
 
       - name: Ruff lint
         run: |
@@ -73,11 +75,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Ensure openssh-client is installed
-        run: |
-          apt-get update
-          apt-get install -y openssh-client
 
       - name: Install SSH key
         run: |
