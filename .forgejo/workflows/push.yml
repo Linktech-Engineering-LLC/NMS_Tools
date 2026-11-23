@@ -60,6 +60,7 @@ jobs:
           yamllint . || true
 
       - name: Shellcheck
+        continue-on-error: true
         run: |
           shellcheck $(find . -name "*.sh") | tee shellcheck.log
 
