@@ -14,7 +14,7 @@ echo " Source root: $SRC_ROOT"
 echo "========================================"
 
 # Loop through each tool directory under src/
-for TOOL_DIR in $(ls "$SRC_ROOT"); do
+for TOOL_DIR in "$SRC_ROOT"; do
     [ -d "$TOOL_DIR" ] || continue
         echo ""
         echo "----------------------------------------"
