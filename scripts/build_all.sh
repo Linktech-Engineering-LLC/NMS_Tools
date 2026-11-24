@@ -14,13 +14,18 @@ echo " Source root: $SRC_ROOT"
 echo "========================================"
 
 # Loop through each tool directory under src/
-for TOOL_DIR in "$SRC_ROOT"; do
+for TOOL_DIR in "$SRC_ROOT"/*; do
     [ -d "$TOOL_DIR" ] || continue
         echo ""
         echo "----------------------------------------"
         echo " Starting build for: $(basename "$TOOL_DIR")"
         echo "----------------------------------------"
-        ./scripts/build_one.sh "$(basename "$TOOL_DIR")"
+    if [ -f "$TOOL_DIR/build.sh" ]; then
+        (
+            cd "$TOOL_DIR"
+            ./build.sh
+        )
+    fi
 done
 
 echo ""
