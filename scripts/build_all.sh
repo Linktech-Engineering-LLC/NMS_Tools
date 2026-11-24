@@ -21,7 +21,6 @@ for TOOL_DIR in "$SRC_ROOT"; do
         echo " Starting build for: $(basename "$TOOL_DIR")"
         echo "----------------------------------------"
         ./scripts/build_one.sh "$(basename "$TOOL_DIR")"
-    fi
 done
 
 echo ""
