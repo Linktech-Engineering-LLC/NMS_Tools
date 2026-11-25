@@ -63,7 +63,7 @@
 name: Forgejo Nightly Build
 env:
   FORGEJO_URL: "http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/tags/nightly"
-  FORGEJO_BASE: "ssh://forgejo@dad:3001/Linux/NMS_Tools.git"
+  FORGEJO_API_ROOT: "http://dad:3000/api/v1/repos/linux/NMS_Tools"
 
 on:
   schedule:
@@ -91,7 +91,10 @@ jobs:
           ruff --version
           yamllint --version
           shellcheck --version
-          
+          pytest --version
+          mypy --version
+          pyinstaller --version
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -113,30 +116,11 @@ jobs:
           echo "build_date=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
           echo "git_hash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Create virtual environment
+      - name: Install Build Dependencies
         run: |
-          python3.12 -m venv /opt/venv
-          source /opt/venv/bin/activate
-          python -m pip install --upgrade pip
-
-      - name: Install Python build dependencies
-        run: |
-          source /opt/venv/bin/activate
-          pip install -r requirements.txt
-          pip install pyinstaller jsonschema
-          pip install git+http://dad:3000/linux/PythonTools.git
-
-      - name: Environment diagnostics
-        run: |
-          source /opt/venv/bin/activate
-          echo "VIRTUAL_ENV=$VIRTUAL_ENV"
-          which python3
-          python3 --version
-          pip --version
-          pyinstaller --version
-          uname -a
-
-          python3 -m pip freeze | sort
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install \
+            git+http://dad:3000/linux/PythonTools.git
 
       - name: Make scripts executable
         run: |
@@ -145,12 +129,10 @@ jobs:
 
       - name: Build all artifacts
         run: |
-          source /opt/venv/bin/activate
           packaging/build_all.sh
 
       - name: Collect artifacts
         run: |
-          curl -v -H "Authorization: token $FORGEJO_TOKEN" "$FORGEJO_URL"
           ls -al packaging/output
           mkdir -p artifacts
           cp packaging/output/*.tgz artifacts/ || true
@@ -161,7 +143,6 @@ jobs:
       - name: Generate metadata.json
         run: |
           mkdir -p artifacts
-          source /opt/venv/bin/activate
           PYTHON_VERSION=$(python3 --version | awk '{print $2}')
           PYINSTALLER_VERSION=$(pyinstaller --version 2>/dev/null || echo "unknown")
           BUILDER_OS="forgejo-runner"
@@ -243,7 +224,7 @@ jobs:
               -H "Authorization: token $FORGEJO_TOKEN" \
               -H "Content-Type: application/json" \
               -d '{"tag_name":"nightly","name":"Nightly Build","body":"Nightly build artifacts","prerelease":true}' \
-              http://dad:3000/api/v1/repos/linux/NMS_Tools/releases
+              "$FORGEJO_API_ROOT/releases"
 
             RELEASE=$(curl -s \
               -H "Authorization: token $FORGEJO_TOKEN" \
@@ -270,7 +251,7 @@ jobs:
                 echo "Deleting Forgejo asset $ID"
                 curl -s -X DELETE \
                   -H "Authorization: token $FORGEJO_TOKEN" \
-                  "http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/$RELEASE/assets/$ID"
+                  "$FORGEJO_API_ROOT/releases/$RELEASE/assets/$ID"
               done
 
       # ============================================================
@@ -287,7 +268,7 @@ jobs:
               -H "Authorization: token ${{ secrets.NMSTOOLSTOKEN }}" \
               -H "Content-Type: application/octet-stream" \
               --data-binary @"$f" \
-              "http://dad:3000/api/v1/repos/linux/NMS_Tools/releases/$RELEASE/assets?name=$(basename "$f")"
+              "$FORGEJO_API_ROOT/releases/$RELEASE/assets?name=$(basename "$f")"
           done
 
   publish:
@@ -339,8 +320,6 @@ jobs:
 
 
       - name: Download release assets
-        env:
-          FORGEJO_API_ROOT: http://dad:3000/api/v1/repos/linux/NMS_Tools
         run: |
           mkdir -p website/artifacts
 
@@ -365,9 +344,6 @@ jobs:
                 -o "website/artifacts/$NAME"
             fi
           done
-
-          echo "Website contents:"
-          find website -type f | sort
 
       - name: Verify downloaded assets
         run: |
