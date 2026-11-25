@@ -133,9 +133,13 @@ def get_apikeys(args) -> dict:
     config_data = None
     if apikey_file:
         apikey_file = resolve_apikey_file(apikey_file, SCRIPT_NAME)
+
+        if apikey_file is None:
+            raise ApiKeyError("API key file resolution failed")
+
         with open(apikey_file, encoding="utf-8") as f:
             config_data = yaml.safe_load(f) or {}
-
+        
     resolved = {}
 
     for provider in ProviderRegistry.providers:
@@ -218,7 +222,7 @@ def main() -> int:
     result = engine.get_quote(ticker, prefer_history)
 
     if result.is_error():
-        msg = result.error
+        msg = result.error or "Unknown error"
         if logger:
             logger.error(msg)
             logger.info(end_banner("check_ticker", "UNKNOWN"))
@@ -232,7 +236,7 @@ def main() -> int:
         "provider": result.provider,
         "timestamp": result.timestamp,
         "price": result.price,
-        "pct": result.pct * 100,
+        "pct": (result.pct or 0.0) * 100,
         "history": result.history,
         "trend": result.trend_result.to_json(),
         "raw": result.raw,  # optional
@@ -246,8 +250,8 @@ def main() -> int:
     rounded_pct = round(payload["pct"], 2)
 
     # Perfdata (rounded)
-    perfdata = f"price={rounded_price:.3f} pct={rounded_pct:.2f}"
-    nagios_msg = f"{ticker} ${rounded_price:.3f} ({rounded_pct:+.2f}%)"
+    perfdata = f"price={rounded_price:.3f} pct={rounded_pct:.2f}%"
+    nagios_msg = f"{ticker} ${perfdata})"
     state = OK
 
     # --- Trend Analysis ---
@@ -308,7 +312,7 @@ def main() -> int:
             logger.info(f"[RAW] provider={payload['provider']} data=\n{raw_json}")
         except Exception as exc:
             logger.error(f"[RAW] failed to serialize raw provider data: {exc}")
-        logger.info(end_banner("check_ticker", state))
+        logger.info(end_banner("check_ticker", str(state)))
 
     return state
 

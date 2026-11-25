@@ -22,6 +22,7 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from _pytest.monkeypatch import MonkeyPatch
 
@@ -32,9 +33,9 @@ sys.path.insert(0, str(ROOT))
 # Import the LoggerFactory
 # Import test modules explicitly
 # (You will add more as you expand the harness)
-from check_html.init import HTML
-from check_ticker.init import TICKER
-from check_weather.init import WEATHER
+from tests.check_html.registry import HTML
+from tests.check_ticker.registry import TICKER
+from tests.check_weather.registry import WEATHER
 from PythonTools.log_helpers.factory import LoggerFactory
 from PythonTools.nagios import BaseNagiosParser
 from PythonTools.test import display_results
@@ -58,7 +59,7 @@ HARNESS = {
 }
 
 
-def parse_cli() -> BaseNagiosParser:
+def parse_cli() -> tuple[Any, Any, str]:
     parser = BaseNagiosParser(prog="runner", description="NMS_Tools Deterministic Test Harness")
 
     # Use add_group(), just like check_ticker
