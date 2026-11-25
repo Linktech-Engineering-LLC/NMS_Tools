@@ -1,0 +1,32 @@
+[project]
+name = "NMS_Tools"
+dynamic = ["version"]
+description = "Nagios-compatible monitoring and diagnostic tool suite."
+authors = [
+  { name = "Leon McClatchey", email = "ldmcclatchey@linktechengineering.net" }
+]
+requires-python = ">=3.12"
+readme = { file = "README.md", content-type = "text/markdown" }
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "RUF"]
+ignore = [
+    "E501",
+    "BLE001",
+    "SIM103",
+    "N999",
+]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v"

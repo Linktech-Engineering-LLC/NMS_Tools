@@ -147,7 +147,7 @@ jobs:
           pytest -v
 
       - name: MyPy
-        if: ${{ hashFiles('pyproject.toml') != '' }}
+        if: ${{ hashFiles('pyproject.toml', "mypy.ini") != '' }}
         continue-on-error: true
         run: |
           mypy .
