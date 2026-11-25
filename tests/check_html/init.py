@@ -34,4 +34,3 @@ HTML = {
     "perfdata": test_perfdata,
     "single_line_ok": test_single_line_ok,
 }
-

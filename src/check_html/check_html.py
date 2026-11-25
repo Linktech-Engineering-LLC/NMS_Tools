@@ -61,6 +61,8 @@ MIN_MINOR = 8
 # Other Global Constants
 SCRIPT_NAME = Path(sys.argv[0]).stem
 SCRIPT_VERSION = "1.1.0"
+
+
 # -----------------------------
 # ArgParse Custom Formatter & CLI Parser (Migrated)
 # -----------------------------
@@ -152,14 +154,14 @@ def build_parser():
         "--require-backend",
         action="append",
         choices=["tomcat", "apache", "nginx", "iis", "jetty", "express", "gunicorn"],
-        help="Require backend to match one of the specified types (repeatable)"
+        help="Require backend to match one of the specified types (repeatable)",
     )
 
     backend.add_argument(
         "--forbid-backend",
         action="append",
         choices=["tomcat", "apache", "nginx", "iis", "jetty", "express", "gunicorn"],
-        help="Fail if backend matches any of the specified types (repeatable)"
+        help="Fail if backend matches any of the specified types (repeatable)",
     )
 
     # -----------------------------
@@ -178,7 +180,9 @@ def build_parser():
     nagios.add_argument("--warning-rt", type=float, default=0.5, help="Warning threshold for response time (seconds)")
     nagios.add_argument("--critical-rt", type=float, default=1.0, help="Critical threshold for response time (seconds)")
     nagios.add_argument("--warning-size", type=int, default=200 * 1024, help="Warning threshold for page size (bytes)")
-    nagios.add_argument("--critical-size", type=int, default=500 * 1024, help="Critical threshold for page size (bytes)")
+    nagios.add_argument(
+        "--critical-size", type=int, default=500 * 1024, help="Critical threshold for page size (bytes)"
+    )
 
     # -----------------------------
     # Examples
@@ -192,16 +196,18 @@ def build_parser():
     )
 
     return nag.parse()
+
+
 def determine_protocol_and_url(args):
     host = args.host.strip()
 
     # Detect protocol prefix
     if host.startswith("http://"):
         protocol = "http"
-        host = host[len("http://"):]
+        host = host[len("http://") :]
     elif host.startswith("https://"):
         protocol = "https"
-        host = host[len("https://"):]
+        host = host[len("https://") :]
     else:
         protocol = "https" if args.https else "http"
 
@@ -212,7 +218,7 @@ def determine_protocol_and_url(args):
     url = f"{protocol}://{host}"
 
     # Include port ONLY if explicitly specified
-    if args.port_was_explicit:   # You track this in the parser
+    if args.port_was_explicit:  # You track this in the parser
         url = f"{url}:{port}"
 
     # Default path
@@ -220,6 +226,8 @@ def determine_protocol_and_url(args):
         url = f"{url}/"
 
     return protocol, url
+
+
 def fetch_http(url, protocol, args):
     """
     Performs an HTTP or HTTPS request with deterministic behavior.
@@ -255,18 +263,9 @@ def fetch_http(url, protocol, args):
             # ------------------------------------------------------------
             if protocol == "https":
                 context = ssl.create_default_context()
-                conn = http.client.HTTPSConnection(
-                    host,
-                    port,
-                    timeout=args.timeout,
-                    context=context
-                )
+                conn = http.client.HTTPSConnection(host, port, timeout=args.timeout, context=context)
             else:
-                conn = http.client.HTTPConnection(
-                    host,
-                    port,
-                    timeout=args.timeout
-                )
+                conn = http.client.HTTPConnection(host, port, timeout=args.timeout)
 
             # ------------------------------------------------------------
             # Send request
@@ -339,8 +338,10 @@ def fetch_http(url, protocol, args):
         "response_time": response_time,
         "final_url": f"{protocol}://{host}:{port}{path}",
         "redirects": redirects,
-        "tls_error": tls_error
+        "tls_error": tls_error,
     }
+
+
 def capture_http_response(url: str, protocol: str, args):
     """
     Performs the HTTP request and returns a normalized capture object.
@@ -368,7 +369,6 @@ def capture_http_response(url: str, protocol: str, args):
     # Normalize body
     body = raw.get("body") if raw.get("body") is not None else None
 
-
     # Normalize and structure the capture
     capture = {
         "status": status,
@@ -382,11 +382,13 @@ def capture_http_response(url: str, protocol: str, args):
     }
 
     return capture
+
+
 def enforce_backend_rules(detected_obj, args):
     # TLS failure overrides backend detection
     if detected_obj["reason"] == "TLS handshake failed":
         return (2, "TLS handshake failed")
-    backend = detected_obj["detected"]   # may be None
+    backend = detected_obj["detected"]  # may be None
 
     # ------------------------------------------------------------
     # Explicit selectors (highest precedence)
@@ -394,27 +396,41 @@ def enforce_backend_rules(detected_obj, args):
     explicit_require = []
     explicit_forbid = []
 
-    if args.require_tomcat: explicit_require.append("tomcat")
-    if args.require_apache: explicit_require.append("apache")
-    if args.require_nginx: explicit_require.append("nginx")
-    if args.require_iis: explicit_require.append("iis")
-    if args.require_jetty: explicit_require.append("jetty")
-    if args.require_express: explicit_require.append("express")
-    if args.require_gunicorn: explicit_require.append("gunicorn")
+    if args.require_tomcat:
+        explicit_require.append("tomcat")
+    if args.require_apache:
+        explicit_require.append("apache")
+    if args.require_nginx:
+        explicit_require.append("nginx")
+    if args.require_iis:
+        explicit_require.append("iis")
+    if args.require_jetty:
+        explicit_require.append("jetty")
+    if args.require_express:
+        explicit_require.append("express")
+    if args.require_gunicorn:
+        explicit_require.append("gunicorn")
 
-    if args.forbid_tomcat: explicit_forbid.append("tomcat")
-    if args.forbid_apache: explicit_forbid.append("apache")
-    if args.forbid_nginx: explicit_forbid.append("nginx")
-    if args.forbid_iis: explicit_forbid.append("iis")
-    if args.forbid_jetty: explicit_forbid.append("jetty")
-    if args.forbid_express: explicit_forbid.append("express")
-    if args.forbid_gunicorn: explicit_forbid.append("gunicorn")
+    if args.forbid_tomcat:
+        explicit_forbid.append("tomcat")
+    if args.forbid_apache:
+        explicit_forbid.append("apache")
+    if args.forbid_nginx:
+        explicit_forbid.append("nginx")
+    if args.forbid_iis:
+        explicit_forbid.append("iis")
+    if args.forbid_jetty:
+        explicit_forbid.append("jetty")
+    if args.forbid_express:
+        explicit_forbid.append("express")
+    if args.forbid_gunicorn:
+        explicit_forbid.append("gunicorn")
 
     # ------------------------------------------------------------
     # Generic selectors (only used if no explicit selectors)
     # ------------------------------------------------------------
     require = explicit_require or normalize_list(args.require_backend)
-    forbid  = explicit_forbid  or normalize_list(args.forbid_backend)
+    forbid = explicit_forbid or normalize_list(args.forbid_backend)
 
     # ------------------------------------------------------------
     # Enforcement
@@ -430,6 +446,8 @@ def enforce_backend_rules(detected_obj, args):
             return CRITICAL, f"Backend '{backend}' is forbidden"
 
     return OK, None
+
+
 # ============================================================
 #  Metadata Builder for check_html.py
 #  (Aligned with current main() and logging module)
@@ -446,22 +464,21 @@ def build_html_meta(capture, backend, args):
         # Normalized target URL + protocol
         "url": capture.get("url"),
         "protocol": capture.get("protocol"),
-
         # Connection behavior
         "https": args.https,
         "max_redirects": args.max_redirects,
         "timeout": args.timeout,
-
         # Expected behavior (for banners + enforcement)
         "expect_status": args.expect_status,
         "expect_family": args.expect_family,
-
         # Capture-derived fields
         "status": capture.get("status"),
         "content_type": capture.get("content_type"),
         "redirects": capture.get("redirects"),
         "backend_detected": backend.get("detected"),
     }
+
+
 # -------------------------------------
 # Displays
 # ------------------------------------
@@ -519,13 +536,12 @@ def print_verbose(result):
     print("=== Overall ===")
     print(f"Final Status:    {nagios_label(result['overall']['status'])}")
     print(f"Message:         {result['overall']['message']}")
+
+
 def nagios_label(code):
-    return {
-        0: "OK",
-        1: "WARNING",
-        2: "CRITICAL",
-        3: "UNKNOWN"
-    }.get(code, "UNKNOWN")
+    return {0: "OK", 1: "WARNING", 2: "CRITICAL", 3: "UNKNOWN"}.get(code, "UNKNOWN")
+
+
 def single_line(result, args):
     code = result["overall"]["status"]
     message = result["overall"]["message"]
@@ -573,6 +589,8 @@ def single_line(result, args):
         return f"{prefix} - {message}"
     else:
         return f"{prefix}"
+
+
 def build_perfdata(args, capture):
     latency = capture["response_time"]
     size = len(capture["body"]) if capture["body"] else 0
@@ -585,6 +603,8 @@ def build_perfdata(args, capture):
         f"{args.warning_size};"
         f"{args.critical_size};0;"
     )
+
+
 # -----------------------------
 # Host Validation
 # -----------------------------
@@ -617,8 +637,8 @@ def validate_host_basic(host: str):
         ip_obj = ipaddress.ip_address(host)
         return {
             "ok": True,
-            "ip": str(ip_obj),   # return IP exactly as supplied
-            "error": None
+            "ip": str(ip_obj),  # return IP exactly as supplied
+            "error": None,
         }
     except ValueError:
         pass  # Not an IP, continue
@@ -631,19 +651,12 @@ def validate_host_basic(host: str):
     if host.lower() == system_hostname.lower():
         try:
             resolved = socket.gethostbyname(system_hostname)
-            return {
-                "ok": True,
-                "ip": resolved,
-                "error": None
-            }
+            return {"ok": True, "ip": resolved, "error": None}
         except Exception:
             return {
                 "ok": False,
                 "ip": None,
-                "error": (
-                    f"Hostname '{host}' matches local hostname but "
-                    f"cannot be resolved by the system resolver"
-                )
+                "error": (f"Hostname '{host}' matches local hostname but cannot be resolved by the system resolver"),
             }
 
     # ------------------------------------------------------------
@@ -651,17 +664,11 @@ def validate_host_basic(host: str):
     # ------------------------------------------------------------
     try:
         resolved = socket.gethostbyname(host)
-        return {
-            "ok": True,
-            "ip": resolved,
-            "error": None
-        }
+        return {"ok": True, "ip": resolved, "error": None}
     except Exception:
-        return {
-            "ok": False,
-            "ip": None,
-            "error": f"Hostname resolution failed for '{host}'"
-        }
+        return {"ok": False, "ip": None, "error": f"Hostname resolution failed for '{host}'"}
+
+
 # --------------------------------------
 # Logging Functions
 # --------------------------------------
@@ -684,11 +691,9 @@ def initialize_logger(args, mode):
             "log_max_mb": args.log_max_mb,
             "archive_mode": "zip",
             "backup_count": 7,
-
             # Console output only when verbose AND not quiet
             "console_stream": sys.stderr,
             "console_enabled": not args.quiet and args.verbose,
-
             # Nagios mode never uses color
             "color": False if mode == "nagios" else args.color,
         }
@@ -700,6 +705,8 @@ def initialize_logger(args, mode):
         if should_output(mode):
             print(nagios_summary(UNKNOWN, f"Failed to initialize LoggerFactory: {e}"))
         return None
+
+
 # -----------------------------
 # Main Function
 # -----------------------------
@@ -722,7 +729,6 @@ def main():
     if not rc["ok"]:
         early_exit(meta, f"UNKNOWN - {rc['error']}", UNKNOWN)
 
-
     # Track whether the operator explicitly set -p/--port
     args.port_was_explicit = args.port is not None
 
@@ -731,7 +737,7 @@ def main():
         args.port = 443 if args.https else 80
 
     protocol, url = determine_protocol_and_url(args)
-    capture = capture_http_response(url, protocol, args)    
+    capture = capture_http_response(url, protocol, args)
     backend = detect_backend(capture)
     meta.update(build_html_meta(capture, backend, args))
     backend_status, backend_message = enforce_backend_rules(backend, args)
@@ -753,7 +759,7 @@ def main():
         "content_type": {"status": ct_status, "message": ct_message},
         "html": {"status": html_status, "message": html_message},
     }
-   
+
     result = build_result_object(capture, backend, checks, failures)
     # -------------------------------------------------
     # Add perfdata to metadata (for logging only)
@@ -770,7 +776,7 @@ def main():
         "critical_rt": args.critical_rt,
         "warning_size": args.warning_size,
         "critical_size": args.critical_size,
-        "string": build_perfdata(args, capture)
+        "string": build_perfdata(args, capture),
     }
     # Add to result (for JSON)
     result["perfdata"] = perf
@@ -786,7 +792,7 @@ def main():
         logger.info(html_banner(meta, result))
         logger.info(result_banner(result["overall"]["status"], result["failures"]))
         logger.info(end_banner(SCRIPT_NAME, result["overall"]["status"]))
-    
+
     match mode:
         case "verbose":
             print_verbose(result)
@@ -803,9 +809,12 @@ def main():
             print(single_line(result, args))
             os._exit(result["overall"]["status"])
 
+
 if __name__ == "__main__":
     if sys.version_info < (MIN_MAJOR, MIN_MINOR):
-        print(f"CRITICAL: Python {MIN_MAJOR}.{MIN_MINOR}+ required, "
-            f"but running on {sys.version_info.major}.{sys.version_info.minor}")
+        print(
+            f"CRITICAL: Python {MIN_MAJOR}.{MIN_MINOR}+ required, "
+            f"but running on {sys.version_info.major}.{sys.version_info.minor}"
+        )
         sys.exit(2)
     main()

@@ -47,7 +47,8 @@ class TestResult:
     passed: bool
     duration: float
     error: str | None = None
-        
+
+
 HARNESS = {
     "Weather Index": WEATHER,
     "HTML Core": HTML,
@@ -55,39 +56,25 @@ HARNESS = {
     # "Interfaces": INTERFACES,
     # "Cert": CERT,
 }
+
+
 def parse_cli() -> BaseNagiosParser:
-    parser = BaseNagiosParser(
-        prog="runner",
-        description="NMS_Tools Deterministic Test Harness"
-    )
+    parser = BaseNagiosParser(prog="runner", description="NMS_Tools Deterministic Test Harness")
 
     # Use add_group(), just like check_ticker
     group = parser.add_group("Harness Options")
 
-    group.add_argument(
-        "--group",
-        default=None,
-        help="Run only a specific test group (Weather, HTML, Ticker)"
-    )
+    group.add_argument("--group", default=None, help="Run only a specific test group (Weather, HTML, Ticker)")
 
-    group.add_argument(
-        "--list",
-        action="store_true",
-        help="List available test groups"
-    )
-    group.add_argument(
-        "--fail-fast",
-        action="store_true",
-        help="Stop after the first failed test"
-    )
+    group.add_argument("--list", action="store_true", help="List available test groups")
+    group.add_argument("--fail-fast", action="store_true", help="Stop after the first failed test")
 
-    group.add_argument(
-        "--pattern",
-        help="Run only tests whose names contain this substring"
-    )
+    group.add_argument("--pattern", help="Run only tests whose names contain this substring")
 
     args, flags, mode = parser.parse()
     return args, flags, mode
+
+
 # ---------------------------------------------------------------------------
 # Logger Initialization
 # ---------------------------------------------------------------------------
@@ -110,24 +97,24 @@ def initialize_harness_logger(args):
         "log_max_mb": args.log_max_mb or 5,
         "archive_mode": "zip",
         "backup_count": 5,
-
         # Console output only when verbose AND not quiet
         "console_stream": sys.stderr,
         "console_enabled": args.verbose and not args.quiet,
-
         # Color only when user requests it
-        #"color": args.color,
+        # "color": args.color,
         "color": False,
     }
 
     factory = LoggerFactory(log_cfg, script_name)
     return factory.get_logger("harness")
 
+
 def log_environment(logger):
     logger.info(f"Python: {platform.python_version()}")
     logger.info(f"OS: {platform.system()} {platform.release()}")
     logger.info(f"Machine: {platform.machine()}")
     logger.info(f"Working Directory: {os.getcwd()}")
+
 
 # ---------------------------------------------------------------------------
 # Test Runner Helpers
@@ -137,7 +124,6 @@ def run_group(group_name, tests, args, logger):
     results = []
 
     for name, func in tests.items():
-
         # Pattern filtering
         if args.pattern and args.pattern not in name:
             continue
@@ -160,6 +146,7 @@ def run_group(group_name, tests, args, logger):
 
     return results
 
+
 def run_test(name, func, group_name):
     start = time.perf_counter()
 
@@ -181,11 +168,11 @@ def run_test(name, func, group_name):
         duration = time.perf_counter() - start
         return TestResult(name=name, group=group_name, passed=False, duration=duration, error=str(e))
 
-   
 
 # ---------------------------------------------------------------------------
 # Main Harness Execution
 # ---------------------------------------------------------------------------
+
 
 def main():
     args, flags, mode = parse_cli()
@@ -195,7 +182,7 @@ def main():
     logger.info("=== Starting NMS_Tools Test Harness ===")
     log_environment(logger)
     logger.info(f"Command Line: {' '.join(sys.argv)}")
-    
+
     if args.list:
         logger.info("Available test groups:")
         for name in HARNESS.keys():
@@ -226,7 +213,6 @@ def main():
     display_results(all_results, args)
 
     logger.info(f"=== Harness Complete: {passed} passed, {failed} failed ===")
-
 
     # Always exit with a code
     os._exit(0 if failed == 0 else 1)

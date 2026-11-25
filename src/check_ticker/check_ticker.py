@@ -60,6 +60,7 @@ SCRIPT_NAME = Path(sys.argv[0]).stem
 SCRIPT_VERSION = "1.0.0"
 VERSION = load_version(Path(__file__).resolve().parents[1])
 
+
 # -------------------------------------------------------------------
 # Argument parser
 # -------------------------------------------------------------------
@@ -84,8 +85,12 @@ def build_parser() -> BaseNagiosParser:
     trnd = parser.add_group("Trend Options")
     trnd.add_argument("--history", type=int, metavar="DAYS", help="Fetch N days of historical data")
     trnd.add_argument("--trend", action="store_true", help="Enable trend analysis (direction + slope)")
-    trnd.add_argument("--trend-volatility", action="store_true",help="Include volatility (standard deviation of history)")
-    trnd.add_argument("--trend-strength", action="store_true", help="Include trend strength (slope normalized by volatility)")
+    trnd.add_argument(
+        "--trend-volatility", action="store_true", help="Include volatility (standard deviation of history)"
+    )
+    trnd.add_argument(
+        "--trend-strength", action="store_true", help="Include trend strength (slope normalized by volatility)"
+    )
     trnd.add_argument("--trend-reversal", action="store_true", help="Detect mid‑window trend reversals")
     trnd.add_argument("--trend-windows", action="store_true", help="Compute short/medium/long window trends")
 
@@ -105,6 +110,7 @@ def build_parser() -> BaseNagiosParser:
 
     return parser
 
+
 # -------------------------------------------------------------------
 # API key resolution
 # -------------------------------------------------------------------
@@ -113,10 +119,7 @@ def get_apikeys(args) -> dict:
     vault_password_file = normalize_path(args.vault_password_file or os.getenv("CT_VAULT_PASSWORD_FILE"))
     apikey_file = normalize_path(args.apikey_file or os.getenv("CT_APIKEY_FILE"))
 
-    cli_keys = {
-        name: getattr(args, f"{name}_key", None)
-        for name in ProviderRegistry.provider_names()
-    }
+    cli_keys = {name: getattr(args, f"{name}_key", None) for name in ProviderRegistry.provider_names()}
 
     vault_data = None
     if vault_path and vault_password_file:
@@ -142,6 +145,7 @@ def get_apikeys(args) -> dict:
                 resolved[provider.name] = key
 
     return resolved
+
 
 # -------------------------------------------------------------------
 # Logger
@@ -169,6 +173,7 @@ def initialize_logger(args, mode):
             print(nagios_summary(UNKNOWN, f"Failed to initialize LoggerFactory: {e}"))
         return None
 
+
 # -------------------------------------------------------------------
 # Main
 # -------------------------------------------------------------------
@@ -176,12 +181,12 @@ def main() -> int:
     parser = build_parser()
     args, flags, mode = parser.parse()
     prefer_history = (
-        args.history or
-        args.trend or
-        args.trend_volatility or
-        args.trend_strength or
-        args.trend_reversal or
-        args.trend_windows
+        args.history
+        or args.trend
+        or args.trend_volatility
+        or args.trend_strength
+        or args.trend_reversal
+        or args.trend_windows
     )
 
     # Resolve API keys
@@ -230,11 +235,11 @@ def main() -> int:
         "pct": result.pct * 100,
         "history": result.history,
         "trend": result.trend_result.to_json(),
-        "raw": result.raw,   # optional
+        "raw": result.raw,  # optional
     }
     # Rounded values for human/Nagios output
     if not isinstance(payload.get("price"), (int, float)):
-        payload["price"]= 0.0
+        payload["price"] = 0.0
     if not isinstance(payload.get("pct"), (int, float)):
         payload["pct"] = 0.0
     rounded_price = round(payload["price"], 3)
@@ -244,7 +249,7 @@ def main() -> int:
     perfdata = f"price={rounded_price:.3f} pct={rounded_pct:.2f}"
     nagios_msg = f"{ticker} ${rounded_price:.3f} ({rounded_pct:+.2f}%)"
     state = OK
-  
+
     # --- Trend Analysis ---
     tr = result.trend_result
     if args.trend:
@@ -260,15 +265,15 @@ def main() -> int:
     if args.trend_volatility:
         tr.volatility = compute_volatility(result.history)
         nagios_msg += f" vol={tr.volatility:.3f}"
-        
+
     if args.trend_strength:
         tr.strength = compute_trend_strength(result.history)
         nagios_msg += f" strength={tr.strength:.3f}"
-        
+
     if args.trend_reversal:
         tr.reversal = detect_reversal(result.history)
         nagios_msg += f" reversal={tr.reversal}"
-        
+
     if args.trend_windows:
         tr.windows = compute_multi_window_trend(result.history)
 
@@ -298,6 +303,7 @@ def main() -> int:
         # NEW: log full raw provider payload
         try:
             import json
+
             raw_json = json.dumps(payload["raw"], indent=2, sort_keys=True)
             logger.info(f"[RAW] provider={payload['provider']} data=\n{raw_json}")
         except Exception as exc:

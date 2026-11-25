@@ -6,12 +6,12 @@ File: bump_version.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-25
- Modified: 2026-08-29
+ Modified: 2026-11-25
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
 
-Description: 
+Description:
     bump_version.py
     Bumps the NMS_Tools suite version in the VERSION file.
 Usage:

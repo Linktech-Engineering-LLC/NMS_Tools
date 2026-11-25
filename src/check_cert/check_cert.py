@@ -15,6 +15,7 @@ Description:
     Certificate checker with SAN, issuer, signature algorithm, wildcard detection,
     perfdata, quiet/verbose modes, and JSON output.
 """
+
 import json
 import os
 import sys
@@ -54,6 +55,8 @@ MIN_MINOR = 8
 # Other Constants
 SCRIPT_NAME = Path(sys.argv[0]).stem
 SCRIPT_VERSION = "3.1.0"
+
+
 # -----------------------------
 # ArgParse Custom Formatter & CLI Parser
 # -----------------------------
@@ -131,7 +134,9 @@ def build_parser():
     ocsp = nag.add_group("OCSP Options")
     ocsp.add_argument("--require-ocsp", action="store_true", help="OCSP responder must be reachable")
     ocsp.add_argument("--forbid-ocsp", action="store_true", help="OCSP responder must NOT be reachable")
-    ocsp.add_argument("--ocsp-status", choices=["good", "revoked", "unknown", "invalid"], help="Require specific OCSP status")
+    ocsp.add_argument(
+        "--ocsp-status", choices=["good", "revoked", "unknown", "invalid"], help="Require specific OCSP status"
+    )
 
     # Examples
     nag.parser.epilog = (
@@ -143,6 +148,8 @@ def build_parser():
     )
 
     return nag.parse()
+
+
 # -----------------------------
 # Display Options
 # -----------------------------
@@ -292,6 +299,8 @@ def display_verbose(meta):
             print(f"  - {e}")
     else:
         print("  None")
+
+
 def display_chain_summary(data):
     """High-level, operator-grade summary of certificate chain status."""
 
@@ -336,6 +345,8 @@ def display_chain_summary(data):
         print("Errors: None")
 
     print()
+
+
 def display_enforcement_summary(enf):
     """
     High-level, operator-grade summary of enforcement results.
@@ -391,6 +402,8 @@ def display_enforcement_summary(enf):
         print("Errors: None")
 
     print()
+
+
 def nagios_exit(enf, meta):
     days = meta["expiration_days"]
     date = meta["expiration_date"]
@@ -418,6 +431,8 @@ def nagios_exit(enf, meta):
     # 4. Fully OK
     print(f"OK - certificate valid, expires on {date} | {perf}")
     os._exit(OK)
+
+
 def output_json(meta, enf):
     """
     Produce deterministic, complete JSON output for monitoring and automation.
@@ -433,7 +448,6 @@ def output_json(meta, enf):
         "sni": meta.get("sni"),
         "timeout": meta.get("timeout"),
         "insecure": meta.get("insecure"),
-
         # -----------------------------
         # TLS Session
         # -----------------------------
@@ -441,14 +455,13 @@ def output_json(meta, enf):
             "version": meta.get("tls_version"),
             "cipher": meta.get("cipher"),
             "tls_state": meta.get("tls_state"),
-            "tls_messages":meta.get("tls_messages"),
-            "tls_handshake_state":meta.get("tls_handshake_state"),
-            "tls_handshake_message":meta.get("tls_handshake_message"),
+            "tls_messages": meta.get("tls_messages"),
+            "tls_handshake_state": meta.get("tls_handshake_state"),
+            "tls_handshake_message": meta.get("tls_handshake_message"),
             "cipher_is_aead": meta.get("cipher_is_aead"),
             "cipher_is_cbc": meta.get("cipher_is_cbc"),
             "cipher_is_rc4": meta.get("cipher_is_rc4"),
         },
-
         # -----------------------------
         # Certificate
         # -----------------------------
@@ -467,7 +480,6 @@ def output_json(meta, enf):
             "warning_days": meta.get("warning_days"),
             "critical_days": meta.get("critical_days"),
         },
-
         # -----------------------------
         # Key Metadata
         # -----------------------------
@@ -476,9 +488,8 @@ def output_json(meta, enf):
             "rsa_bits": meta.get("rsa_bits"),
             "ecc_curve": meta.get("ecc_curve"),
             "key_state": meta.get("key_state"),
-            "key_message": meta.get("key_message")
+            "key_message": meta.get("key_message"),
         },
-
         # -----------------------------
         # AIA
         # -----------------------------
@@ -486,7 +497,6 @@ def output_json(meta, enf):
             "issuer_urls": meta.get("aia_issuer_urls", []),
             "chain": meta.get("aia_chain", []),
         },
-
         # -----------------------------
         # OCSP
         # -----------------------------
@@ -495,7 +505,6 @@ def output_json(meta, enf):
             "status": meta.get("ocsp_status"),
             "reachable": meta.get("ocsp_reachable"),
         },
-
         # -----------------------------
         # Chain Validation
         # -----------------------------
@@ -507,13 +516,11 @@ def output_json(meta, enf):
             "chain_state": meta.get("chain_state"),
             "chain_message": meta.get("chain_message"),
         },
-
         # -----------------------------
         # General Warnings / Errors
         # -----------------------------
         "warnings": meta.get("warnings", []),
         "errors": meta.get("errors", []),
-
         # -----------------------------
         # Enforcement
         # -----------------------------
@@ -523,10 +530,12 @@ def output_json(meta, enf):
             "failed": enf.get("failed", []),
             "errors": enf.get("errors", []),
             "state": compute_nagios_code(enf),
-        }
+        },
     }
 
     print(json.dumps(out, indent=2))
+
+
 def compute_nagios_code(enf):
     hard_failures = [f for f in enf["failed"] if not f.endswith("_warning")]
     warnings = [f for f in enf["failed"] if f.endswith("_warning")]
@@ -536,6 +545,8 @@ def compute_nagios_code(enf):
     if warnings:
         return WARNING
     return OK
+
+
 # --------------------------------------
 # Logging Functions
 # --------------------------------------
@@ -558,11 +569,9 @@ def initialize_logger(args, mode):
             "log_max_mb": args.log_max_mb,
             "archive_mode": "zip",
             "backup_count": 7,
-
             # Console output only when verbose AND not quiet
             "console_stream": sys.stderr,
             "console_enabled": not args.quiet and args.verbose,
-
             # Nagios mode never uses color
             "color": False if mode == "nagios" else args.color,
         }
@@ -574,6 +583,7 @@ def initialize_logger(args, mode):
         if should_output(mode):
             print(nagios_summary(UNKNOWN, f"Failed to initialize LoggerFactory: {e}"))
         return None
+
 
 # -----------------------------
 #  Main Orchestrator
@@ -605,10 +615,7 @@ def main():
     # ------------------------------------------------------------
     try:
         cert, chain, tls_version, cipher = fetch_certificate_and_socket(
-            args.sni or args.host,
-            args.port,
-            args.timeout,
-            args.insecure
+            args.sni or args.host, args.port, args.timeout, args.insecure
         )
     except Exception as e:
         early_exit(meta, f"UNKNOWN - failed to retrieve certificate: {e}", UNKNOWN, logger)
@@ -685,7 +692,9 @@ def main():
 
 if __name__ == "__main__":
     if sys.version_info < (MIN_MAJOR, MIN_MINOR):
-        print(f"CRITICAL: Python {MIN_MAJOR}.{MIN_MINOR}+ required, "
-            f"but running on {sys.version_info.major}.{sys.version_info.minor}")
+        print(
+            f"CRITICAL: Python {MIN_MAJOR}.{MIN_MINOR}+ required, "
+            f"but running on {sys.version_info.major}.{sys.version_info.minor}"
+        )
         os._exit(2)
     main()

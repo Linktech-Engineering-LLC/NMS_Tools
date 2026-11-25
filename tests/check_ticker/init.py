@@ -14,6 +14,7 @@ License: MIT (see LICENSE for details)
 Description: Description of this module
 
 """
+
 from .test_get_apikeys import (
     test_cli_overrides,
     test_env_fallback,
@@ -31,4 +32,3 @@ TICKER = {
     "invalid_vault": test_invalid_vault,
     "env_fallback": test_env_fallback,
 }
-

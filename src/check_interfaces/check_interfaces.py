@@ -16,6 +16,7 @@ Description:
         Obtains a dictionary of interfaces from the system, which includes the operational
         and configuration information about each interface.
 """
+
 import json
 import os
 import sys
@@ -59,6 +60,8 @@ MIN_MINOR = 8
 # Other Global Constants
 SCRIPT_NAME = Path(sys.argv[0]).stem
 SCRIPT_VERSION = "1.1.0"
+
+
 # -----------------------------
 # ArgParse Custom Formatter & CLI Parser (Migrated)
 # -----------------------------
@@ -82,21 +85,21 @@ def build_parser():
     # Core Options
     # -----------------------------
     core = nag.add_group("Core Options")
-    core.add_argument("-H", "--host", required=True,
-                      help="Target hostname or IP address")
-    core.add_argument("-t", "--timeout", type=int, default=5,
-                      help="Connection timeout in seconds")
+    core.add_argument("-H", "--host", required=True, help="Target hostname or IP address")
+    core.add_argument("-t", "--timeout", type=int, default=5, help="Connection timeout in seconds")
 
     # -----------------------------
     # SNMP Options (v2c)
     # -----------------------------
     snmp = nag.add_group("SNMP Options")
-    snmp.add_argument("-C", "--community",
-                      help="SNMPv2c community string (required for remote hosts)")
-    snmp.add_argument("-p", "--snmp-port", type=int, default=161,
-                      help="SNMP port")
-    snmp.add_argument("-T", "--snmp-timeout", type=int,
-                      help="SNMP timeout in seconds (defaults to --timeout if not set; ignored in local mode)")
+    snmp.add_argument("-C", "--community", help="SNMPv2c community string (required for remote hosts)")
+    snmp.add_argument("-p", "--snmp-port", type=int, default=161, help="SNMP port")
+    snmp.add_argument(
+        "-T",
+        "--snmp-timeout",
+        type=int,
+        help="SNMP timeout in seconds (defaults to --timeout if not set; ignored in local mode)",
+    )
 
     # -----------------------------
     # SNMPv3 Options (future-proofing)
@@ -112,14 +115,19 @@ def build_parser():
     # Interface Filtering Options
     # -----------------------------
     filtering = nag.add_group("Interface Filtering Options")
-    filtering.add_argument("--include-aliases", action="store_true",
-                           help="Include alias interfaces (e.g., eth0:1, br0:backup)")
-    filtering.add_argument("--ignore-virtual", action="store_true",
-                           help="Ignore virtual interfaces (e.g., vnet*, virbr*, docker0)")
-    filtering.add_argument("--exclude-local", action="store_true",
-                           help="Exclude local-only interfaces such as 'lo'")
-    filtering.add_argument("--ignore", action="append", metavar="PATTERN",
-                           help="Ignore interfaces matching this pattern (substring or regex). Repeatable.")
+    filtering.add_argument(
+        "--include-aliases", action="store_true", help="Include alias interfaces (e.g., eth0:1, br0:backup)"
+    )
+    filtering.add_argument(
+        "--ignore-virtual", action="store_true", help="Ignore virtual interfaces (e.g., vnet*, virbr*, docker0)"
+    )
+    filtering.add_argument("--exclude-local", action="store_true", help="Exclude local-only interfaces such as 'lo'")
+    filtering.add_argument(
+        "--ignore",
+        action="append",
+        metavar="PATTERN",
+        help="Ignore interfaces matching this pattern (substring or regex). Repeatable.",
+    )
 
     # -----------------------------
     # Targeting Options
@@ -129,18 +137,9 @@ def build_parser():
     group = targeting.add_mutually_exclusive_group()
     group.add_argument(
         "--status",
-        choices=[
-            "oper-status",
-            "admin-status",
-            "linkspeed",
-            "duplex",
-            "mtu",
-            "alias",
-            "flags",
-            "iftype"
-        ],
+        choices=["oper-status", "admin-status", "linkspeed", "duplex", "mtu", "alias", "flags", "iftype"],
         default="oper-status",
-        help="Interface attribute to evaluate."
+        help="Interface attribute to evaluate.",
     )
 
     group.add_argument(
@@ -157,15 +156,13 @@ def build_parser():
             "in_multicast",
             "out_multicast",
             "in_broadcast",
-            "out_broadcast"
+            "out_broadcast",
         ],
-        help="Select a perfdata metric to output."
+        help="Select a perfdata metric to output.",
     )
 
     targeting.add_argument(
-        "--ifaces",
-        metavar="LIST",
-        help="Comma-delimited list or regex pattern of interfaces to evaluate."
+        "--ifaces", metavar="LIST", help="Comma-delimited list or regex pattern of interfaces to evaluate."
     )
 
     # -----------------------------
@@ -179,6 +176,8 @@ def build_parser():
     )
 
     return nag.parse()
+
+
 # -----------------------------
 # Filters
 # -----------------------------
@@ -186,7 +185,6 @@ def apply_filters(interfaces, args) -> dict:
     filtered = {}
 
     for name, iface in interfaces.items():
-
         # Alias filtering
         if args.status == "alias":
             pass
@@ -208,6 +206,8 @@ def apply_filters(interfaces, args) -> dict:
         filtered[name] = iface
 
     return filtered
+
+
 # --------------------------------
 # Enforcement
 # --------------------------------
@@ -220,6 +220,8 @@ def extract_required(filtered, args):
         if req in filtered:
             required_only[req] = filtered[req]
     return required_only
+
+
 # -----------------------------
 # Display the Information
 # -----------------------------
@@ -231,15 +233,13 @@ def output_json(meta, interfaces, exit_code):
     exit_code: Nagios exit code
     """
 
-    payload = {
-        "meta": meta,
-        "interfaces": interfaces,
-        "status": exit_code
-    }
+    payload = {"meta": meta, "interfaces": interfaces, "status": exit_code}
     meta.pop("_log_warn_emitted", None)
-    
+
     print(json.dumps(payload, indent=2, sort_keys=True))
     return exit_code
+
+
 def output_verbose(meta, interfaces, result):
     print(f"Interface Summary ({meta['mode']})")
     print(f"Host: {meta['host']} ({meta['ip']})")
@@ -294,6 +294,8 @@ def output_verbose(meta, interfaces, result):
     if meta.get("warnings"):
         for w in meta["warnings"]:
             print(w)
+
+
 def output_single_line(meta, interfaces, result, primary_mode, perfdata_metric):
     """
     Build a Nagios-compatible single-line output with optional perfdata.
@@ -345,14 +347,11 @@ def output_single_line(meta, interfaces, result, primary_mode, perfdata_metric):
     # -----------------------------
     line = f"{msg} | {perfdata}"
 
-    exit_code = {
-        "OK": 0,
-        "WARNING": 1,
-        "CRITICAL": 2,
-        "UNKNOWN": 3
-    }.get(state, 3)
+    exit_code = {"OK": 0, "WARNING": 1, "CRITICAL": 2, "UNKNOWN": 3}.get(state, 3)
 
     return line, exit_code
+
+
 # --------------------------------------
 # Logging Initialization (PythonTools Unified)
 # --------------------------------------
@@ -375,11 +374,9 @@ def initialize_logger(args, mode):
             "log_max_mb": args.log_max_mb,
             "archive_mode": "zip",
             "backup_count": 7,
-
             # Console output only when verbose AND not quiet
             "console_stream": sys.stderr,
             "console_enabled": not args.quiet and args.verbose,
-
             # Nagios mode never uses color
             "color": False if mode == "nagios" else args.color,
         }
@@ -391,6 +388,7 @@ def initialize_logger(args, mode):
         if should_output(mode):
             print(nagios_summary(UNKNOWN, f"Failed to initialize LoggerFactory: {e}"))
         return None
+
 
 # --------------------------------------
 # Main Entry Point
@@ -436,10 +434,7 @@ def main():
     # ------------------------------------------------------------
     # Determine timeout
     # ------------------------------------------------------------
-    effective_timeout = (
-        args.timeout if rc["local"]
-        else args.snmp_timeout or args.timeout
-    )
+    effective_timeout = args.timeout if rc["local"] else args.snmp_timeout or args.timeout
 
     # ------------------------------------------------------------
     # Interface collection
@@ -451,12 +446,7 @@ def main():
             print("CRITICAL - remote host requires SNMP community string")
             os._exit(CRITICAL)
 
-        raw = gather_snmp_interfaces(
-            rc["ip"],
-            args.community,
-            port=args.snmp_port,
-            timeout=effective_timeout
-        )
+        raw = gather_snmp_interfaces(rc["ip"], args.community, port=args.snmp_port, timeout=effective_timeout)
 
     data = normalize_interfaces(raw, meta["mode"])
 
@@ -480,18 +470,10 @@ def main():
     # ------------------------------------------------------------
     if logger and logging_enabled:
         for iface_name in selected:
-            logger.info(log_interface(
-                iface_name,
-                data[iface_name],
-                result["results"][iface_name]
-            ))
+            logger.info(log_interface(iface_name, data[iface_name], result["results"][iface_name]))
 
         for name in unmatched:
-            logger.info(log_interface(
-                name,
-                {"name": name},
-                result["results"][name]
-            ))
+            logger.info(log_interface(name, {"name": name}, result["results"][name]))
 
         logger.info(result_banner(result["state"], result["failures"]))
         logger.info(end_banner(SCRIPT_NAME, result["state"]))
@@ -508,11 +490,7 @@ def main():
         os._exit(0 if result["state"] == "OK" else 2)
 
     msg, code = output_single_line(
-        meta=meta,
-        interfaces=selected,
-        result=result,
-        primary_mode=primary_mode,
-        perfdata_metric=args.perfdata
+        meta=meta, interfaces=selected, result=result, primary_mode=primary_mode, perfdata_metric=args.perfdata
     )
 
     if not args.quiet:
@@ -520,9 +498,12 @@ def main():
 
     os._exit(code)
 
+
 if __name__ == "__main__":
     if sys.version_info < (MIN_MAJOR, MIN_MINOR):
-        print(f"CRITICAL: Python {MIN_MAJOR}.{MIN_MINOR}+ required, "
-            f"but running on {sys.version_info.major}.{sys.version_info.minor}")
+        print(
+            f"CRITICAL: Python {MIN_MAJOR}.{MIN_MINOR}+ required, "
+            f"but running on {sys.version_info.major}.{sys.version_info.minor}"
+        )
         os._exit(2)
     main()

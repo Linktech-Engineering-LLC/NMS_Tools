@@ -6,12 +6,12 @@ File: validate_env.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-25
- Modified: 2026-08-29
+ Modified: 2026-11-25
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
 
-Description: 
+Description:
     validate_env.py
     Performs preflight validation for building or installing the NMS_Tools suite.
 """
@@ -25,8 +25,9 @@ REQUIRED_PYTHON = (3, 8)
 
 def check_python_version():
     if sys.version_info < REQUIRED_PYTHON:
-        print(f"[env] ERROR: Python {REQUIRED_PYTHON[0]}.{REQUIRED_PYTHON[1]}+ required "
-            f"(found {sys.version.split()[0]}).")
+        print(
+            f"[env] ERROR: Python {REQUIRED_PYTHON[0]}.{REQUIRED_PYTHON[1]}+ required (found {sys.version.split()[0]})."
+        )
         sys.exit(1)
     print(f"[env] Python version OK: {sys.version.split()[0]}")
 

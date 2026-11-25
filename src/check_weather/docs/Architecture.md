@@ -214,10 +214,13 @@ Mode is resolved in `main()`:
 
 ```python
 weather_mode = (
-    "weekly" if weather_flags[WeatherFlagNames.WEEKLY] else
-    "hourly" if weather_flags[WeatherFlagNames.HOURLY] else
-    "full"   if weather_flags[WeatherFlagNames.FULL]   else
-    "current"
+    "weekly"
+    if weather_flags[WeatherFlagNames.WEEKLY]
+    else "hourly"
+    if weather_flags[WeatherFlagNames.HOURLY]
+    else "full"
+    if weather_flags[WeatherFlagNames.FULL]
+    else "current"
 )
 ```
 

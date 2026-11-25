@@ -11,7 +11,6 @@ Created: 2026-08-10
  Description: Tests the Weather Indexes
 """
 
-
 import pytest
 from PythonTools.weather.indexes import (
     compute_all_indexes,
@@ -65,7 +64,7 @@ def test_compute_all_indexes():
         dewpoint_c=22,
         rh=70,
         wind_mph=10,
-        pressure_hpa=1013.25,   # standard atmospheric pressure
+        pressure_hpa=1013.25,  # standard atmospheric pressure
     )
 
     assert idx.heat_index is not None

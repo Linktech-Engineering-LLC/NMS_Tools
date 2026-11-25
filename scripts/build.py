@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_NAME = Path(sys.argv[0]).stem
 SCRIPT_VERSION = "1.0.0"
 
+
 # ------------------------------------------------------------
 # Tool discovery
 # ------------------------------------------------------------
@@ -36,6 +37,7 @@ def discover_tools(src_dir="src"):
         if os.path.isdir(tool_dir) and os.path.isfile(tool_script):
             tools.append(entry)
     return tools
+
 
 # ------------------------------------------------------------
 # Asset collector (only NMS_Tools assets)
@@ -56,10 +58,7 @@ def generate_spec(tool_name, log=None):
     spec_path = ROOT / f"{tool_name}.spec"
     python_tools_src = Path(os.path.expanduser("~/projects/Python/PythonTools"))
 
-    pathex = [
-        str(src_dir),
-        sysconfig.get_paths()["purelib"]
-    ]
+    pathex = [str(src_dir), sysconfig.get_paths()["purelib"]]
 
     # Only add editable source path if it exists (local dev)
     if python_tools_src.exists():
@@ -75,7 +74,6 @@ def generate_spec(tool_name, log=None):
     datas = [(str(ROOT / "VERSION.txt"), "VERSION")]
 
     binaries = []
-
 
     spec_content = f"""
 # -*- mode: python ; coding: utf-8 -*-
@@ -116,6 +114,7 @@ exe = EXE(
     msg = f"[+] Generated spec for {tool_name}"
     log.info(msg) if log else print(msg)
 
+
 # ------------------------------------------------------------
 # Freeze
 # ------------------------------------------------------------
@@ -123,6 +122,7 @@ def freeze_tool(tool_name, log=None):
     msg = f"[+] Freezing {tool_name}..."
     log.info(msg) if log else print(msg)
     subprocess.run(["pyinstaller", f"{tool_name}.spec"], check=True)
+
 
 # ------------------------------------------------------------
 # Logging
@@ -139,8 +139,10 @@ def init_log():
         "color": False,
     }
     from PythonTools.log_helpers.factory import LoggerFactory
+
     logger_factory = LoggerFactory(log_cfg, "build")
     return logger_factory.get_logger("main")
+
 
 # ------------------------------------------------------------
 # Main
@@ -156,6 +158,7 @@ def main():
         freeze_tool(tool, log)
 
     log.info("[+] All tools frozen successfully.")
+
 
 if __name__ == "__main__":
     main()

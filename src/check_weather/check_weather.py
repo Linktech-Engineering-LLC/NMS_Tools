@@ -12,7 +12,7 @@ Required: Python 3.10+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
 
-Description: 
+Description:
     Deterministic weather checker with ZIP/city/lat-long support.
 """
 
@@ -86,6 +86,7 @@ SCRIPT_NAME = Path(sys.argv[0]).stem
 DEFAULT_PROVIDER = "nws"
 DEFAULT_WEATHER_ICON = "wi-na.svg"
 
+
 # Flag Classes
 class WeatherFlagNames(IntEnum):
     INCLUDE_GUSTS = auto()
@@ -103,8 +104,9 @@ class WeatherFlagNames(IntEnum):
     SHOW_LOCATION_DETAILS = auto()
     SHOW_CODES = auto()
     NO_COLOR = auto()
-class WeatherFlags(Flags):
 
+
+class WeatherFlags(Flags):
     @classmethod
     def from_args(cls, args):
         f = cls()
@@ -129,28 +131,47 @@ class WeatherFlags(Flags):
         f.set(WeatherFlagNames.NO_COLOR, args.no_color)
 
         return f
+
+
 # ------------------------------------------------------------
 # Cache Directories + TTLs
 # ------------------------------------------------------------
 WEATHER_CACHE_DIR = ensure_subdir("weather")
 LOCATION_CACHE_DIR = ensure_subdir("location")
-CACHE_TTL = timedelta(minutes=15)       # Weather TTL
-LOCATION_TTL = timedelta(hours=24)      # Location TTL
+CACHE_TTL = timedelta(minutes=15)  # Weather TTL
+LOCATION_TTL = timedelta(hours=24)  # Location TTL
+
+
 # ------------------------------------------------------------
 # Weather Cache Functions
 # ------------------------------------------------------------
-def weather_cache_path(key): return cache_path(WEATHER_CACHE_DIR, key)
-def load_weather_cache(key): return load_json_cache(weather_cache_path(key), CACHE_TTL)
-def save_weather_cache(key, data): return save_json_cache(weather_cache_path(key), data)
+def weather_cache_path(key):
+    return cache_path(WEATHER_CACHE_DIR, key)
+
+
+def load_weather_cache(key):
+    return load_json_cache(weather_cache_path(key), CACHE_TTL)
+
+
+def save_weather_cache(key, data):
+    return save_json_cache(weather_cache_path(key), data)
+
+
 # ------------------------------------------------------------
 # Location Cache Functions
 # ------------------------------------------------------------
 def location_cache_path(key: str) -> Path:
     return cache_path(LOCATION_CACHE_DIR, key)
+
+
 def load_location_from_cache(key: str):
     return load_json_cache(location_cache_path(key), LOCATION_TTL)[0]
+
+
 def save_location_to_cache(key: str, data: dict):
-    return save_json_cache(location_cache_path(key), data)# -----------------------------
+    return save_json_cache(location_cache_path(key), data)  # -----------------------------
+
+
 # Parsers
 # -----------------------------
 def build_parser():
@@ -166,16 +187,15 @@ def build_parser():
     )
 
     # Usage line
-    nag.parser.usage = (
-        "%(prog)s (--zip <code> | --city <name> | --lat <lat> --lon <lon>) [options]"
-    )
+    nag.parser.usage = "%(prog)s (--zip <code> | --city <name> | --lat <lat> --lon <lon>) [options]"
 
     # ------------------------------------------------------------
     # Core Options
     # ------------------------------------------------------------
     core = nag.add_group("Core Options")
     core.add_argument(
-        "-l", "--location",
+        "-l",
+        "--location",
         help="Free-form location: ZIP, City/State, or lat,lon",
     )
     core.add_argument(
@@ -214,10 +234,7 @@ def build_parser():
         help="Connection timeout in seconds",
     )
     core.add_argument(
-        "--provider",
-        choices=["open-meteo", "nws"],
-        default=DEFAULT_PROVIDER,
-        help="Weather provider to use"
+        "--provider", choices=["open-meteo", "nws"], default=DEFAULT_PROVIDER, help="Weather provider to use"
     )
     # ------------------------------------------------------------
     # Nagios Behavior Filters (required by PythonTools)
@@ -239,19 +256,17 @@ def build_parser():
         help="Only report failed conditions in verbose or JSON output.",
     )
     include = nag.add_group("Inclusion Options")
-    include.add_argument("--include-gusts", action="store_true",
-                        help="Include wind gusts in output and perfdata.")
-    include.add_argument("--include-precip", action="store_true",
-                        help="Include precipitation fields in output and perfdata.")
-    include.add_argument("--include-clouds", action="store_true",
-                        help="Include cloud cover fields in output and perfdata.")
+    include.add_argument("--include-gusts", action="store_true", help="Include wind gusts in output and perfdata.")
+    include.add_argument(
+        "--include-precip", action="store_true", help="Include precipitation fields in output and perfdata."
+    )
+    include.add_argument(
+        "--include-clouds", action="store_true", help="Include cloud cover fields in output and perfdata."
+    )
     modes = nag.add_group("Weather Modes")
-    modes.add_argument("--weekly", action="store_true",
-                    help="Show weekly forecast.")
-    modes.add_argument("--hourly", action="store_true",
-                    help="Show hourly forecast.")
-    modes.add_argument("--full", action="store_true",
-                    help="Show full forecast, including current, weekly, hourly.")
+    modes.add_argument("--weekly", action="store_true", help="Show weekly forecast.")
+    modes.add_argument("--hourly", action="store_true", help="Show hourly forecast.")
+    modes.add_argument("--full", action="store_true", help="Show full forecast, including current, weekly, hourly.")
     debug = nag.add_group("Debug Options")
     debug.add_argument("--ignore-cache", action="store_true")
     debug.add_argument("--ignore-ttl", action="store_true")
@@ -281,18 +296,14 @@ def build_parser():
     nag.parser.epilog = (
         "Examples:\n"
         "  %(prog)s --zip 67576 -v\n"
-        "  %(prog)s --city \"St John, KS\" --json\n"
+        '  %(prog)s --city "St John, KS" --json\n'
         "  %(prog)s --lat 38.00 --lon -98.76 --warning-temp 30\n"
     )
 
     # Parse using BaseNagiosParser
     args, flags, mode = nag.parse()
     # Enforce mutual exclusivity manually
-    mode_flags = [
-        args.weekly,
-        args.hourly,
-        args.full
-    ]
+    mode_flags = [args.weekly, args.hourly, args.full]
 
     if sum(bool(x) for x in mode_flags) > 1:
         raise ValueError("Only one mode may be selected: --weekly, --hourly, or --full.")
@@ -320,6 +331,8 @@ def build_parser():
         args.location = f"{args.lat},{args.lon}"
 
     return args, flags, mode
+
+
 # ---------------------------------------------------------------------------
 # Location Resolver (ZIP, City, Lat/Long)
 # ---------------------------------------------------------------------------
@@ -358,13 +371,12 @@ def resolve_location(args):
 
     save_location_to_cache(cache_key, result)
     return result
+
+
 # ---------------------------------------------------------------------------
 # Evaluation Logic
 # ---------------------------------------------------------------------------
-def evaluate_simple(value: float | None,
-                    warn: float | None,
-                    crit: float | None,
-                    label: str) -> tuple[int, str] | None:
+def evaluate_simple(value: float | None, warn: float | None, crit: float | None, label: str) -> tuple[int, str] | None:
     if value is None:
         return None
     if crit is not None and value >= crit:
@@ -372,6 +384,8 @@ def evaluate_simple(value: float | None,
     if warn is not None and value >= warn:
         return WARNING, f"{label} {value:.2f} exceeds warning threshold"
     return None
+
+
 def evaluate_temperature(temp, args, unit):
     wt = args.warning_temp
     ct = args.critical_temp
@@ -414,6 +428,8 @@ def evaluate_temperature(temp, args, unit):
         return WARNING, f"Temperature {temp}°F exceeds warning threshold"
 
     return None
+
+
 def evaluate_weather(data: dict[str, Any], args: argparse.Namespace) -> tuple[int, str]:
     if args.units == "imperial":
         temp = data.get("temperature_f")
@@ -469,6 +485,8 @@ def evaluate_weather(data: dict[str, Any], args: argparse.Namespace) -> tuple[in
     # Default OK
     msg = build_normal_message(data, args)
     return OK, msg
+
+
 # ---------------------------------------------------------------------------
 # Output Helpers
 # ---------------------------------------------------------------------------
@@ -485,6 +503,8 @@ def build_normal_message(data: dict[str, Any], args: argparse.Namespace) -> str:
         if t is None and w is None:
             return "Weather data unavailable"
         return f"Weather normal: {t:.2f}°C, {w:.2f} kph"
+
+
 def output_and_exit(status: int, payload: dict[str, Any], args, flags, weather_mode: str):
     """
     Unified output dispatcher for all display modes and all weather modes.
@@ -534,6 +554,8 @@ def output_and_exit(status: int, payload: dict[str, Any], args, flags, weather_m
     # main() already enforces that nagios cannot be used with hourly/weekly
     nagios_output(payload)
     os._exit(status)
+
+
 def verbose_current(payload):
     data = payload["data"]
     units = data.get("units", "metric")
@@ -554,6 +576,8 @@ def verbose_current(payload):
     print(f"Visibility: {data.get('visibility_m')} m")
     print(f"Condition: {data.get('context', 'Unknown')}")
     print(f"Source:   {data.get('source')}")
+
+
 def verbose_hourly(payload):
     data = payload["data"]
     units = data.get("units", "metric")
@@ -571,6 +595,8 @@ def verbose_hourly(payload):
         cond = h.get("context", "Unknown")
 
         print(f"{t}  {temp}  Wind {wind}  Clouds {clouds}  Precip {precip}  {cond}")
+
+
 def verbose_weekly(payload):
     data = payload["data"]
     units = data.get("units", "metric")
@@ -589,14 +615,22 @@ def verbose_weekly(payload):
         cond = d.get("context", "Unknown")
 
         print(f"{date}  High {tmax}  Low {tmin}  Rain {precip} ({prob}%)  Wind {wind}  {cond}")
+
+
 def quiet_current(payload):
     print(payload["message"])
+
+
 def quiet_forecast(payload, weather_mode):
     print(f"{weather_mode.capitalize()} forecast retrieved")
+
+
 def nagios_output(payload):
     status = payload["status"]
     message = payload["message"]
     print(f"{status}: {message}")
+
+
 # -----------------------------
 # Perfdata
 # -----------------------------
@@ -669,6 +703,8 @@ def build_perfdata(data: dict[str, Any], args: argparse.Namespace, flags: Flags)
         parts.append(f"cloud={cloud:.2f};{w};{c}")
 
     return " ".join(parts)
+
+
 # --------------------------------------
 # Logging Functions
 # --------------------------------------
@@ -697,6 +733,8 @@ def initialize_logger(args, mode):
         if should_output(mode):
             print(nagios_summary(UNKNOWN, f"Failed to initialize LoggerFactory: {e}"))
         return None
+
+
 def start_banner_weather(meta):
     return (
         f"[START] {SCRIPT_NAME}.py"
@@ -711,6 +749,8 @@ def start_banner_weather(meta):
         f" include_precip={meta['include_precip']}"
         f" include_clouds={meta['include_clouds']}"
     )
+
+
 def log_weather_data_mode_aware(weather_mode: str, data: dict[str, Any]) -> str:
     match weather_mode:
         case "current":
@@ -723,16 +763,22 @@ def log_weather_data_mode_aware(weather_mode: str, data: dict[str, Any]) -> str:
             return "[WEATHER] mode=full"
         case _:
             return f"[WEATHER] error=unknown_mode mode={weather_mode}"
+
+
 def log_weather_data(weather):
     fields = []
     for k, v in weather.items():
         fields.append(f"{k}={v}")
     return "[WEATHER] " + " ".join(fields)
+
+
 def log_weather_current_flat(data: dict[str, Any]) -> str:
     fields = []
     for k, v in data.items():
         fields.append(f"{k}={v}")
     return "[WEATHER] " + " ".join(fields)
+
+
 def log_weather_hourly_flat(data: dict[str, Any]) -> str:
     hours = data.get("hourly", [])
     lines = []
@@ -744,6 +790,8 @@ def log_weather_hourly_flat(data: dict[str, Any]) -> str:
         lines.append("[WEATHER] " + " ".join(fields))
 
     return "\n".join(lines)
+
+
 def log_weather_weekly_flat(data: dict[str, Any]) -> str:
     days = data.get("days", [])
     lines = []
@@ -755,10 +803,16 @@ def log_weather_weekly_flat(data: dict[str, Any]) -> str:
         lines.append("[WEATHER] " + " ".join(fields))
 
     return "\n".join(lines)
+
+
 def log_summary_weather(state, message):
-    return f"[RESULT] state={state} message=\"{message}\""
+    return f'[RESULT] state={state} message="{message}"'
+
+
 def end_banner():
     return "[END]"
+
+
 def fetch_weather(
     lat: float,
     lon: float,
@@ -769,7 +823,7 @@ def fetch_weather(
     mode: str,
     meta: dict[str, Any],
     logging_enabled: bool,
-    logger = None
+    logger=None,
 ) -> tuple[dict[str, Any], str | None, str, float | None, bool]:
 
     # Cache key must include mode + provider
@@ -803,14 +857,16 @@ def fetch_weather(
     url = None
     try:
         if provider == "nws":
-            meta.update(resolve_nws_meta(lat,lon))
-        if (provider == "nws" and mode in ("weekly", "hourly", "full")) or (provider == "open-meteo" and mode in ("weekly", "full")) :
+            meta.update(resolve_nws_meta(lat, lon))
+        if (provider == "nws" and mode in ("weekly", "hourly", "full")) or (
+            provider == "open-meteo" and mode in ("weekly", "full")
+        ):
             obs, obs_url, station_id = fetch_valid_nws_observation(lat, lon, timeout, meta)
             meta["cached_obs"] = obs
             meta["cached_station_id"] = station_id
         if mode == "full":
             live = fetch_fn(lat, lon, timeout, meta)
-        else:                
+        else:
             live, url = fetch_fn(lat, lon, timeout, meta)
     except Exception:
         live = None
@@ -842,6 +898,8 @@ def fetch_weather(
 
     # No live + no cache → fail
     raise RuntimeError("Weather API unreachable and no cached data")
+
+
 # -----------------------------
 # Main
 # -----------------------------
@@ -868,39 +926,44 @@ def main() -> None:
     # WEATHER MODE (new)
     # -----------------------------
     weather_mode = (
-        "weekly" if weather_flags[WeatherFlagNames.WEEKLY] else
-        "hourly" if weather_flags[WeatherFlagNames.HOURLY] else
-        "full" if weather_flags[WeatherFlagNames.FULL] else
-        "current"
+        "weekly"
+        if weather_flags[WeatherFlagNames.WEEKLY]
+        else "hourly"
+        if weather_flags[WeatherFlagNames.HOURLY]
+        else "full"
+        if weather_flags[WeatherFlagNames.FULL]
+        else "current"
     )
 
     # Nagios only works with current mode
     if display_mode == "nagios" and weather_mode != "current":
         raise RuntimeError("Nagios mode only supports current weather.")
 
-    meta.update({
-        "location_input": args.location,
-        "country": args.country,
-        "units": args.units,
-        "provider": args.provider,
-        "ignore_cache": weather_flags[WeatherFlagNames.IGNORE_CACHE],
-        "ignore_ttl": weather_flags[WeatherFlagNames.IGNORE_TTL],
-        "force_cache": weather_flags[WeatherFlagNames.FORCE_CACHE],
-        "include_gusts": weather_flags[WeatherFlagNames.INCLUDE_GUSTS],
-        "include_precip": weather_flags[WeatherFlagNames.INCLUDE_PRECIP],
-        "include_clouds": weather_flags[WeatherFlagNames.INCLUDE_CLOUDS],
-        "log_max_mb": args.log_max_mb,
-        "display_mode": display_mode,
-        "weather_mode": weather_mode,   # NEW
-    })
+    meta.update(
+        {
+            "location_input": args.location,
+            "country": args.country,
+            "units": args.units,
+            "provider": args.provider,
+            "ignore_cache": weather_flags[WeatherFlagNames.IGNORE_CACHE],
+            "ignore_ttl": weather_flags[WeatherFlagNames.IGNORE_TTL],
+            "force_cache": weather_flags[WeatherFlagNames.FORCE_CACHE],
+            "include_gusts": weather_flags[WeatherFlagNames.INCLUDE_GUSTS],
+            "include_precip": weather_flags[WeatherFlagNames.INCLUDE_PRECIP],
+            "include_clouds": weather_flags[WeatherFlagNames.INCLUDE_CLOUDS],
+            "log_max_mb": args.log_max_mb,
+            "display_mode": display_mode,
+            "weather_mode": weather_mode,  # NEW
+        }
+    )
 
     logging_enabled = display_mode != "nagios" and args.log_dir
 
     loc = resolve_location(args)
     lat = loc.get("latitude", 0)
     lon = loc.get("longitude", 0)
-    meta.update({"timezone":get_timezone(lat,lon)})
-    
+    meta.update({"timezone": get_timezone(lat, lon)})
+
     if logger and logging_enabled:
         logger.info(start_banner_weather(meta))
         logger.info(log_weather_data(loc))
@@ -909,13 +972,7 @@ def main() -> None:
     # FETCH WEATHER (now mode-aware)
     # -----------------------------
     data, url, source, cache_age, cache_written = fetch_weather(
-        lat, lon, args.timeout,
-        args.provider, args.units,
-        args.force_cache,
-        weather_mode,
-        meta,
-        logging_enabled,
-        logger
+        lat, lon, args.timeout, args.provider, args.units, args.force_cache, weather_mode, meta, logging_enabled, logger
     )
 
     data["source"] = "Live API" if source == "live" else source
@@ -969,9 +1026,12 @@ def main() -> None:
 
     output_and_exit(status, payload, args, flags, weather_mode)
 
+
 if __name__ == "__main__":
     if sys.version_info < (MIN_MAJOR, MIN_MINOR):
-        print(f"CRITICAL: Python {MIN_MAJOR}.{MIN_MINOR}+ required, "
-            f"but running on {sys.version_info.major}.{sys.version_info.minor}")
+        print(
+            f"CRITICAL: Python {MIN_MAJOR}.{MIN_MINOR}+ required, "
+            f"but running on {sys.version_info.major}.{sys.version_info.minor}"
+        )
         sys.exit(2)
     main()

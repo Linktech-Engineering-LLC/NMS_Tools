@@ -37,14 +37,17 @@ class DummyArgs:
         self.warning_size = 200_000
         self.critical_size = 500_000
 
+
 def test_validate_host_basic_ip():
     rc = validate_host_basic("127.0.0.1")
     assert rc["ok"] is True
     assert rc["ip"] == "127.0.0.1"
 
+
 def test_validate_host_basic_invalid():
     rc = validate_host_basic("invalid.host.name")
     assert rc["ok"] is False
+
 
 def test_determine_protocol_default():
     args = DummyArgs()
@@ -54,6 +57,7 @@ def test_determine_protocol_default():
     protocol, url = determine_protocol_and_url(args)
     assert protocol == "http"
     assert url == "http://example.com/"
+
 
 def test_backend_rules_require_match():
     detected = {"detected": "nginx", "reason": "header match"}
@@ -78,9 +82,11 @@ def test_backend_rules_require_match():
     status, msg = enforce_backend_rules(detected, args)
     assert status == 0  # OK
 
+
 def test_nagios_label():
     assert nagios_label(0) == "OK"
     assert nagios_label(2) == "CRITICAL"
+
 
 def test_perfdata():
     args = DummyArgs()
@@ -88,6 +94,7 @@ def test_perfdata():
     perf = build_perfdata(args, capture)
     assert "time=0.1234s" in perf
     assert "size=11B" in perf
+
 
 def test_single_line_ok():
     args = DummyArgs()

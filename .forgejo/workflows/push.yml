@@ -143,7 +143,7 @@ jobs:
         if: ${{ hashFiles('tests/**/*.py', 'test/**/*.py') != '' }}
         continue-on-error: true
         run: |
-          python3 -m pytest -v
+          pytest -v
 
       - name: MyPy
         if: ${{ hashFiles('pyproject.toml') != '' }}

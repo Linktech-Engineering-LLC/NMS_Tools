@@ -23,6 +23,7 @@ VERSION = "1.0.0"
 # Enhanced Argparse (consistent with check_html.py)
 # ------------------------------------------------------------
 
+
 def build_parser():
     parser = BaseScriptParser(
         prog="update_modified",
@@ -32,13 +33,15 @@ def build_parser():
             "If --path is omitted, the parent folder of this script is treated\n"
             "as the project root and ALL Python files beneath it are scanned."
         ),
-        version_string = VERSION,
+        version_string=VERSION,
     )
     # Remove the inherited command positional
     parser.remove_command_positional()
-    
+
     parser.parser.add_argument(
-        "-p", "--path", metavar="DIR",
+        "-p",
+        "--path",
+        metavar="DIR",
         help="Path to a specific project. If omitted, scan the parent folder.",
     )
 
@@ -52,9 +55,11 @@ def build_parser():
         return args.func(args)
     return args
 
+
 # ------------------------------------------------------------
 # Helper Functions (no side effects)
 # ------------------------------------------------------------
+
 
 def build_summary(updated_files: list[str], preview: bool) -> str:
     mode = "PREVIEW" if preview else "UPDATE"
@@ -130,6 +135,7 @@ def walk_project(project_root: Path, preview: bool) -> list[str]:
 # GLOBAL LOGGER INITIALIZATION
 # ------------------------------------------------------------
 
+
 def initialize_logger(args, mode):
     """
     Unified LoggerFactory initialization for update_modified.
@@ -149,11 +155,9 @@ def initialize_logger(args, mode):
             "log_max_mb": args.log_max_mb,
             "archive_mode": "zip",
             "backup_count": 7,
-
             # Console output only when verbose AND not quiet
             "console_stream": sys.stderr,
             "console_enabled": args.verbose,
-
             # update_modified does not use color flags, but we keep the field
             "color": args.color if hasattr(args, "color") else False,
         }
@@ -169,6 +173,7 @@ def initialize_logger(args, mode):
 # ------------------------------------------------------------
 # Main Orchestration
 # ------------------------------------------------------------
+
 
 def main():
     args = build_parser()

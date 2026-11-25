@@ -14,6 +14,7 @@ License: MIT (see LICENSE for details)
 Description: Description of this module
 
 """
+
 from .test_indexes import (
     test_compute_all_indexes,
     test_heat_index_invalid_low_rh,
@@ -37,4 +38,3 @@ WEATHER = {
     "wind_chill_low_wind": test_wind_chill_invalid_low_wind,
     "valid_wind_chill": test_wind_chill_valid,
 }
-

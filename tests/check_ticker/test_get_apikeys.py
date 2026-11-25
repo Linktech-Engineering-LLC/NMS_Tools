@@ -28,6 +28,7 @@ import src.check_ticker.check_ticker as ct
 # Fake provider registry
 # ---------------------------------------------------------------------------
 
+
 class FakeProvider:
     def __init__(self, name, accepts_key=True, requires_key=True):
         self.name = name
@@ -46,6 +47,7 @@ class FakeRegistry:
 # ---------------------------------------------------------------------------
 # Fake vault + fake file
 # ---------------------------------------------------------------------------
+
 
 class FakeVault:
     """
@@ -68,6 +70,7 @@ class FakeFile:
     """
     Simple fake file object that supports read(), __enter__, __exit__.
     """
+
     def __init__(self, data):
         self.data = data
 
@@ -85,6 +88,7 @@ class FakeFile:
 # Patch helpers
 # ---------------------------------------------------------------------------
 
+
 def patch_registry(monkeypatch):
     monkeypatch.setattr(ct, "ProviderRegistry", FakeRegistry)
 
@@ -92,23 +96,16 @@ def patch_registry(monkeypatch):
 def patch_resolve_api_key(monkeypatch, mapping):
     def fake_resolve(name, cli_keys, vault_data, config_data):
         return mapping.get(name)
+
     monkeypatch.setattr(ct, "resolve_api_key", fake_resolve)
 
 
 def patch_vault(monkeypatch, data):
-    monkeypatch.setattr(
-        ct,
-        "VaultLoader",
-        lambda *a, **kw: FakeVault(data=data)
-    )
+    monkeypatch.setattr(ct, "VaultLoader", lambda *a, **kw: FakeVault(data=data))
 
 
 def patch_vault_failure(monkeypatch):
-    monkeypatch.setattr(
-        ct,
-        "VaultLoader",
-        lambda *a, **kw: FakeVault(error=ApiKeyError("vault failure"))
-    )
+    monkeypatch.setattr(ct, "VaultLoader", lambda *a, **kw: FakeVault(error=ApiKeyError("vault failure")))
 
 
 def patch_yaml(monkeypatch, data):
@@ -118,7 +115,9 @@ def patch_yaml(monkeypatch, data):
 def patch_open(monkeypatch, data):
     def fake_open(path, mode="r", encoding=None, _data=data):
         return FakeFile(_data)
+
     monkeypatch.setattr(builtins, "open", fake_open)
+
 
 def make_args(**kwargs):
     args = types.SimpleNamespace()
@@ -130,6 +129,7 @@ def make_args(**kwargs):
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 def test_cli_overrides(monkeypatch):
     patch_registry(monkeypatch)

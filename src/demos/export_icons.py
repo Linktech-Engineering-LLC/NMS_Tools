@@ -56,6 +56,8 @@ STATUS_CRITICAL = 2
 STATUS_UNKNOWN = 3
 MIN_MAJOR = 3
 MIN_MINOR = 8
+
+
 # ----------------------------------------------
 # Argument Parser
 # -----------------------------------------------
@@ -68,7 +70,7 @@ def build_parser():
             "check_weather.py. Intended for use during development and "
             "deployment of the NMS_Tools weather demo."
         ),
-        version_string = build_version_string(SCRIPT_NAME, SCRIPT_VERSION, VERSION)
+        version_string=build_version_string(SCRIPT_NAME, SCRIPT_VERSION, VERSION),
     )
 
     # Remove irrelevant global groups
@@ -83,12 +85,14 @@ def build_parser():
     # Path options
     paths = parser.add_group("Paths Options")
     paths.add_argument(
-        "-s", "--src",
+        "-s",
+        "--src",
         default=str(SRC_DIR),
         help="Source directory containing raw SVG icons",
     )
     paths.add_argument(
-        "-d", "--dst",
+        "-d",
+        "--dst",
         default=str(DST_DIR),
         help="Destination directory for exported/recolored icons",
     )
@@ -102,18 +106,20 @@ def build_parser():
             "'local' uses only local SVGs;\n"
             "'remote' downloads all icons from the upstream Weather Icons repo;\n"
             "'hybrid' uses local icons when present and downloads missing ones."
-        )
+        ),
     )
     source.add_argument(
         "--icon",
         action="append",
-        help="Name of a specific icon to export. Use multiple --icon flags to export more than one."
+        help="Name of a specific icon to export. Use multiple --icon flags to export more than one.",
     )
     args = parser.parse()
     if hasattr(args, "func"):
         return args.func(args)
     args.log_dir = args.log_dir or DEFAULT_LOG_DIR
     return args
+
+
 # Manage the Icons
 def extract_icon_list(args, logger=None):
     """
@@ -133,10 +139,7 @@ def extract_icon_list(args, logger=None):
         if invalid:
             # Compact single-line list of invalid icons
             bad = ", ".join(sorted(invalid))
-            msg = (
-                f"[ERROR] The following icons are not recognized: {bad}\n"
-                "Use --list-icons to see valid names."
-            )
+            msg = f"[ERROR] The following icons are not recognized: {bad}\nUse --list-icons to see valid names."
 
             if logger:
                 logger.error(msg)
@@ -149,6 +152,8 @@ def extract_icon_list(args, logger=None):
 
     # Default: return all icons
     return sorted(icons)
+
+
 def fetch_remote_icon(dst, logger=None):
     """
     Download icon_name from the Weather Icons repo and save it to dst.
@@ -199,10 +204,14 @@ def fetch_remote_icon(dst, logger=None):
         logger.info(f"Saved remote icon: {icon_name} → {dst}")
 
     return dst
+
+
 def copy_icon(src, dst):
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     shutil.copy2(src, dst)
-def process_icon(icon, meta, logger = None):
+
+
+def process_icon(icon, meta, logger=None):
     src = SRC_DIR / icon
     dst = DST_DIR / icon
     if not SRC_DIR.exists():
@@ -262,6 +271,7 @@ def process_icon(icon, meta, logger = None):
     if logger:
         logger.info(msg)
 
+
 # --------------------------------------
 # Logging Functions (export_icons)
 # --------------------------------------
@@ -292,6 +302,7 @@ def initialize_logger(meta, debug=False):
         print(warn)
         meta.setdefault("warnings", []).append(warn)
         return None
+
 
 def main():
     start = time.time()
@@ -349,7 +360,6 @@ def main():
         logger.info(f"unknown : {DAY_NIGHT['unknown']}")
         logger.info("[END]")
 
+
 if __name__ == "__main__":
     main()
-
-

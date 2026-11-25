@@ -23,6 +23,7 @@ from jsonschema import ValidationError, validate
 
 SCHEMA_PATH = Path(__file__).parent / "schema.json"
 
+
 def main():
     with open(SCHEMA_PATH) as s, open(sys.argv[1]) as f:
         schema = json.load(s)
@@ -33,6 +34,7 @@ def main():
     except ValidationError as e:
         print(f"[!] Validation failed: {e.message}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

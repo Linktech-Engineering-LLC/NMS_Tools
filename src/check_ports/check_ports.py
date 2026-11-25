@@ -14,6 +14,7 @@ Description:
     Deterministic, multi-port TCP availability checker with Nagios-compatible
     output and optional JSON diagnostics.
 """
+
 import json
 import os
 import shlex
@@ -44,6 +45,7 @@ VERSION = load_version(Path(__file__).resolve().parents[1])
 SCRIPT_VERSION = "1.1.0"
 SCRIPT_NAME = Path(sys.argv[0]).stem
 
+
 def build_parser():
     nag = BaseNagiosParser(
         prog=SCRIPT_NAME,
@@ -64,12 +66,14 @@ def build_parser():
     # ------------------------------------------------------------
     core = nag.add_group("Core Options")
     core.add_argument(
-        "-H", "--host",
+        "-H",
+        "--host",
         required=True,
         help="Target hostname or IP address",
     )
     core.add_argument(
-        "-t", "--timeout",
+        "-t",
+        "--timeout",
         type=int,
         default=5,
         help="Connection timeout in seconds",
@@ -80,7 +84,8 @@ def build_parser():
     # ------------------------------------------------------------
     sel = nag.add_group("Port / Service Selection")
     sel.add_argument(
-        "-p", "--ports",
+        "-p",
+        "--ports",
         help=(
             "Comma-delimited list of ports or port ranges. "
             "Examples: '22,80,443', '1-1024', or '22,80,1000-1010'. "
@@ -88,14 +93,15 @@ def build_parser():
         ),
     )
     sel.add_argument(
-        "-s", "--service",
+        "-s",
+        "--service",
         help=(
             "Comma-delimited list of service names to resolve. "
             "Examples: 'http', 'https,ssh', or 'smtp,pop3,imap'. "
             "Each service is resolved using /etc/services and socket.getservbyname()."
         ),
     )
-   # ------------------------------------------------------------
+    # ------------------------------------------------------------
     # Nagios Behavior Filters
     # ------------------------------------------------------------
     filt = nag.add_group("Nagios Behavior Filters")
@@ -127,6 +133,8 @@ def build_parser():
         nag.exit_unknown("Either --ports or --service must be specified.")
 
     return args, flags, mode
+
+
 def build_metadata(args, mode):
     """
     Build the initial metadata dictionary for check_ports.
@@ -141,21 +149,21 @@ def build_metadata(args, mode):
         "_log_warn_emitted": False,
         "command": command_string,
         "logging_enabled": (mode != "nagios") and bool(args.log_dir),
-
         # tool-specific fields
         "host": args.host,
         "timeout": args.timeout,
         "require_all": args.require_all,
         "require_any": args.require_any,
         "fail_only": args.fail_only,
-
         # dynamic fields (populated later)
         "service_requested": [],
         "explicit_ports": [],
         "service_ports": [],
         "all_ports": [],
     }
-def resolve_all_ports(args, meta, logger=None ):
+
+
+def resolve_all_ports(args, meta, logger=None):
     """
     Resolve explicit ports and service ports, merge them, update metadata,
     emit warnings, and write the start banner. Handles CheckArgError cleanly.
@@ -183,7 +191,6 @@ def resolve_all_ports(args, meta, logger=None ):
                     print(msg)
             service_ports.extend(srv_ports)
 
-
         # Merge ports
         ports = sorted(set(explicit_ports + service_ports))
 
@@ -192,14 +199,14 @@ def resolve_all_ports(args, meta, logger=None ):
 
         # Update metadata
         meta["explicit_ports"] = explicit_ports
-        meta["service_ports"]  = service_ports
-        meta["all_ports"]      = ports
+        meta["service_ports"] = service_ports
+        meta["all_ports"] = ports
 
         # Write start banner
         if logger and logging_enabled:
             logger.info(start_banner_ports(meta))
 
-        return 
+        return
 
     except CheckArgError as e:
         # UNKNOWN state handling
@@ -207,12 +214,14 @@ def resolve_all_ports(args, meta, logger=None ):
 
         if logger and logging_enabled:
             # No START banner was written → write a minimal START
-            logger.info(meta, f"[START] {SCRIPT_NAME}.py host={meta['host']} cmd=\"{meta['command']}\"")
+            logger.info(meta, f'[START] {SCRIPT_NAME}.py host={meta["host"]} cmd="{meta["command"]}"')
             logger.info(meta, log_summary_ports("UNKNOWN", msg))
             logger.info(meta, end_banner())
 
         print(msg)
         os._exit(UNKNOWN)
+
+
 def run_port_checks(args, meta, logger=None):
     results = []
 
@@ -236,12 +245,15 @@ def run_port_checks(args, meta, logger=None):
 
     return results, port_to_service
 
+
 def compute_nagios_code(enf, args):
     # require-all: all ports must be open
     if args.require_all:
-        return 0 if len(enf["closed_ports"]) == 0 \
-                   and len(enf["timeout_ports"]) == 0 \
-                   and len(enf["unreachable_ports"]) == 0 else 2
+        return (
+            0
+            if len(enf["closed_ports"]) == 0 and len(enf["timeout_ports"]) == 0 and len(enf["unreachable_ports"]) == 0
+            else 2
+        )
 
     # require-any: at least one port must be open
     if args.require_any:
@@ -254,7 +266,9 @@ def compute_nagios_code(enf, args):
         return 2  # CRITICAL
     if len(enf["closed_ports"]) > 0:
         return 1  # WARNING
-    return 0      # OK
+    return 0  # OK
+
+
 # --------------------------------------
 # Logging Functions
 # --------------------------------------
@@ -277,11 +291,9 @@ def initialize_logger(args, mode):
             "log_max_mb": args.log_max_mb,
             "archive_mode": "zip",
             "backup_count": 7,
-
             # Console output only when verbose AND not quiet
             "console_stream": sys.stderr,
             "console_enabled": not args.quiet and args.verbose,
-
             # Nagios mode never uses color
             "color": False if mode == "nagios" else args.color,
         }
@@ -294,10 +306,11 @@ def initialize_logger(args, mode):
             print(nagios_summary(UNKNOWN, f"Failed to initialize LoggerFactory: {e}"))
         return None
 
+
 def start_banner_ports(meta):
     return (
         f"[START]"
-        f" cmd=\"{meta['command']}\""
+        f' cmd="{meta["command"]}"'
         f" host={meta['host']}"
         f" ports_explicit={meta['explicit_ports']}"
         f" ports_service={meta['service_ports']}"
@@ -307,8 +320,12 @@ def start_banner_ports(meta):
         f" require_any={meta['require_any']}"
         f" fail_only={meta['fail_only']}"
     )
+
+
 def log_port_result(host, port, status):
     return f"[PORT] host={host} port={port} status={status}"
+
+
 def log_summary_ports(state, message, enf=None):
     """
     Build the RESULT line for the log.
@@ -316,7 +333,7 @@ def log_summary_ports(state, message, enf=None):
     If enf is provided, include grouped service/explicit info so logs
     show which services/ports were open/closed.
     """
-    base = f"[RESULT] state={state} message=\"{message}\""
+    base = f'[RESULT] state={state} message="{message}"'
 
     if not enf:
         return base
@@ -340,18 +357,26 @@ def log_summary_ports(state, message, enf=None):
     if segments:
         return base + " " + " ".join(segments)
     return base
+
+
 def end_banner():
     return "[END]"
+
+
 def detect_mode(flags):
     for flag, mode in MODE_MAP.items():
         if flags[flag]:
             return mode
     return "nagios"
+
+
 # -------------------------------------
 # Display Functions
 # -------------------------------------
 def nagios_state_string(code):
     return STATE_NAMES.get(code, "UNKNOWN")
+
+
 def build_nagios_message(enf, code):
     """
     Build the single-line Nagios output message.
@@ -368,12 +393,7 @@ def build_nagios_message(enf, code):
     # ------------------------------------------------------------
     # Case 1: Single-service, single-port check
     # ------------------------------------------------------------
-    single_service = (
-        len(services) == 1
-        and len(service_ports) == 1
-        and len(explicit_ports) == 0
-        and len(all_ports) == 1
-    )
+    single_service = len(services) == 1 and len(service_ports) == 1 and len(explicit_ports) == 0 and len(all_ports) == 1
 
     if single_service:
         svc = services[0]
@@ -393,11 +413,7 @@ def build_nagios_message(enf, code):
     # ------------------------------------------------------------
     # Case 2: Single explicit port (no services)
     # ------------------------------------------------------------
-    single_explicit = (
-        len(explicit_ports) == 1
-        and len(services) == 0
-        and len(all_ports) == 1
-    )
+    single_explicit = len(explicit_ports) == 1 and len(services) == 0 and len(all_ports) == 1
 
     if single_explicit:
         port = explicit_ports[0]
@@ -472,66 +488,59 @@ def build_nagios_message(enf, code):
         return f"{code} - {summary} ({segment_str}) | {perfdata}"
     else:
         return f"{code} - {summary} | {perfdata}"
+
+
 def build_enforcement_object(meta, results, port_to_service):
     services_requested = meta["service_requested"]
-    service_ports      = meta["service_ports"]
-    explicit_ports     = meta["explicit_ports"]
-    ports              = meta["all_ports"]
+    service_ports = meta["service_ports"]
+    explicit_ports = meta["explicit_ports"]
+    ports = meta["all_ports"]
 
     # service → port
-    service_map = {
-        svc: port
-        for svc, port in zip(services_requested, service_ports)
-    }
+    service_map = {svc: port for svc, port in zip(services_requested, service_ports)}
 
     # Helper for labeling service ports
     def svc_label(port):
         svc = port_to_service.get(str(port))
         return f"{svc}({port})" if svc else str(port)
 
-    open_ports        = [r["port"] for r in results if r["status"] == "open"]
-    closed_ports      = [r["port"] for r in results if r["status"] == "closed"]
-    timeout_ports     = [r["port"] for r in results if r["status"] == "timeout"]
+    open_ports = [r["port"] for r in results if r["status"] == "open"]
+    closed_ports = [r["port"] for r in results if r["status"] == "closed"]
+    timeout_ports = [r["port"] for r in results if r["status"] == "timeout"]
     unreachable_ports = [r["port"] for r in results if r["status"] == "unreachable"]
 
-    service_open   = sorted([svc_label(p) for p in service_ports if p in open_ports])
+    service_open = sorted([svc_label(p) for p in service_ports if p in open_ports])
     service_closed = sorted([svc_label(p) for p in service_ports if p in closed_ports])
 
-    explicit_open   = sorted([str(p) for p in explicit_ports if p in open_ports])
+    explicit_open = sorted([str(p) for p in explicit_ports if p in open_ports])
     explicit_closed = sorted([str(p) for p in explicit_ports if p in closed_ports])
 
     status_by_port = {str(r["port"]): r["status"] for r in results}
 
-    status_by_service = {
-        svc: status_by_port.get(str(port), "unknown")
-        for svc, port in service_map.items()
-    }
+    status_by_service = {svc: status_by_port.get(str(port), "unknown") for svc, port in service_map.items()}
 
     return {
         "host": meta["host"],
-
         "services_requested": services_requested,
         "service_ports": service_ports,
         "explicit_ports": explicit_ports,
         "all_ports": ports,
-
         "service_map": service_map,
-        "port_to_service": port_to_service,   # ← FIXED
-
+        "port_to_service": port_to_service,  # ← FIXED
         "service_open": service_open,
         "service_closed": service_closed,
         "explicit_open": explicit_open,
         "explicit_closed": explicit_closed,
-
         "results": results,
         "status_by_port": status_by_port,
         "status_by_service": status_by_service,
-
         "open_ports": open_ports,
         "closed_ports": closed_ports,
         "timeout_ports": timeout_ports,
         "unreachable_ports": unreachable_ports,
     }
+
+
 def output_results(mode, args, meta, results, port_to_service, enf, code, logger=None):
     """
     Handle all output modes:
@@ -544,7 +553,6 @@ def output_results(mode, args, meta, results, port_to_service, enf, code, logger
     logging_enabled = meta["logging_enabled"]
 
     match mode:
-
         # ------------------------------------------------------------
         # JSON output
         # ------------------------------------------------------------
@@ -566,10 +574,7 @@ def output_results(mode, args, meta, results, port_to_service, enf, code, logger
 
             # Show service ports with service names
             if meta["service_ports"]:
-                svc_labels = [
-                    f"{svc}({port})"
-                    for svc, port in zip(meta["service_requested"], meta["service_ports"])
-                ]
+                svc_labels = [f"{svc}({port})" for svc, port in zip(meta["service_requested"], meta["service_ports"])]
                 print(f"Service ports:      {', '.join(svc_labels)}")
             else:
                 print("Service ports:      None")
@@ -581,7 +586,7 @@ def output_results(mode, args, meta, results, port_to_service, enf, code, logger
             # Per-port results with service names when applicable
             for r in results:
                 if meta["fail_only"] and r["status"] == "open":
-                    continue                
+                    continue
                 port = r["port"]
                 svc = port_to_service.get(str(port))
                 label = f"{svc}({port})" if svc else str(port)
@@ -615,7 +620,8 @@ def output_results(mode, args, meta, results, port_to_service, enf, code, logger
                 logger.info(end_banner())
 
             os._exit(code)
-    
+
+
 def main():
     args, flags, mode = build_parser()
     logger = initialize_logger(args, mode)
@@ -628,6 +634,7 @@ def main():
     # ------------------------------------------------------------
     code = compute_nagios_code(enf, args)
     output_results(mode, args, meta, results, port_to_service, enf, code, logger)
+
 
 if __name__ == "__main__":
     main()

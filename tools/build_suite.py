@@ -11,7 +11,7 @@ Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
 
-Description: 
+Description:
     build_suite.py
     Packages the NMS_Tools suite into a distributable tarball.
 
@@ -27,9 +27,13 @@ DIST = ROOT / "dist"
 LIBS = ROOT / "libs"
 VERSION_FILE = ROOT / "VERSION"
 
+
 def read_version():
     return VERSION_FILE.read_text().strip()
+
+
 VERSION = read_version()
+
 
 def main():
     print("[build] Building NMS_Tools suite package...")

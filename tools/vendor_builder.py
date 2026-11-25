@@ -11,7 +11,7 @@ Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
 
-Description: 
+Description:
     Builds the suite-level vendor directory (libs/) by copying installed
     packages from the active virtual environment's site-packages.
 
