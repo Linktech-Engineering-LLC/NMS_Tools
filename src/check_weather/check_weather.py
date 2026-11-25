@@ -850,8 +850,15 @@ def fetch_weather(
     if mode not in prov["supports"]:
         raise RuntimeError(f"Provider '{provider}' does not support mode '{mode}'")
 
-    fetch_fn = prov[f"fetch_{mode}"]
+    FETCH_MAP = {
+        "current": prov["fetch_current"],
+        "hourly": prov["fetch_hourly"],
+        "weekly": prov["fetch_weekly"],
+        "full": prov["fetch_full"],
+    }
 
+    fetch_fn = FETCH_MAP[mode]
+    
     # Try live provider
     live = None
     url = None
