@@ -126,10 +126,21 @@ jobs:
         run: |
           chmod +x scripts/*.sh
           chmod +x packaging/*.sh
+      - name: Verify PythonTools
+        run: |
+          python3 -c "import PythonTools; print('PythonTools OK')"
 
       - name: Build all artifacts
         run: |
-          packaging/build_all.sh
+          echo "===== BUILD ENV ====="
+          pwd
+          whoami
+          python3 --version
+          pip --version
+          env | sort
+
+          echo "===== BUILD ====="
+          bash -x packaging/build_all.sh
 
       - name: Collect artifacts
         run: |
