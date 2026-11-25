@@ -112,7 +112,7 @@ find "$RPMBUILD_DIR/RPMS" -name "*.rpm" -exec cp {} "$ROOT_DIR/packaging/output/
 # ------------------------------------------------------------
 for f in "$ROOT_DIR/packaging/output"/nms-tools-*.rpm; do
     base=$(basename "$f")
-    new=$(base/nms-tools-/nms-tools_)
+    new=${base/nms-tools-/nms-tools_}
     mv "$f" "$ROOT_DIR/packaging/output/$new"
 done
 
