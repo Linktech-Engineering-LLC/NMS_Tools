@@ -21,6 +21,8 @@ jobs:
           ruff --version
           yamllint --version
           shellcheck --version
+          pytest --version
+          mypy --version
 
       - name: Environment diagnostics
         run: |
@@ -31,6 +33,14 @@ jobs:
           uname -a
 
           python3 -m pip freeze | sort
+      - name: Python Paths
+        run: |
+          which python3
+          which pip
+          which pytest
+          which mypy
+
+          python3 --version
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -40,35 +50,105 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install Workflow Dependencies
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install \
+            git+http://dad:3000/linux/PythonTools.git
+
       - name: Ruff lint
-        run: |
-          echo "Running Ruff..."
-          ruff check . || true
-
-      - name: Ruff Format
-        run: |
-          echo "Checking formatting..."
-          ruff format --check . || true
-
-      - name: Ruff Statistics
-        run: |
-          ruff check . --statistics || true
-
-      - name: Run yamllint (non-blocking)
-        run: |
-          echo "Running yamllint..."
-          yamllint . || true
-
-      - name: Shellcheck
+        if: ${{ hashFiles('**/*.py') != '' }}
         continue-on-error: true
         run: |
-          shellcheck $(find . -name "*.sh") | tee shellcheck.log
+          echo "Running Ruff..."
+          ruff check . | tee ruff.log || true
 
-          ERRORS=$(grep -c "error:" shellcheck.log || true)
-          WARNINGS=$(grep -c "warning:" shellcheck.log || true)
+      - name: Ruff Format
+        if: ${{ hashFiles('**/*.py') != '' }}
+        continue-on-error: true
+        run: |
+          echo "Checking formatting..."
+          ruff format --check . | tee ruff-format.log || true
 
-          echo "Errors: $ERRORS"
+      - name: Ruff Statistics
+        if: ${{ hashFiles('**/*.py') != '' }}
+        continue-on-error: true
+        run: |
+          echo ""
+          echo "========================================"
+          echo "Ruff Statistics"
+          echo "========================================"
+
+          ruff check . --statistics || true
+
+      - name: Run yamllint
+        if: ${{ hashFiles('**/*.yml', '**/*.yaml') != '' }}
+        continue-on-error: true
+        run: |
+          yamllint -c .yamllint . 2>&1 | tee yamllint.log || true
+
+          ERRORS=$(grep -c "error" yamllint.log || true)
+          WARNINGS=$(grep -c "warning" yamllint.log || true)
+
+          echo ""
+          echo "Warning Breakdown:"
+          grep -o '\[[^]]*\]' yamllint.log | sort | uniq -c || true
+
+      - name: Shellcheck
+        if: ${{ hashFiles('**/*.sh') != '' }}
+        continue-on-error: true
+        run: |
+          SH_FILES=$(find . -type f -name "*.sh")
+
+          if [ -z "$SH_FILES" ]; then
+              echo "No shell scripts found."
+              exit 0
+          fi
+
+          shellcheck $SH_FILES 2>&1 | tee shellcheck.log || true
+
+          ERRORS=$(grep -c "(error)" shellcheck.log || true)
+          WARNINGS=$(grep -c "(warning)" shellcheck.log || true)
+          INFOS=$(grep -c "(info)" shellcheck.log || true)
+
+          echo ""
+          echo "========================================"
+          echo "ShellCheck Summary"
+          echo "========================================"
+          echo "Errors:   $ERRORS"
           echo "Warnings: $WARNINGS"
+          echo "Infos:    $INFOS"
+
+          echo ""
+          echo "Rule Breakdown:"
+          grep -o 'SC[0-9]\{4\}' shellcheck.log | \
+            sort | uniq -c | sort -rn || true
+
+          echo ""
+          echo "Affected Files:"
+          grep '^In .* line [0-9]\+:' shellcheck.log | \
+            sed 's/^In //' | sed 's/ line.*$//' | \
+            sort -u || true
+      - name: Verify Python Environment
+        run: |
+          python3 -m pip list
+          python3 -m pip show mypy
+          python3 -m pip show PyYAML
+          python3 -m pip show types-PyYAML || true
+          python3 -m pip show jsonschema || true
+          python3 -m pip show types-jsonschema || true          
+          
+      - name: Pytest
+        if: ${{ hashFiles('tests/**/*.py', 'test/**/*.py') != '' }}
+        continue-on-error: true
+        run: |
+          python3 -m pytest -v
+
+      - name: MyPy
+        if: ${{ hashFiles('pyproject.toml') != '' }}
+        continue-on-error: true
+        run: |
+          python3 -m mypy .
 
   sync_to_remote:
     needs: lint
