@@ -68,7 +68,6 @@ def parse_cli() -> tuple[Any, Any, str]:
     group.add_argument("--group", default=None, help="Run only a specific test group (Weather, HTML, Ticker)")
 
     group.add_argument("--list", action="store_true", help="List available test groups")
-    group.add_argument("--fail-fast", action="store_true", help="Stop after the first failed test")
 
     group.add_argument("--pattern", help="Run only tests whose names contain this substring")
 

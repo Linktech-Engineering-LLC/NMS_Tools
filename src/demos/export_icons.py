@@ -44,9 +44,9 @@ VERSION = load_version(SUITE_ROOT)
 SRC_DIR = Path(__file__).resolve().parent / "svg"
 DST_DIR = Path(__file__).resolve().parent / "web" / "icons"
 DEFAULT_LOG_DIR = Path.home() / "logs"
-STATS = Counter()
-GROUPS_PER_ICON = Counter()
-DAY_NIGHT = Counter()
+STATS: Counter[str] = Counter()
+GROUPS_PER_ICON: Counter[int] = Counter()
+DAY_NIGHT: Counter[str] = Counter()
 # ---------------------------------------------------------------------------
 # Status Codes
 # ---------------------------------------------------------------------------
