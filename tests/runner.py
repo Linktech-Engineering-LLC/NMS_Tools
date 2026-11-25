@@ -33,9 +33,9 @@ sys.path.insert(0, str(ROOT))
 # Import the LoggerFactory
 # Import test modules explicitly
 # (You will add more as you expand the harness)
-from tests.check_html.registry import HTML
-from tests.check_ticker.registry import TICKER
-from tests.check_weather.registry import WEATHER
+from check_html.registry import HTML
+from check_ticker.registry import TICKER
+from check_weather.registry import WEATHER
 from PythonTools.log_helpers.factory import LoggerFactory
 from PythonTools.nagios import BaseNagiosParser
 from PythonTools.test import display_results
