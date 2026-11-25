@@ -6,7 +6,7 @@ File: test_core.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-09-02
-Modified: 2026-09-02
+ Modified: 2026-11-25
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -16,14 +16,14 @@ Description: Description of this module
 """
 
 from src.check_html.check_html import (
-    validate_host_basic,
+    build_perfdata,
     determine_protocol_and_url,
     enforce_backend_rules,
-    build_html_meta,
     nagios_label,
-    build_perfdata,
     single_line,
+    validate_host_basic,
 )
+
 
 class DummyArgs:
     def __init__(self):

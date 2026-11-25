@@ -6,7 +6,7 @@ File: export_icons.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-05-04
-Modified: 2026-09-22
+ Modified: 2026-11-25
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -21,25 +21,21 @@ Description:
 # export_icons.py
 
 import os
-import requests
 import shutil
 import sys
 import time
 from collections import Counter
 from pathlib import Path
 
+import requests
 from PythonTools.log_helpers.factory import LoggerFactory
-from PythonTools.weather import (
-    collect_alert_icons,
-    collect_weather_icons,
-    generate_alert_svg
-)
-from PythonTools.weather.codes import WEATHER_CODES
+from PythonTools.nagios import build_version_string
+from PythonTools.parser import BaseScriptParser
+from PythonTools.utils.common import load_version
+from PythonTools.weather import collect_alert_icons, collect_weather_icons, generate_alert_svg
 from PythonTools.weather.recolor_engine import analyze_svg
 from PythonTools.weather.recolor_engine.recolor import recolor
-from PythonTools.utils.common import load_version
-from PythonTools.parser import BaseScriptParser
-from PythonTools.nagios import build_version_string
+
 # Global Constants
 SUITE_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_VERSION = "1.0.0"

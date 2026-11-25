@@ -5,7 +5,7 @@
  Author: Leon McClatchey
  Company: Linktech Engineering LLC
 Created: 2026-08-10
- Modified: 2026-08-29
+ Modified: 2026-11-25
  File: ~/projects/NMS_Tools/tests/test_indexes.py
  Version: 1.0.0
  Description: Tests the Weather Indexes
@@ -13,13 +13,12 @@ Created: 2026-08-10
 
 
 import pytest
-
 from PythonTools.weather.indexes import (
+    compute_all_indexes,
     compute_heat_index,
-    compute_wind_chill,
     compute_humidex,
     compute_wet_bulb,
-    compute_all_indexes,
+    compute_wind_chill,
 )
 
 

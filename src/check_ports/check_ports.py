@@ -6,7 +6,7 @@ File: check_ports.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-04-20
-Modified: 2026-09-08
+ Modified: 2026-11-25
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
 
@@ -17,27 +17,24 @@ Description:
 import json
 import os
 import shlex
-import socket
 import sys
-
 from pathlib import Path
 
 from PythonTools.log_helpers.factory import LoggerFactory
 from PythonTools.nagios import (
-    OK,
-    WARNING,
     CRITICAL,
-    UNKNOWN,
-    STATE_NAMES,
-    Flags,
     MODE_MAP,
+    OK,
+    STATE_NAMES,
+    UNKNOWN,
+    WARNING,
     BaseNagiosParser,
-    should_output,
     nagios_summary,
+    should_output,
 )
 from PythonTools.net import check_port
-from PythonTools.parsing import parse_ports, resolve_services
 from PythonTools.parser import CheckArgError
+from PythonTools.parsing import parse_ports, resolve_services
 from PythonTools.utils.common import load_version
 
 # Root of the suite (two levels up from the tool script)

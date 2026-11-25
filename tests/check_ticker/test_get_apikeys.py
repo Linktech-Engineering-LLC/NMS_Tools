@@ -6,7 +6,7 @@ File: test_check_ticker.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-09-02
-Modified: 2026-09-02
+ Modified: 2026-11-25
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -18,11 +18,11 @@ Description: Deterministic test group for NMS_Tools/check_ticker
 
 import builtins
 import types
-import pytest
 
-import src.check_ticker.check_ticker as ct
+import pytest
 from PythonTools.finance import ApiKeyError
 
+import src.check_ticker.check_ticker as ct
 
 # ---------------------------------------------------------------------------
 # Fake provider registry

@@ -6,7 +6,7 @@ File: check_html.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-21
-Modified: 2026-09-08
+ Modified: 2026-11-25
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -20,40 +20,38 @@ import http.client
 import ipaddress
 import json
 import os
-import ssl
 import socket
+import ssl
 import sys
 import time
-
 from pathlib import Path
 from urllib.parse import urlparse
 
 from PythonTools.http import (
     HttpFetchError,
-    BACKEND_SIGNATURES,
     detect_backend,
-    enforce_status_rules,
     enforce_content_type_rules,
-    enforce_html_rules
+    enforce_html_rules,
+    enforce_status_rules,
 )
 from PythonTools.log_helpers.factory import LoggerFactory
 from PythonTools.nagios import (
-    OK,
-    WARNING,
     CRITICAL,
+    OK,
     UNKNOWN,
     BaseNagiosParser,
-    nagios_summary,
-    start_banner,
-    end_banner,
-    result_banner,
-    html_banner,
-    should_output,
-    early_exit,
-    critical_exit,
     build_result_object,
+    critical_exit,
+    early_exit,
+    end_banner,
+    html_banner,
+    nagios_summary,
+    result_banner,
+    should_output,
+    start_banner,
 )
-from PythonTools.utils.common import normalize_list, load_version
+from PythonTools.utils.common import load_version, normalize_list
+
 # Root of the suite (two levels up from the tool script)
 SUITE_ROOT = Path(__file__).resolve().parents[2]
 VERSION = load_version(Path(__file__).resolve().parents[1])

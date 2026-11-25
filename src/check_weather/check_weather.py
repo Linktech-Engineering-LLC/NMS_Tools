@@ -21,64 +21,59 @@ import json
 import os
 import sys
 import time
-
 from datetime import datetime, timedelta
 from enum import IntEnum, auto
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from PythonTools.cache import (
-    ensure_subdir,
     cache_path,
+    ensure_subdir,
     load_json_cache,
     save_json_cache,
     serialize_for_json,
 )
-
-from PythonTools.color import Color,colorize
 from PythonTools.datetime import (
     format_age,
     get_timezone,
 )
 from PythonTools.location import (
-    US_STATES,
+    LocationInfo,
+    LocationNotFoundError,
+    format_resolved_name,
     normalize_city_name,
     validate_location_input,
-    format_resolved_name,
+)
+from PythonTools.location import (
     resolve_location as pt_resolve,
-    LocationNotFoundError,
-    LocationInfo,
 )
 from PythonTools.log_helpers.factory import LoggerFactory
 from PythonTools.nagios import (
-    OK,
-    WARNING,
     CRITICAL,
+    OK,
     UNKNOWN,
+    WARNING,
+    BaseNagiosParser,
     FlagNames,
     Flags,
-    BaseNagiosParser,
-    should_output,
     nagios_summary,
+    should_output,
 )
-from PythonTools.utils import strip_none, load_version
+from PythonTools.utils import load_version, strip_none
 from PythonTools.weather import (
     WEATHER_PROVIDERS,
     convert_units_mode_aware,
-    fmt_temp,
-    fmt_clouds,
-    fmt_wind,
-    fmt_precip,
-    merge_daily_periods,
-    reorder_hourly_current_first,
     fetch_cached_alerts,
+    fmt_clouds,
+    fmt_precip,
+    fmt_temp,
+    fmt_wind,
+    merge_daily_periods,
     normalize_output,
+    reorder_hourly_current_first,
 )
-from PythonTools.weather.providers import (
-    register_providers, 
-    resolve_nws_meta, 
-    fetch_valid_nws_observation
-)
+from PythonTools.weather.providers import fetch_valid_nws_observation, register_providers, resolve_nws_meta
+
 # Root of the suite (two levels up from the tool script)
 SUITE_ROOT = Path(__file__).resolve().parents[2]
 VERSION = load_version(Path(__file__).resolve().parents[1])
@@ -366,10 +361,10 @@ def resolve_location(args):
 # ---------------------------------------------------------------------------
 # Evaluation Logic
 # ---------------------------------------------------------------------------
-def evaluate_simple(value: Optional[float],
-                    warn: Optional[float],
-                    crit: Optional[float],
-                    label: str) -> Optional[Tuple[int, str]]:
+def evaluate_simple(value: float | None,
+                    warn: float | None,
+                    crit: float | None,
+                    label: str) -> tuple[int, str] | None:
     if value is None:
         return None
     if crit is not None and value >= crit:
@@ -419,7 +414,7 @@ def evaluate_temperature(temp, args, unit):
         return WARNING, f"Temperature {temp}°F exceeds warning threshold"
 
     return None
-def evaluate_weather(data: Dict[str, Any], args: argparse.Namespace) -> Tuple[int, str]:
+def evaluate_weather(data: dict[str, Any], args: argparse.Namespace) -> tuple[int, str]:
     if args.units == "imperial":
         temp = data.get("temperature_f")
         wind = data.get("wind_mph")
@@ -477,7 +472,7 @@ def evaluate_weather(data: Dict[str, Any], args: argparse.Namespace) -> Tuple[in
 # ---------------------------------------------------------------------------
 # Output Helpers
 # ---------------------------------------------------------------------------
-def build_normal_message(data: Dict[str, Any], args: argparse.Namespace) -> str:
+def build_normal_message(data: dict[str, Any], args: argparse.Namespace) -> str:
     if args.units == "imperial":
         t = data.get("temperature_f")
         w = data.get("wind_mph")
@@ -490,7 +485,7 @@ def build_normal_message(data: Dict[str, Any], args: argparse.Namespace) -> str:
         if t is None and w is None:
             return "Weather data unavailable"
         return f"Weather normal: {t:.2f}°C, {w:.2f} kph"
-def output_and_exit(status: int, payload: Dict[str, Any], args, flags, weather_mode: str):
+def output_and_exit(status: int, payload: dict[str, Any], args, flags, weather_mode: str):
     """
     Unified output dispatcher for all display modes and all weather modes.
     weather_mode is passed explicitly from main() to avoid guessing.
@@ -605,7 +600,7 @@ def nagios_output(payload):
 # -----------------------------
 # Perfdata
 # -----------------------------
-def build_perfdata(data: Dict[str, Any], args: argparse.Namespace, flags: Flags) -> str:
+def build_perfdata(data: dict[str, Any], args: argparse.Namespace, flags: Flags) -> str:
     parts = []
 
     # -----------------------------
@@ -716,7 +711,7 @@ def start_banner_weather(meta):
         f" include_precip={meta['include_precip']}"
         f" include_clouds={meta['include_clouds']}"
     )
-def log_weather_data_mode_aware(weather_mode: str, data: Dict[str, Any]) -> str:
+def log_weather_data_mode_aware(weather_mode: str, data: dict[str, Any]) -> str:
     match weather_mode:
         case "current":
             return log_weather_current_flat(data)
@@ -733,12 +728,12 @@ def log_weather_data(weather):
     for k, v in weather.items():
         fields.append(f"{k}={v}")
     return "[WEATHER] " + " ".join(fields)
-def log_weather_current_flat(data: Dict[str, Any]) -> str:
+def log_weather_current_flat(data: dict[str, Any]) -> str:
     fields = []
     for k, v in data.items():
         fields.append(f"{k}={v}")
     return "[WEATHER] " + " ".join(fields)
-def log_weather_hourly_flat(data: Dict[str, Any]) -> str:
+def log_weather_hourly_flat(data: dict[str, Any]) -> str:
     hours = data.get("hourly", [])
     lines = []
 
@@ -749,7 +744,7 @@ def log_weather_hourly_flat(data: Dict[str, Any]) -> str:
         lines.append("[WEATHER] " + " ".join(fields))
 
     return "\n".join(lines)
-def log_weather_weekly_flat(data: Dict[str, Any]) -> str:
+def log_weather_weekly_flat(data: dict[str, Any]) -> str:
     days = data.get("days", [])
     lines = []
 
@@ -772,10 +767,10 @@ def fetch_weather(
     units: str,
     force_cache: bool,
     mode: str,
-    meta: Dict[str, Any],
+    meta: dict[str, Any],
     logging_enabled: bool,
     logger = None
-) -> Tuple[Dict[str, Any], Optional[str], str, Optional[float], bool]:
+) -> tuple[dict[str, Any], str | None, str, float | None, bool]:
 
     # Cache key must include mode + provider
     cache_id = f"{lat},{lon}:{units}:{provider}:{mode}"

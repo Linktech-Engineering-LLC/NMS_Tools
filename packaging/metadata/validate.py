@@ -6,7 +6,7 @@ File: validate.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-07-15
- Modified: 2026-08-29
+ Modified: 2026-11-25
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -15,9 +15,11 @@ Description: Description of this module
 
 """
 
-import json, sys
+import json
+import sys
 from pathlib import Path
-from jsonschema import validate, ValidationError
+
+from jsonschema import ValidationError, validate
 
 SCHEMA_PATH = Path(__file__).parent / "schema.json"
 

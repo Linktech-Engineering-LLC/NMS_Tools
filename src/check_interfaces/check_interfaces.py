@@ -6,7 +6,7 @@ File: check_interfaces.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-03-22
-Modified: 2026-09-08
+ Modified: 2026-11-25
 Required: Python 3.8+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -16,26 +16,22 @@ Description:
         Obtains a dictionary of interfaces from the system, which includes the operational
         and configuration information about each interface.
 """
-import sys
-import os
 import json
-import re
-
+import os
+import sys
 from pathlib import Path
 
 from PythonTools.log_helpers.factory import LoggerFactory
 from PythonTools.nagios import (
-    OK,
-    WARNING,
     CRITICAL,
     UNKNOWN,
     BaseNagiosParser,
+    end_banner,
+    log_interface,
     nagios_summary,
+    result_banner,
     should_output,
     start_banner,
-    result_banner,
-    log_interface,
-    end_banner,
 )
 from PythonTools.net import (
     apply_iface_selection,
@@ -50,9 +46,7 @@ from PythonTools.net import (
     normalize_interfaces,
     validate_host_local,
 )
-from PythonTools.utils import (
-    matches_ignore
-)
+from PythonTools.utils import matches_ignore
 from PythonTools.utils.common import load_version
 
 # Root of the suite (two levels up from the tool script)

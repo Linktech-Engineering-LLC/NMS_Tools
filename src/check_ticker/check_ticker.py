@@ -6,7 +6,7 @@ File: check_ticker.py
 Author: Leon McClatchey
 Company: Linktech Engineering LLC
 Created: 2026-06-17
-Modified: 2026-09-08
+ Modified: 2026-11-25
 Required: Python 3.10dist+
 Part of: NMS_Tools Monitoring Suite
 License: MIT (see LICENSE for details)
@@ -20,37 +20,37 @@ Description:
 
 import os
 import sys
-import yaml
 from pathlib import Path
 
+import yaml
 from PythonTools.ansible.vault import VaultLoader
 from PythonTools.finance import (
-    resolve_api_key,
     ApiKeyError,
-    resolve_apikey_file,
     ProviderRegistry,
+    resolve_api_key,
+    resolve_apikey_file,
 )
 from PythonTools.log_helpers.factory import LoggerFactory
 from PythonTools.market import (
     MarketObjectEngine,
+    compute_multi_window_trend,
     compute_trend_and_slope,
-    compute_volatility,
     compute_trend_strength,
+    compute_volatility,
     detect_reversal,
-    compute_multi_window_trend
 )
 from PythonTools.nagios import (
-    OK,
-    WARNING,
     CRITICAL,
+    OK,
     UNKNOWN,
-    nagios_summary,
-    start_banner,
-    end_banner,
+    WARNING,
     BaseNagiosParser,
+    end_banner,
+    nagios_summary,
     should_output,
+    start_banner,
 )
-from PythonTools.utils.common import normalize_path, json_output, load_version
+from PythonTools.utils.common import json_output, load_version, normalize_path
 
 # -------------------------------------------------------------------
 # Suite metadata
@@ -130,7 +130,7 @@ def get_apikeys(args) -> dict:
     config_data = None
     if apikey_file:
         apikey_file = resolve_apikey_file(apikey_file, SCRIPT_NAME)
-        with open(apikey_file, "r", encoding="utf-8") as f:
+        with open(apikey_file, encoding="utf-8") as f:
             config_data = yaml.safe_load(f) or {}
 
     resolved = {}
