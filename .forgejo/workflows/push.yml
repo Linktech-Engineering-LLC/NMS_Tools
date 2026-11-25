@@ -47,8 +47,8 @@ jobs:
 
       - name: Install Workflow Dependencies
         run: |
-          python3 -m pip install --break-system-packages -r requirements.txt
-          python3 -m pip install --break-system-packages \
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install \
             git+http://dad:3000/linux/PythonTools.git
 
       - name: Ruff lint
