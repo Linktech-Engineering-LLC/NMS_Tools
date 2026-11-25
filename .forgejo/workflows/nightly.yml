@@ -138,6 +138,8 @@ jobs:
           python3 --version
           pip --version
           env | sort
+          ls -la
+          find packaging -maxdepth 2 -type f | sort
 
           echo "===== BUILD ====="
           bash -x packaging/build_all.sh
