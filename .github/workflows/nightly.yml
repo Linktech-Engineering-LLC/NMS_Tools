@@ -36,17 +36,18 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install build dependencies
+      - name: Verify toolchain
         run: |
-          sudo apt-get update
-          sudo apt-get install -y pandoc rpm dpkg-dev libarchive-zip-perl
-          sudo apt-get install -y libsnmp-dev snmp-mibs-downloader
+          python3 --version
+          pandoc --version | head -1
+          rpm --version
+          dpkg --version | head -1
+          shellcheck --version
+          yamllint --version
 
       - name: Install Python build dependencies
         run: |
-          python3 -m pip install --upgrade pip
           python3 -m pip install -r requirements.txt
-          python3 -m pip install pyinstaller jsonschema
           python3 -m pip install git+https://github.com/linktech-engineering-llc/PythonTools.git
 
       - name: Environment diagnostics
