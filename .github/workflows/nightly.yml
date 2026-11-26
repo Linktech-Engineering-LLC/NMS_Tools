@@ -12,7 +12,9 @@ concurrency:
 jobs:
 
   nightly-build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/linktech-engineering-llc/leon-ci:1.0.1
 
     outputs:
       version: ${{ steps.capture.outputs.version }}
@@ -210,7 +212,9 @@ jobs:
           git push -f origin nightly
 
   publish-dashboard:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/linktech-engineering-llc/leon-ci:1.0.1
     needs: nightly-build
 
     steps:
