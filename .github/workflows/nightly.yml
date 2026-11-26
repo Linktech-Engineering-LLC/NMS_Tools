@@ -192,6 +192,11 @@ jobs:
           name: nightly-nms-tools
           path: artifacts
 
+      - name: Install GitHub CLI
+        run: |
+          apt-get update
+          apt-get install -y gh
+
       - name: Remove existing nightly assets
         env:
           GH_TOKEN: ${{ github.token }}
