@@ -31,11 +31,6 @@ jobs:
       - name: Clean workspace
         run: git clean -xfd
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
       - name: Verify toolchain
         run: |
           python3 --version
