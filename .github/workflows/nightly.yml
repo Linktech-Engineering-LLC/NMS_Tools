@@ -12,7 +12,7 @@ concurrency:
 jobs:
 
   nightly-build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     outputs:
       version: ${{ steps.capture.outputs.version }}
@@ -25,14 +25,6 @@ jobs:
 
       - name: Clean workspace
         run: git clean -xfd
-
-      - name: Skip build if no relevant changes
-        run: |
-          # Compare this commit with the previous one
-          if git diff --quiet HEAD^ HEAD -- packaging src scripts requirements.txt; then
-            echo "No relevant changes detected — skipping nightly build."
-            exit 0
-          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -218,7 +210,7 @@ jobs:
           git push -f origin nightly
 
   publish-dashboard:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: nightly-build
 
     steps:
