@@ -88,11 +88,6 @@ jobs:
         run: |
           python3 --version
           pandoc --version | head -1
-          ruff --version
-          yamllint --version
-          shellcheck --version
-          pytest --version
-          mypy --version
           pyinstaller --version
 
       - name: Checkout repository
@@ -338,7 +333,7 @@ jobs:
 
           curl -s \
             -H "Authorization: token $NMSTOOLS_TOKEN" \
-            "$FORGEJO_API_ROOT/releases/tags/nightly" \
+            "$FORGEJO_URL" \
             > release.json
 
           jq -r '.assets[] | "\(.name)|\(.browser_download_url)"' release.json |
